@@ -1,0 +1,13 @@
+[package]
+name = "action"
+version = "0.1.0"
+edition = "2024"
+description = "Flow control actions for CosmoFlow"
+
+[dependencies]
+serde = { workspace = true }
+serde_json = { workspace = true }
+
+[dev-dependencies]
+
+[features]
