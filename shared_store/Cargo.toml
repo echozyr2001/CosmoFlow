@@ -1,0 +1,20 @@
+[package]
+name = "shared_store"
+version = "0.1.0"
+edition = "2024"
+description = "Storage backends and abstractions for CosmoFlow"
+
+[dependencies]
+serde = { workspace = true }
+serde_json = { workspace = true }
+thiserror = { workspace = true }
+
+[dev-dependencies]
+tempfile = { workspace = true }
+
+[features]
+default = []
+
+storage-memory = []
+storage-file = []
+storage-full = ["storage-memory", "storage-file"]

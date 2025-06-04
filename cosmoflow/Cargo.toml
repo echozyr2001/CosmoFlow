@@ -1,0 +1,23 @@
+[package]
+name = "cosmoflow"
+version = "0.1.0"
+edition = "2024"
+authors = ["echozyr2001 <echo.zyr.2001@gmail.com>"]
+description = "CosmoFlow - A type-safe workflow engine for Rust, inspired by PocketFlow and optimized for LLM applications"
+license = "MIT"
+keywords = ["llm", "ai", "workflow", "cosmoai", "flow", "graph"]
+homepage = "https://github.com/echozyr2001/CosmoFlow"
+repository = "https://github.com/echozyr2001/CosmoFlow"
+readme = "../README.md"
+
+[dependencies]
+shared_store = { workspace = true }
+
+[dev-dependencies]
+
+[features]
+default = []
+
+storage-memory = ["shared_store/storage-memory"]
+storage-file = ["shared_store/storage-file"]
+storage-full = ["shared_store/storage-full"]
