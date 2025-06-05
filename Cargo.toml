@@ -1,5 +1,5 @@
 [workspace]
-members = ["cosmoflow", "shared_store", "action"]
+members = ["cosmoflow", "shared_store", "action", "node"]
 default-members = ["cosmoflow"]
 resolver = "2"
 
@@ -9,5 +9,17 @@ serde = { version = "1.0", features = ["derive"] }
 serde_json = "1.0"
 thiserror = "2.0"
 tempfile = "3.0"
+uuid = { version = "1.0", features = ["v4"] }
+async-trait = "0.1"
+tokio = { version = "1.0", features = [
+  "macros",
+  "rt-multi-thread",
+  "sync",
+  "time",
+] }
+tokio-test = "0.4"
 
+cosmoflow = { path = "cosmoflow" }
 shared_store = { path = "shared_store" }
+action = { path = "action" }
+node = { path = "node" }

@@ -12,6 +12,7 @@ readme = "../README.md"
 
 [dependencies]
 shared_store = { workspace = true }
+node = { workspace = true }
 
 [dev-dependencies]
 

@@ -9,3 +9,7 @@ pub mod storage {
     #[cfg(feature = "storage-file")]
     pub use shared_store::{FileStorage, FileStorageError};
 }
+
+pub mod nodes {
+    pub use node::{ExecutionContext, Node, NodeBackend, NodeError};
+}
