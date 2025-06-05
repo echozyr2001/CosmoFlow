@@ -213,6 +213,7 @@ version = "0.1.0"
 dependencies = [
  "action",
  "builtin",
+ "flow",
  "node",
  "serde_json",
  "shared_store",

@@ -26,3 +26,5 @@ cosmoflow = { path = "cosmoflow" }
 shared_store = { path = "shared_store" }
 action = { path = "action" }
 node = { path = "node" }
+flow = { path = "flow" }
+builtin = { path = "builtin" }

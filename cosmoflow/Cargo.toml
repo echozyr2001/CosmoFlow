@@ -14,15 +14,38 @@ readme = "../README.md"
 shared_store = { workspace = true }
 node = { workspace = true }
 action = { workspace = true }
+flow = { workspace = true }
 thiserror = { workspace = true }
 serde_json = { workspace = true }
 
+# Optional dependencies
+builtin = { workspace = true, optional = true }
+
 [dev-dependencies]
-builtin = { path = "../builtin" }
 tokio = { workspace = true }
 
 [features]
 default = ["storage-memory"]
-storage-memory = ["shared_store/storage-memory"]
-storage-file = ["shared_store/storage-file"]
-storage-full = ["shared_store/storage-full"]
+
+# Storage backend features
+storage-memory = [
+  "shared_store/storage-memory",
+  "node/storage-memory",
+  "flow/storage-memory",
+  "builtin?/storage-memory",
+]
+storage-file = [
+  "shared_store/storage-file",
+  "node/storage-file",
+  "flow/storage-file",
+  "builtin?/storage-file",
+]
+storage-full = [
+  "shared_store/storage-full",
+  "node/storage-full",
+  "flow/storage-full",
+  "builtin?/storage-full",
+]
+
+# Optional functionality features
+builtin = ["dep:builtin"]

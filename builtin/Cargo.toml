@@ -11,11 +11,18 @@ serde_json = { workspace = true }
 async-trait = { workspace = true }
 action = { workspace = true }
 node = { workspace = true }
-shared_store = { workspace = true, features = ["storage-memory"] }
+shared_store = { workspace = true }
 async-openai = { workspace = true }
 futures = { workspace = true }
 rand = { workspace = true }
 
 [dev-dependencies]
+shared_store = { workspace = true, features = ["storage-memory"] }
 
 [features]
+default = []
+
+# Storage backend features - these are passed through to shared_store
+storage-memory = ["shared_store/storage-memory"]
+storage-file = ["shared_store/storage-file"]
+storage-full = ["shared_store/storage-full"]
