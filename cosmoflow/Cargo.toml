@@ -13,12 +13,16 @@ readme = "../README.md"
 [dependencies]
 shared_store = { workspace = true }
 node = { workspace = true }
+action = { workspace = true }
+thiserror = { workspace = true }
+serde_json = { workspace = true }
 
 [dev-dependencies]
+builtin = { path = "../builtin" }
+tokio = { workspace = true }
 
 [features]
-default = []
-
+default = ["storage-memory"]
 storage-memory = ["shared_store/storage-memory"]
 storage-file = ["shared_store/storage-file"]
 storage-full = ["shared_store/storage-full"]

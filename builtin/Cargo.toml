@@ -1,0 +1,21 @@
+[package]
+name = "builtin"
+version = "0.1.0"
+edition = "2024"
+description = "Built in nodes for CosmoFlow"
+
+[dependencies]
+tokio = { workspace = true }
+serde = { workspace = true }
+serde_json = { workspace = true }
+async-trait = { workspace = true }
+action = { workspace = true }
+node = { workspace = true }
+shared_store = { workspace = true, features = ["storage-memory"] }
+async-openai = { workspace = true }
+futures = { workspace = true }
+rand = { workspace = true }
+
+[dev-dependencies]
+
+[features]

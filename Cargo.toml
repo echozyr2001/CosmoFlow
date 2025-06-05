@@ -1,5 +1,5 @@
 [workspace]
-members = ["cosmoflow", "shared_store", "action", "node"]
+members = ["cosmoflow", "shared_store", "action", "node", "builtin"]
 default-members = ["cosmoflow"]
 resolver = "2"
 
@@ -18,6 +18,9 @@ tokio = { version = "1.0", features = [
   "time",
 ] }
 tokio-test = "0.4"
+async-openai = "0.28"
+futures = "0.3"
+rand = "0.8"
 
 cosmoflow = { path = "cosmoflow" }
 shared_store = { path = "shared_store" }
