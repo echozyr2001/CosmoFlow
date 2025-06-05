@@ -1,0 +1,21 @@
+[package]
+name = "flow"
+version = "0.1.0"
+edition = "2024"
+description = "Flow orchestration System for CosmoFlow"
+
+[dependencies]
+serde = { workspace = true }
+serde_json = { workspace = true }
+thiserror = { workspace = true }
+async-trait = { workspace = true }
+tokio = { workspace = true }
+node = { workspace = true }
+shared_store = { workspace = true }
+action = { workspace = true }
+
+[dev-dependencies]
+tokio-test = { workspace = true }
+shared_store = { workspace = true, features = ["storage-memory"] }
+
+[features]

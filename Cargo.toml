@@ -1,5 +1,5 @@
 [workspace]
-members = ["cosmoflow", "shared_store", "action", "node", "builtin"]
+members = ["cosmoflow", "shared_store", "action", "node", "builtin", "flow"]
 default-members = ["cosmoflow"]
 resolver = "2"
 
