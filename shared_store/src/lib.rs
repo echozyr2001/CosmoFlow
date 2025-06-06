@@ -1,14 +1,12 @@
-pub mod storage;
-
 pub mod prelude {
     pub use crate::SharedStore;
-    pub use crate::storage::StorageBackend;
+    pub use storage::StorageBackend;
 
     #[cfg(feature = "storage-memory")]
-    pub use crate::storage::{MemoryStorage, MemoryStorageError};
+    pub use storage::{MemoryStorage, MemoryStorageError};
 
     #[cfg(feature = "storage-file")]
-    pub use crate::storage::{FileStorage, FileStorageError};
+    pub use storage::{FileStorage, FileStorageError};
 }
 
 pub use storage::StorageBackend;
@@ -108,25 +106,23 @@ impl<S: StorageBackend> SharedStore<S> {
 }
 
 #[cfg(feature = "storage-memory")]
-impl SharedStore<crate::storage::MemoryStorage> {
+impl SharedStore<storage::MemoryStorage> {
     /// Creates a new SharedStore with a memory backend
     pub fn memory() -> Self {
-        Self::with_storage(crate::storage::MemoryStorage::new())
+        Self::with_storage(storage::MemoryStorage::new())
     }
 
     /// Creates a new SharedStore with a memory backend with specified capacity
     pub fn memory_with_capacity(capacity: usize) -> Self {
-        Self::with_storage(crate::storage::MemoryStorage::with_capacity(capacity))
+        Self::with_storage(storage::MemoryStorage::with_capacity(capacity))
     }
 }
 
 #[cfg(feature = "storage-file")]
-impl SharedStore<crate::storage::FileStorage> {
+impl SharedStore<storage::FileStorage> {
     /// Creates a new SharedStore with a file backend
-    pub fn file<P: AsRef<std::path::Path>>(
-        path: P,
-    ) -> Result<Self, crate::storage::FileStorageError> {
-        Ok(Self::with_storage(crate::storage::FileStorage::new(path)?))
+    pub fn file<P: AsRef<std::path::Path>>(path: P) -> Result<Self, storage::FileStorageError> {
+        Ok(Self::with_storage(storage::FileStorage::new(path)?))
     }
 }
 

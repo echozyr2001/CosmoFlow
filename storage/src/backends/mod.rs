@@ -1,9 +1,9 @@
-//! Storage backends for CosmoFlow SharedStore
+//! Storage backends for CosmoFlow
 //!
 //! This module provides various storage backend implementations:
 //!
-//! - Memory storage (feature: `storage-memory`)
-//! - File storage (feature: `storage-file`)
+//! - Memory storage (feature: `memory`)
+//! - File storage (feature: `file`)
 
 use serde::{Serialize, de::DeserializeOwned};
 use std::error::Error;
@@ -52,13 +52,13 @@ pub trait StorageBackend: Send + Sync {
 // ============================================================================
 
 // Memory storage
-#[cfg(feature = "storage-memory")]
+#[cfg(feature = "memory")]
 mod memory;
-#[cfg(feature = "storage-memory")]
+#[cfg(feature = "memory")]
 pub use memory::{MemoryStorage, MemoryStorageError};
 
 // File storage
-#[cfg(feature = "storage-file")]
+#[cfg(feature = "file")]
 mod file;
-#[cfg(feature = "storage-file")]
+#[cfg(feature = "file")]
 pub use file::{FileStorage, FileStorageError};
