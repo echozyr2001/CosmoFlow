@@ -6,17 +6,10 @@ description = "Storage backends and abstractions for CosmoFlow"
 
 [dependencies]
 serde = { workspace = true }
-serde_json = { workspace = true }
-thiserror = { workspace = true }
+
 storage = { workspace = true }
 
 [dev-dependencies]
-tempfile = { workspace = true }
-storage = { workspace = true, features = ["memory", "file"] }
 
 [features]
 default = []
-
-storage-memory = ["storage/memory"]
-storage-file = ["storage/file"]
-storage-full = ["storage-memory", "storage-file"]

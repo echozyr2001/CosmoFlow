@@ -1,5 +1,6 @@
 use serde_json::Value;
-use shared_store::{SharedStore, StorageBackend};
+use shared_store::SharedStore;
+use storage::StorageBackend;
 
 /// Represents a route from one node to another based on an action
 #[derive(Debug, Clone)]

@@ -8,7 +8,8 @@ use std::{collections::HashMap, time::Duration};
 
 use action::Action;
 use serde_json::Value;
-use shared_store::{SharedStore, StorageBackend};
+use shared_store::SharedStore;
+use storage::StorageBackend;
 use uuid::Uuid;
 
 /// Represents the execution context for a node, containing the current retry count
@@ -177,8 +178,9 @@ where
 #[cfg(test)]
 mod tests {
     use async_trait::async_trait;
-    use shared_store::{MemoryStorage, SharedStore};
+    use shared_store::SharedStore;
     use std::sync::{Arc, Mutex};
+    use storage::MemoryStorage;
 
     use super::*;
 

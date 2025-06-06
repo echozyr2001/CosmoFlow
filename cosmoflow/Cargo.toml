@@ -12,6 +12,7 @@ readme = "../README.md"
 
 [dependencies]
 shared_store = { workspace = true }
+storage = { workspace = true }
 node = { workspace = true }
 action = { workspace = true }
 flow = { workspace = true }
@@ -23,29 +24,22 @@ builtin = { workspace = true, optional = true }
 
 [dev-dependencies]
 tokio = { workspace = true }
+tempfile = { workspace = true }
 
 [features]
-default = ["storage-memory"]
+default = []
 
 # Storage backend features
-storage-memory = [
-  "shared_store/storage-memory",
-  "node/storage-memory",
-  "flow/storage-memory",
-  "builtin?/storage-memory",
-]
-storage-file = [
-  "shared_store/storage-file",
-  "node/storage-file",
-  "flow/storage-file",
-  "builtin?/storage-file",
-]
-storage-full = [
-  "shared_store/storage-full",
-  "node/storage-full",
-  "flow/storage-full",
-  "builtin?/storage-full",
-]
+storage-memory = ["storage/memory"]
+storage-file = ["storage/file"]
+storage-full = ["storage-memory", "storage-file", "storage/full"]
 
 # Optional functionality features
 builtin = ["dep:builtin"]
+builtin-full = ["builtin", "storage-full"]
+
+# Convenience meta-features
+minimal = []
+basic = ["storage-memory"]
+standard = ["storage-memory", "builtin"]
+full = ["storage-full", "builtin-full"]

@@ -2,7 +2,8 @@ use std::time::Duration;
 
 use action::Action;
 use async_trait::async_trait;
-use shared_store::{SharedStore, StorageBackend};
+use shared_store::SharedStore;
+use storage::StorageBackend;
 
 use crate::ExecutionContext;
 
@@ -100,7 +101,8 @@ mod tests {
     use super::*;
     use crate::NodeError;
     use async_trait::async_trait;
-    use shared_store::{MemoryStorage, SharedStore};
+    use shared_store::SharedStore;
+    use storage::MemoryStorage;
 
     // Test implementation of NodeBackend
     struct MockNodeBackend {

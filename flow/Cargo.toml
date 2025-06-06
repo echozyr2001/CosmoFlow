@@ -5,23 +5,18 @@ edition = "2024"
 description = "Flow orchestration System for CosmoFlow"
 
 [dependencies]
-serde = { workspace = true }
 serde_json = { workspace = true }
 thiserror = { workspace = true }
 async-trait = { workspace = true }
 tokio = { workspace = true }
+
 node = { workspace = true }
 shared_store = { workspace = true }
+storage = { workspace = true }
 action = { workspace = true }
 
 [dev-dependencies]
-tokio-test = { workspace = true }
-shared_store = { workspace = true, features = ["storage-memory"] }
+storage = { workspace = true, features = ["memory"] }
 
 [features]
 default = []
-
-# Storage backend features - these are passed through to shared_store
-storage-memory = ["shared_store/storage-memory"]
-storage-file = ["shared_store/storage-file"]
-storage-full = ["shared_store/storage-full"]

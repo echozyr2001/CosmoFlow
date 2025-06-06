@@ -10,7 +10,8 @@ use async_trait::async_trait;
 use futures::StreamExt;
 use node::{ExecutionContext, NodeBackend, NodeError};
 use serde_json::Value;
-use shared_store::{SharedStore, StorageBackend};
+use shared_store::SharedStore;
+use storage::StorageBackend;
 
 #[derive(Debug, Clone)]
 pub struct ApiConfig {

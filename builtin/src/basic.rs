@@ -4,7 +4,8 @@ use action::Action;
 use async_trait::async_trait;
 use node::{ExecutionContext, NodeBackend, NodeError};
 use serde_json::Value;
-use shared_store::{SharedStore, StorageBackend};
+use shared_store::SharedStore;
+use storage::StorageBackend;
 
 /// A simple node that logs messages and passes through
 pub struct LogNodeBackend {
@@ -429,7 +430,8 @@ pub fn get_value<S1: Into<String>, S2: Into<String>>(
 mod tests {
     use super::*;
     use serde_json::json;
-    use shared_store::{MemoryStorage, SharedStore};
+    use shared_store::SharedStore;
+    use storage::MemoryStorage;
 
     #[tokio::test]
     async fn test_optimized_log_node() {

@@ -1,18 +1,19 @@
+pub mod errors;
+pub mod route;
+
 use std::collections::HashMap;
 use std::time::Duration;
 
 use action::Action;
 use async_trait::async_trait;
 use node::{ExecutionContext, Node, NodeBackend, NodeError};
-use shared_store::{SharedStore, StorageBackend};
+use shared_store::SharedStore;
+use storage::StorageBackend;
 
 use crate::{
     errors::FlowError,
     route::{Route, RouteCondition},
 };
-
-pub mod errors;
-pub mod route;
 
 /// Execution result from a flow run
 #[derive(Debug, Clone)]
@@ -522,7 +523,8 @@ mod tests {
     use action::Action;
     use async_trait::async_trait;
     use node::{ExecutionContext, NodeBackend};
-    use shared_store::{MemoryStorage, SharedStore};
+    use shared_store::SharedStore;
+    use storage::MemoryStorage;
 
     // Test helper node
     struct TestNode {
