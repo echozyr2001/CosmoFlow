@@ -1,24 +1,16 @@
 [workspace]
-members = [
-  "cosmoflow",
-  "shared_store",
-  "storage",
-  "action",
-  "node",
-  "builtin",
-  "flow",
-]
+members = ["cosmoflow"]
 default-members = ["cosmoflow"]
 resolver = "2"
 
 [workspace.dependencies]
 # Shared dependencies for workspace members
-serde = { version = "1.0", features = ["derive"] }
-serde_json = "1.0"
-thiserror = "2.0"
-tempfile = "3.0"
-uuid = { version = "1.0", features = ["v4"] }
+async-openai = "0.28"
 async-trait = "0.1"
+futures = "0.3"
+rand = "0.8"
+tempfile = "3.0"
+thiserror = "2.0"
 tokio = { version = "1.0", features = [
   "macros",
   "rt-multi-thread",
@@ -26,14 +18,8 @@ tokio = { version = "1.0", features = [
   "time",
 ] }
 tokio-test = "0.4"
-async-openai = "0.28"
-futures = "0.3"
-rand = "0.8"
+uuid = { version = "1.0", features = ["v4"] }
+serde = { version = "1.0", features = ["derive"] }
+serde_json = "1.0"
 
 cosmoflow = { path = "cosmoflow" }
-shared_store = { path = "shared_store" }
-storage = { path = "storage" }
-action = { path = "action" }
-node = { path = "node" }
-flow = { path = "flow" }
-builtin = { path = "builtin" }
