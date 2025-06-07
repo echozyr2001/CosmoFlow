@@ -8,6 +8,13 @@ on:
         required: false
         type: string
 
+# 🔐 GitHub Actions permissions
+permissions:
+  contents: write # Required for creating tags and releases
+  packages: write # Required for publishing packages
+  actions: read # Required for workflow execution
+  id-token: write # Required for trusted publishing
+
 env:
   CARGO_TERM_COLOR: always
 
@@ -159,6 +166,7 @@ jobs:
         uses: actions/checkout@v4
         with:
           fetch-depth: 0
+          token: ${{ secrets.GITHUB_TOKEN }}
 
       - name: Configure Git
         run: |
@@ -217,8 +225,8 @@ jobs:
           # Create annotated tag
           git tag -a "$tag" -F release_notes.md
 
-          # Push tag
           git push origin "$tag"
+
           echo "created=true" >> $GITHUB_OUTPUT
           echo "✅ Tag $tag created successfully"
 
@@ -286,12 +294,12 @@ jobs:
         uses: actions/checkout@v4
 
       - name: Create GitHub Release Draft
-        uses: actions/create-release@v1
+        uses: softprops/action-gh-release@v1
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         with:
           tag_name: v${{ needs.detect-and-prepare.outputs.version }}
-          release_name: 🚀 CosmoFlow v${{ needs.detect-and-prepare.outputs.version }}
+          name: 🚀 CosmoFlow v${{ needs.detect-and-prepare.outputs.version }}
           body: |
             ${{ needs.create-release-tag.outputs.release_notes }}
 
