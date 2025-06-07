@@ -285,4 +285,4 @@ jobs:
 
 concurrency:
   group: release-${{ github.ref }}
-  cancel-in-progress: false # Don't cancel release workflows
+  cancel-in-progress: true # Cancel in-progress release workflows to avoid conflicts
