@@ -150,15 +150,20 @@ jobs:
             ~/.cargo/git
             target
 
+      - name: Ensure clean working directory
+        run: |
+          git diff --exit-code
+          git status --porcelain
+
       - name: Package the crate
         run: |
           cd cosmoflow
-          cargo package --allow-dirty
+          cargo package
 
       - name: Test packaged crate
         run: |
           cd cosmoflow
-          cargo package --allow-dirty
+          cargo package
           cd target/package/cosmoflow-${{ needs.validate.outputs.version }}
           cargo build --all-features
           cargo test --all-features
