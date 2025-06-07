@@ -40,8 +40,8 @@ and **production reliability**. it provides a few major components:
 These components provide the runtime infrastructure necessary for building
 complex workflow applications.
 
-[nodes]: https://docs.rs/cosmoflow/latest/cosmoflow/nodes/index.html
-[scheduler]: https://docs.rs/cosmoflow/latest/cosmoflow/flows/index.html
+[nodes]: https://docs.rs/cosmoflow/latest/cosmoflow/node/index.html
+[scheduler]: https://docs.rs/cosmoflow/latest/cosmoflow/flow/index.html
 
 ## Example
 
