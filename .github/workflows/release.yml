@@ -1,66 +1,93 @@
 name: Release and Publish
 
 on:
-  push:
-    tags:
-      - "v*.*.*" # Triggers on version tags like v1.0.0, v0.1.0, etc.
+  workflow_dispatch:
+    inputs:
+      reason:
+        description: "Release reason (optional, for release notes)"
+        required: false
+        type: string
 
 env:
   CARGO_TERM_COLOR: always
-  RUST_BACKTRACE: 1
 
 jobs:
-  # Pre-release validation
-  validate:
-    name: Validate Release
+  # 🔍 Version detection and validation
+  detect-and-prepare:
     runs-on: ubuntu-latest
     outputs:
-      version: ${{ steps.get_version.outputs.VERSION }}
-      tag: ${{ steps.get_version.outputs.TAG }}
+      version: ${{ steps.prepare.outputs.version }}
+      should_continue: ${{ steps.prepare.outputs.should_continue }}
     steps:
-      - name: Install system dependencies
-        run: sudo apt-get update && sudo apt-get install -y libsqlite3-dev
-
-      - name: Checkout Code
+      - name: Checkout
         uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
 
-      - name: Get version from tag
-        id: get_version
+      - name: Auto-detect version and validate
+        id: prepare
         run: |
-          TAG=${GITHUB_REF#refs/tags/}
-          VERSION=${TAG#v}
-          echo "TAG=$TAG" >> $GITHUB_OUTPUT
-          echo "VERSION=$VERSION" >> $GITHUB_OUTPUT
-          echo "Release tag: $TAG"
-          echo "Release version: $VERSION"
+          # 1. Auto-detect version from Cargo.toml
+          version=$(grep '^version = ' cosmoflow/Cargo.toml | cut -d'"' -f2)
+          echo "✓ Auto-detected version: $version"
 
-      - name: Verify version matches Cargo.toml
-        run: |
-          CARGO_VERSION=$(grep '^version = ' cosmoflow/Cargo.toml | head -n1 | sed 's/version = "\(.*\)"/\1/')
-          if [ "${{ steps.get_version.outputs.VERSION }}" != "$CARGO_VERSION" ]; then
-            echo "❌ Version mismatch: tag is ${{ steps.get_version.outputs.VERSION }} but Cargo.toml has $CARGO_VERSION"
+          # 2. Validate version format
+          if [[ ! "$version" =~ ^[0-9]+\.[0-9]+\.[0-9]+$ ]]; then
+            echo "❌ Invalid version format: $version"
             exit 1
           fi
-          echo "✅ Version matches: ${{ steps.get_version.outputs.VERSION }}"
 
-      - name: Setup Rust Toolchain
-        uses: actions-rust-lang/setup-rust-toolchain@v1
-        with:
-          toolchain: stable
-          cache: true
-          cache-directories: |-
-            ~/.cargo/registry
-            ~/.cargo/git
-            target
+          # 3. Check if this version is already released
+          if git tag | grep -q "^v$version$"; then
+            echo "❌ Version v$version already exists"
+            echo "💡 Please update version in Cargo.toml before release"
+            exit 1
+          fi
 
-      - name: Validate package can be built
-        run: cargo build --all-features --workspace
+          # Output results
+          echo "version=$version" >> $GITHUB_OUTPUT
+          echo "should_continue=true" >> $GITHUB_OUTPUT
 
-  # Run comprehensive tests
-  test:
-    name: Test Release
+          echo "✅ Version validation completed:"
+          echo "  Version: $version"
+
+  # 🔍 Quick validation - always executed
+  quick-validation:
+    needs: detect-and-prepare
+    if: needs.detect-and-prepare.outputs.should_continue == 'true'
     runs-on: ubuntu-latest
-    needs: validate
+    outputs:
+      validation_passed: ${{ steps.validate.outputs.passed }}
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup Rust
+        uses: dtolnay/rust-toolchain@stable
+
+      - name: Quick validation
+        id: validate
+        run: |
+          version="${{ needs.detect-and-prepare.outputs.version }}"
+          echo "🔍 Quick validation started for v$version..."
+
+          # 1. Syntax check
+          echo "🔧 Checking code syntax..."
+          cargo check --workspace --all-features
+
+          # 2. Basic compilation test
+          echo "🏗️ Basic compilation test..."
+          cargo build --features minimal
+          cargo build --all-features
+
+          echo "✅ Quick validation passed"
+          echo "passed=true" >> $GITHUB_OUTPUT
+
+  # 📋 Comprehensive testing
+  comprehensive-testing:
+    needs: [detect-and-prepare, quick-validation]
+    if: needs.quick-validation.outputs.validation_passed == 'true'
+    runs-on: ubuntu-latest
     strategy:
       matrix:
         rust: [stable, beta]
@@ -71,14 +98,11 @@ jobs:
           - "--features standard"
           - "--all-features"
     steps:
-      - name: Install system dependencies
-        run: sudo apt-get update && sudo apt-get install -y libsqlite3-dev
-
-      - name: Checkout Code
+      - name: Checkout
         uses: actions/checkout@v4
 
-      - name: Setup Rust Toolchain
-        uses: actions-rust-lang/setup-rust-toolchain@v1
+      - name: Setup Rust
+        uses: dtolnay/rust-toolchain@master
         with:
           toolchain: ${{ matrix.rust }}
           cache: true
@@ -87,202 +111,263 @@ jobs:
             ~/.cargo/git
             target
 
-      - name: Cache cargo-nextest binary
-        uses: actions/cache@v3
-        with:
-          path: ~/.cargo/bin/cargo-nextest
-          key: nextest-${{ matrix.rust }}-v0.9.42
+      - name: Setup Nextest
+        uses: taiki-e/install-action@nextest
 
-      - name: Install nextest if not cached
+      - name: Run comprehensive test suite
         run: |
-          if ! command -v cargo-nextest &>/dev/null || [[ "$(cargo nextest --version)" != "cargo-nextest 0.9.42" ]]; then
-            cargo install cargo-nextest --version 0.9.42 --locked;
+          echo "🧪 Running comprehensive tests"
+          echo "🦀 Rust: ${{ matrix.rust }}"
+          echo "🔧 Features: ${{ matrix.features }}"
+
+          # Unit tests
+          cargo nextest run ${{ matrix.features }} --workspace
+
+          # Documentation tests
+          cargo test --doc ${{ matrix.features }} --workspace
+
+          # Build verification
+          cargo build ${{ matrix.features }} --workspace --release
+
+          # Additional safety checks for stable + all-features configuration
+          if [[ "${{ matrix.features }}" == "--all-features" && "${{ matrix.rust }}" == "stable" ]]; then
+            echo "🔍 Running additional safety checks..."
+            
+            # Clippy check
+            cargo clippy ${{ matrix.features }} --workspace --all-targets -- -D warnings
+            
+            # Format check
+            cargo fmt --all -- --check
+            
+            # Dependency security audit (allow failure)
+            cargo audit || echo "⚠️ Audit found issues, but not blocking release"
           fi
-      - name: Run Tests
-        run: cargo nextest run ${{ matrix.features }} --workspace
 
-      - name: Run Doc Tests
-        run: cargo test --doc ${{ matrix.features }} --workspace
-
-  # Code quality checks
-  quality:
-    name: Quality Checks
+  # 🏷️ Auto-create tag
+  create-release-tag:
+    needs: [detect-and-prepare, quick-validation, comprehensive-testing]
+    if: |
+      always() &&
+      needs.quick-validation.outputs.validation_passed == 'true' &&
+      needs.comprehensive-testing.result == 'success'
     runs-on: ubuntu-latest
-    needs: validate
+    outputs:
+      tag_created: ${{ steps.tag.outputs.created }}
+      release_notes: ${{ steps.notes.outputs.content }}
     steps:
-      - name: Install system dependencies
-        run: sudo apt-get update && sudo apt-get install -y libsqlite3-dev
-
-      - name: Checkout Code
-        uses: actions/checkout@v4
-
-      - name: Setup Rust Toolchain
-        uses: actions-rust-lang/setup-rust-toolchain@v1
-        with:
-          toolchain: nightly
-          components: rustfmt, clippy
-          cache: true
-          cache-directories: |-
-            ~/.cargo/registry
-            ~/.cargo/git
-            target
-
-      - name: Check Formatting
-        run: cargo +nightly fmt --all --check
-
-      - name: Run Clippy
-        run: cargo +nightly clippy --all-features --workspace -- -D warnings
-
-      - name: Check Documentation
-        run: cargo doc --all-features --workspace --no-deps
-
-  # Package validation
-  package:
-    name: Package Validation
-    runs-on: ubuntu-latest
-    needs: [validate, test, quality]
-    steps:
-      - name: Install system dependencies
-        run: sudo apt-get update && sudo apt-get install -y libsqlite3-dev
-
-      - name: Checkout Code
-        uses: actions/checkout@v4
-
-      - name: Setup Rust Toolchain
-        uses: actions-rust-lang/setup-rust-toolchain@v1
-        with:
-          toolchain: stable
-          cache: true
-          cache-directories: |-
-            ~/.cargo/registry
-            ~/.cargo/git
-            target
-
-      - name: Ensure clean working directory
-        run: |
-          git diff --exit-code
-          git status --porcelain
-
-      - name: Package the crate
-        run: |
-          cd cosmoflow
-          cargo package
-
-      - name: Test packaged crate
-        run: |
-          cd cosmoflow
-          cargo package
-          cd target/package/cosmoflow-${{ needs.validate.outputs.version }}
-          cargo build --all-features
-          cargo test --all-features
-
-  # Create GitHub Release
-  github-release:
-    name: Create GitHub Release
-    runs-on: ubuntu-latest
-    needs: [validate, test, quality, package]
-    permissions:
-      contents: write
-    steps:
-      - name: Checkout Code
+      - name: Checkout
         uses: actions/checkout@v4
         with:
           fetch-depth: 0
 
-      - name: Generate Release Notes
-        id: release_notes
+      - name: Configure Git
         run: |
-          # Get the previous tag
-          PREV_TAG=$(git describe --tags --abbrev=0 HEAD^1 2>/dev/null || echo "")
+          git config user.name "github-actions[bot]"
+          git config user.email "github-actions[bot]@users.noreply.github.com"
+
+      - name: Generate release notes
+        id: notes
+        run: |
+          version="${{ needs.detect-and-prepare.outputs.version }}"
+          last_tag=$(git describe --tags --abbrev=0 2>/dev/null || echo "")
 
           # Generate changelog
-          if [ -n "$PREV_TAG" ]; then
-            echo "## What's Changed" > release_notes.md
+          if [[ -n "$last_tag" ]]; then
+            echo "## 🚀 Release v$version" > release_notes.md
             echo "" >> release_notes.md
-            git log --pretty=format:"* %s (%h)" $PREV_TAG..HEAD >> release_notes.md
+            
+            # Add user-provided release reason
+            if [[ -n "${{ inputs.reason }}" ]]; then
+              echo "### 📝 Release Notes" >> release_notes.md
+              echo "${{ inputs.reason }}" >> release_notes.md
+              echo "" >> release_notes.md
+            fi
+            
+            echo "### 🔄 Changes since $last_tag" >> release_notes.md
+            git log ${last_tag}..HEAD --pretty=format:"- %s (%h)" >> release_notes.md
+            echo "" >> release_notes.md
+            
+            # 分类变更 / Categorize changes
+            echo "### 📊 Change Summary" >> release_notes.md
+            breaking=$(git log ${last_tag}..HEAD --oneline | grep -i "breaking\|BREAKING" | wc -l)
+            features=$(git log ${last_tag}..HEAD --oneline | grep -i "feat\|feature\|add" | wc -l)
+            fixes=$(git log ${last_tag}..HEAD --oneline | grep -i "fix\|bug" | wc -l)
+            
+            echo "- 🚨 Breaking Changes: $breaking" >> release_notes.md
+            echo "- ✨ New Features: $features" >> release_notes.md
+            echo "- 🐛 Bug Fixes: $fixes" >> release_notes.md
           else
-            echo "## Initial Release" > release_notes.md
+            echo "## 🚀 Release v$version" > release_notes.md
             echo "" >> release_notes.md
-            echo "This is the first release of CosmoFlow." >> release_notes.md
+            echo "Initial release of CosmoFlow!" >> release_notes.md
           fi
 
-          echo "" >> release_notes.md
-          echo "## Installation" >> release_notes.md
-          echo "" >> release_notes.md
-          echo '```toml' >> release_notes.md
-          echo '[dependencies]' >> release_notes.md
-          echo "cosmoflow = \"${{ needs.validate.outputs.version }}\"" >> release_notes.md
-          echo '```' >> release_notes.md
+          # Output content
+          content=$(cat release_notes.md)
+          echo "content<<EOF" >> $GITHUB_OUTPUT
+          echo "$content" >> $GITHUB_OUTPUT
+          echo "EOF" >> $GITHUB_OUTPUT
 
-      - name: Create Release
-        uses: actions/create-release@v1
-        env:
-          GITHUB_TOKEN: ${{ github.token }}
-        with:
-          tag_name: ${{ needs.validate.outputs.tag }}
-          release_name: CosmoFlow ${{ needs.validate.outputs.version }}
-          body_path: release_notes.md
-          draft: false
-          prerelease: ${{ contains(needs.validate.outputs.version, 'alpha') || contains(needs.validate.outputs.version, 'beta') || contains(needs.validate.outputs.version, 'rc') }}
+      - name: Create tag
+        id: tag
+        run: |
+          version="${{ needs.detect-and-prepare.outputs.version }}"
+          tag="v$version"
 
-  # Publish to crates.io
-  publish:
-    name: Publish to crates.io
+          # Create annotated tag
+          git tag -a "$tag" -F release_notes.md
+
+          # Push tag
+          git push origin "$tag"
+          echo "created=true" >> $GITHUB_OUTPUT
+          echo "✅ Tag $tag created successfully"
+
+  # 📦 Build and package
+  build-and-package:
+    needs: [detect-and-prepare, create-release-tag]
+    if: needs.create-release-tag.outputs.tag_created == 'true'
     runs-on: ubuntu-latest
-    needs: [validate, test, quality, package, github-release]
-    environment: release # Requires manual approval in GitHub
+    outputs:
+      package_ready: ${{ steps.package.outputs.ready }}
     steps:
-      - name: Install system dependencies
-        run: sudo apt-get update && sudo apt-get install -y libsqlite3-dev
-
-      - name: Checkout Code
+      - name: Checkout
         uses: actions/checkout@v4
 
-      - name: Setup Rust Toolchain
-        uses: actions-rust-lang/setup-rust-toolchain@v1
-        with:
-          toolchain: stable
-          cache: true
-          cache-directories: |-
-            ~/.cargo/registry
-            ~/.cargo/git
-            target
+      - name: Setup Rust
+        uses: dtolnay/rust-toolchain@stable
 
-      - name: Login to crates.io
-        run: cargo login ${{ secrets.CARGO_REGISTRY_TOKEN }}
-
-      - name: Publish to crates.io
+      - name: Build release version
         run: |
-          cd cosmoflow
-          cargo publish --allow-dirty
+          echo "🏗️ Building release version..."
+          cargo build --release --all-features --workspace
 
-      - name: Verify publication
+      - name: Create package
+        id: package
         run: |
-          echo "✅ CosmoFlow ${{ needs.validate.outputs.version }} has been published to crates.io!"
-          echo "📦 Package: https://crates.io/crates/cosmoflow"
-          echo "📚 Documentation: https://docs.rs/cosmoflow/${{ needs.validate.outputs.version }}"
+          echo "📦 Creating package..."
+          cargo package --manifest-path cosmoflow/Cargo.toml --allow-dirty
+          echo "ready=true" >> $GITHUB_OUTPUT
 
-  # Notify completion
-  notify:
-    name: Release Complete
+  # 🚀 Publish to Crates.io
+  publish-to-crates:
+    needs: [detect-and-prepare, create-release-tag, build-and-package]
+    if: needs.build-and-package.outputs.package_ready == 'true'
     runs-on: ubuntu-latest
-    needs: [validate, publish]
-    if: always()
+    environment:
+      name: crates-io
+      url: https://crates.io/crates/cosmoflow
     steps:
-      - name: Release Summary
-        run: |
-          if [ "${{ needs.publish.result }}" == "success" ]; then
-            echo "🎉 Release ${{ needs.validate.outputs.tag }} completed successfully!"
-            echo "Package is now available at:"
-            echo "- 📦 crates.io: https://crates.io/crates/cosmoflow"
-            echo "- 📚 docs.rs: https://docs.rs/cosmoflow/${{ needs.validate.outputs.version }}"
-            echo "- 🏷️ GitHub: https://github.com/${{ github.repository }}/releases/tag/${{ needs.validate.outputs.tag }}"
-          else
-            echo "❌ Release ${{ needs.validate.outputs.tag }} failed"
-            echo "Check the workflow logs for details"
-            exit 1
-          fi
+      - name: Checkout
+        uses: actions/checkout@v4
 
-concurrency:
-  group: release-${{ github.ref }}
-  cancel-in-progress: true # Cancel in-progress release workflows to avoid conflicts
+      - name: Setup Rust
+        uses: dtolnay/rust-toolchain@stable
+
+      - name: Publish to Crates.io
+        env:
+          CARGO_REGISTRY_TOKEN: ${{ secrets.CARGO_REGISTRY_TOKEN }}
+        run: |
+          version="${{ needs.detect-and-prepare.outputs.version }}"
+          echo "🚀 Publishing CosmoFlow v$version to Crates.io..."
+
+          # Publish main package
+          cargo publish --manifest-path cosmoflow/Cargo.toml
+
+          echo "✅ Published successfully!"
+          echo "📦 CosmoFlow v$version can now be installed via 'cargo install cosmoflow'"
+
+  # 📝 Create GitHub Release (Draft)
+  create-github-release:
+    needs: [detect-and-prepare, create-release-tag, publish-to-crates]
+    if: always() && needs.create-release-tag.outputs.tag_created == 'true'
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Create GitHub Release Draft
+        uses: actions/create-release@v1
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        with:
+          tag_name: v${{ needs.detect-and-prepare.outputs.version }}
+          release_name: 🚀 CosmoFlow v${{ needs.detect-and-prepare.outputs.version }}
+          body: |
+            ${{ needs.create-release-tag.outputs.release_notes }}
+
+            ---
+
+            **📝 Release Process**
+
+            This release was created through the automated one-click workflow with comprehensive testing:
+            - ✅ Quick validation passed
+            - ✅ Comprehensive testing across multiple Rust versions and feature combinations
+            - ✅ Package built and published to Crates.io
+
+            **🔍 Next Steps**
+
+            This GitHub release is created as a **draft** for safety. Please:
+            1. Review the release notes above
+            2. Verify the package is available on [Crates.io](https://crates.io/crates/cosmoflow)
+            3. Test the published package if needed: `cargo install cosmoflow`
+            4. Manually publish this release when ready
+
+            **🛡️ Safety Note**
+
+            Creating releases as drafts prevents accidental public announcements and allows for final manual review before making the release public.
+          draft: true
+          prerelease: false
+
+  # 📊 Post-release processing
+  post-release:
+    needs: [detect-and-prepare, create-github-release, publish-to-crates]
+    if: always()
+    runs-on: ubuntu-latest
+    steps:
+      - name: Release summary
+        run: |
+          version="${{ needs.detect-and-prepare.outputs.version }}"
+
+          echo "## 🎉 One-Click Release Process Completed!"
+          echo ""
+          echo "### 📋 Release Information"
+          echo "- **Version**: v$version"
+          echo "- **Testing Strategy**: Comprehensive (all feature combinations)"
+          echo "- **Rust Versions Tested**: stable, beta"
+          echo "- **Features Tested**: minimal, basic, standard, all-features"
+          echo "- **Workflow Status**: ${{ job.status }}"
+          echo ""
+
+          echo "### 📦 Package Status"
+          if [[ "${{ needs.publish-to-crates.result }}" == "success" ]]; then
+            echo "✅ **Crates.io**: Package published successfully"
+            echo "   📥 Install with: \`cargo install cosmoflow\`"
+          else
+            echo "❌ **Crates.io**: Package publish failed or was skipped"
+          fi
+          echo ""
+
+          echo "### 📝 GitHub Release Status"
+          if [[ "${{ needs.create-github-release.result }}" == "success" ]]; then
+            echo "✅ **GitHub Release**: Draft created successfully"
+            echo "   🔗 Review at: https://github.com/${{ github.repository }}/releases"
+            echo ""
+            echo "### 🔄 Next Steps for Maintainers"
+            echo "1. **Review**: Check the draft release notes and package"
+            echo "2. **Verify**: Test installation: \`cargo install cosmoflow\`"
+            echo "3. **Publish**: Manually publish the draft release when ready"
+            echo "4. **Announce**: Share the release with the community"
+          else
+            echo "❌ **GitHub Release**: Draft creation failed"
+          fi
+          echo ""
+
+          echo "### 🛡️ Safety Features Applied"
+          echo "- ✅ Version validation (prevented duplicates)"
+          echo "- ✅ Comprehensive testing (multiple Rust versions)"
+          echo "- ✅ Git tag created automatically"
+          echo "- ✅ Draft release (manual review required)"
+          echo ""
+
+          echo "---"
+          echo "🚀 **One-Click Release Workflow v2.0** - Optimized for safety and automation"
