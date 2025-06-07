@@ -1,4 +1,73 @@
+#![deny(missing_docs)]
+//! # Flow - CosmoFlow Orchestration System
+//!
+//! This crate provides the core workflow orchestration system for CosmoFlow. It manages the
+//! execution of interconnected nodes, handles routing between them, and provides comprehensive
+//! error handling and execution tracking.
+//!
+//! ## Key Features
+//!
+//! - **Workflow Orchestration**: Execute complex multi-node workflows
+//! - **Dynamic Routing**: Conditional and parameterized routing between nodes
+//! - **Error Handling**: Comprehensive error management and recovery
+//! - **Execution Tracking**: Detailed execution results and performance metrics
+//! - **Retry Logic**: Built-in retry mechanisms for failed operations
+//!
+//! ## Quick Start
+//!
+//! ```rust
+//! use flow::{Flow, FlowBuilder, FlowBackend};
+//! use shared_store::SharedStore;
+//! use storage::backends::MemoryStorage;
+//!
+//! # async fn example() -> Result<(), Box<dyn std::error::Error>> {
+//! // Create a shared store
+//! let store = SharedStore::with_storage(MemoryStorage::new());
+//!
+//! // Build a flow
+//! let mut flow = FlowBuilder::new()
+//!     .build();
+//!
+//! // Execute the flow
+//! let mut store = SharedStore::with_storage(MemoryStorage::new());
+//! let result = flow.execute(&mut store).await?;
+//! println!("Flow completed with {} steps", result.steps_executed);
+//! # Ok(())
+//! # }
+//! ```
+//!
+//! ## Core Types
+//!
+//! - [`Flow`]: The main workflow execution engine
+//! - [`FlowBuilder`]: Builder pattern for constructing flows
+//! - [`FlowExecutionResult`]: Results and metadata from flow execution
+//! - [`Route`]: Defines routing between nodes in the workflow
+//!
+//! ## Error Handling
+//!
+//! The flow crate provides comprehensive error handling through [`FlowError`]:
+//!
+//! ```rust
+//! use flow::{Flow, errors::FlowError, FlowBackend};
+//!
+//! # async fn example() -> Result<(), FlowError> {
+//! # let mut flow = Flow::new();
+//! # let mut store = shared_store::SharedStore::with_storage(storage::MemoryStorage::new());
+//! match flow.execute(&mut store).await {
+//!     Ok(result) => println!("Success: {:?}", result),
+//!     Err(FlowError::NodeNotFound(id)) => eprintln!("Node '{}' not found", id),
+//!     Err(FlowError::NodeError(msg)) => {
+//!         eprintln!("Node execution failed: {}", msg);
+//!     },
+//!     Err(e) => eprintln!("Flow error: {}", e),
+//! }
+//! # Ok(())
+//! # }
+//! ```
+
+/// The errors module contains the error types for the flow crate.
 pub mod errors;
+/// The route module contains the `Route` struct and `RouteCondition` enum.
 pub mod route;
 
 use std::collections::HashMap;
@@ -16,17 +85,57 @@ use crate::{
 };
 
 /// Execution result from a flow run
+///
+/// This struct contains comprehensive information about the execution of a workflow,
+/// including success status, execution path, and performance metrics.
+///
+/// # Examples
+///
+/// ```rust
+/// use flow::{Flow, FlowExecutionResult, FlowBackend};
+/// use action::Action;
+///
+/// # async fn example() -> Result<(), Box<dyn std::error::Error>> {
+/// # let mut flow = Flow::new();
+/// # let mut store = shared_store::SharedStore::with_storage(storage::MemoryStorage::new());
+/// let result: FlowExecutionResult = flow.execute(&mut store).await?;
+///
+/// if result.success {
+///     println!("Flow completed successfully in {} steps", result.steps_executed);
+///     println!("Execution path: {:?}", result.execution_path);
+/// } else {
+///     println!("Flow failed at node: {}", result.last_node_id);
+/// }
+/// # Ok(())
+/// # }
+/// ```
 #[derive(Debug, Clone)]
 pub struct FlowExecutionResult {
     /// The final action that terminated the flow
+    ///
+    /// This could be an action that completed the workflow successfully,
+    /// or an action that caused the flow to terminate due to an error.
     pub final_action: Action,
     /// The ID of the last executed node
+    ///
+    /// This is useful for debugging and understanding where the flow
+    /// stopped, especially in case of failures.
     pub last_node_id: String,
     /// Number of steps executed
+    ///
+    /// This count includes successful executions and retries, providing
+    /// insight into the complexity and performance of the workflow.
     pub steps_executed: usize,
     /// Whether the flow completed successfully
+    ///
+    /// `true` if the flow reached a completion state without errors,
+    /// `false` if the flow was terminated due to an error or timeout.
     pub success: bool,
     /// Execution path (node IDs in order)
+    ///
+    /// This vector contains the IDs of all nodes that were executed,
+    /// in the order they were processed. Useful for debugging and
+    /// workflow analysis.
     pub execution_path: Vec<String>,
 }
 
@@ -61,6 +170,7 @@ impl Default for FlowConfig {
 /// Type-erased node runner for dynamic dispatch
 #[async_trait]
 pub trait NodeRunner<S: StorageBackend>: Send + Sync {
+    /// Run the node and return the resulting action.
     async fn run(&mut self, store: &mut SharedStore<S>) -> Result<Action, NodeError>;
 }
 
@@ -211,6 +321,45 @@ impl<S: StorageBackend + 'static> FlowBuilder<S> {
 }
 
 /// Basic implementation of the FlowBackend trait
+///
+/// The `Flow` struct represents a complete workflow definition with nodes, routes,
+/// and configuration. It manages the execution of workflows by orchestrating
+/// node execution and routing decisions.
+///
+/// # Type Parameters
+///
+/// * `S` - The storage backend type that implements [`StorageBackend`]
+///
+/// # Fields
+///
+/// - `nodes`: Collection of executable nodes indexed by their unique IDs
+/// - `routes`: Routing table that defines transitions between nodes
+/// - `config`: Configuration settings that control flow execution behavior
+///
+/// # Examples
+///
+/// ```rust
+/// use flow::{Flow, FlowConfig};
+/// use storage::MemoryStorage;
+///
+/// // Create a flow with default configuration
+/// let flow: Flow<MemoryStorage> = Flow::new();
+///
+/// // Create a flow with custom configuration
+/// let config = FlowConfig {
+///     max_steps: 500,
+///     detect_cycles: true,
+///     start_node_id: "start".to_string(),
+///     terminal_actions: vec!["complete".to_string(), "error".to_string()],
+/// };
+/// let flow: Flow<MemoryStorage> = Flow::with_config(config);
+/// ```
+///
+/// # Thread Safety
+///
+/// The `Flow` struct is designed to be used in single-threaded contexts within
+/// CosmoFlow's execution model. For concurrent execution of multiple workflows,
+/// create separate `Flow` instances for each workflow.
 pub struct Flow<S: StorageBackend> {
     nodes: HashMap<String, Box<dyn NodeRunner<S>>>,
     routes: HashMap<String, Vec<Route>>,
@@ -218,7 +367,19 @@ pub struct Flow<S: StorageBackend> {
 }
 
 impl<S: StorageBackend> Flow<S> {
-    /// Create a new basic flow
+    /// Create a new basic flow with default configuration
+    ///
+    /// Creates an empty flow with no nodes or routes. Use [`FlowBuilder`] for
+    /// a more convenient way to construct workflows.
+    ///
+    /// # Examples
+    ///
+    /// ```rust
+    /// use flow::Flow;
+    /// use storage::MemoryStorage;
+    ///
+    /// let flow: Flow<MemoryStorage> = Flow::new();
+    /// ```
     pub fn new() -> Self {
         Self {
             nodes: HashMap::new(),
@@ -228,6 +389,29 @@ impl<S: StorageBackend> Flow<S> {
     }
 
     /// Create a new basic flow with custom configuration
+    ///
+    /// Use this constructor when you need to specify custom execution behavior
+    /// such as timeouts, cycle detection, or terminal actions.
+    ///
+    /// # Arguments
+    ///
+    /// * `config` - Flow configuration settings
+    ///
+    /// # Examples
+    ///
+    /// ```rust
+    /// use flow::{Flow, FlowConfig};
+    /// use storage::MemoryStorage;
+    ///
+    /// let config = FlowConfig {
+    ///     max_steps: 1000,
+    ///     detect_cycles: true,
+    ///     start_node_id: "start".to_string(),
+    ///     terminal_actions: vec!["complete".to_string(), "abort".to_string()],
+    /// };
+    ///
+    /// let flow: Flow<MemoryStorage> = Flow::with_config(config);
+    /// ```
     pub fn with_config(config: FlowConfig) -> Self {
         Self {
             nodes: HashMap::new(),
@@ -237,6 +421,28 @@ impl<S: StorageBackend> Flow<S> {
     }
 
     /// Find the next node ID based on the current action
+    ///
+    /// This method implements the core routing logic of the flow engine. It:
+    /// 1. Checks if the action is a terminal action (ends execution)
+    /// 2. Looks up available routes from the current node
+    /// 3. Evaluates route conditions to find the appropriate next node
+    ///
+    /// # Arguments
+    ///
+    /// * `current_node_id` - ID of the currently executing node
+    /// * `action` - Action returned by the current node
+    /// * `store` - Shared store for condition evaluation
+    ///
+    /// # Returns
+    ///
+    /// * `Ok(Some(String))` - ID of the next node to execute
+    /// * `Ok(None)` - Terminal action, execution should end
+    /// * `Err(FlowError)` - Routing error (no route found, condition evaluation failed)
+    ///
+    /// # Errors
+    ///
+    /// * [`FlowError::NoRouteFound`] - No route exists for the given action
+    /// * [`FlowError::InvalidConfiguration`] - Route condition evaluation failed
     fn find_next_node(
         &self,
         current_node_id: &str,
@@ -275,6 +481,31 @@ impl<S: StorageBackend> Flow<S> {
     }
 
     /// Check for cycles in the execution path
+    ///
+    /// Implements cycle detection to prevent infinite loops in workflow execution.
+    /// When enabled via configuration, this method checks if the next node would
+    /// create a cycle in the execution path.
+    ///
+    /// # Algorithm
+    ///
+    /// Uses a simple linear search through the execution path to detect if the
+    /// next node ID already exists in the current path. This is efficient for
+    /// typical workflow depths but may need optimization for very deep workflows.
+    ///
+    /// # Arguments
+    ///
+    /// * `path` - Current execution path (list of node IDs)
+    /// * `next_node_id` - ID of the next node to execute
+    ///
+    /// # Returns
+    ///
+    /// * `Ok(())` - No cycle detected or cycle detection disabled
+    /// * `Err(FlowError::CycleDetected)` - Cycle would be created
+    ///
+    /// # Performance
+    ///
+    /// Time complexity: O(n) where n is the length of the execution path
+    /// Space complexity: O(n) for the cycle path in error cases
     fn check_cycle(&self, path: &[String], next_node_id: &str) -> Result<(), FlowError> {
         if !self.config.detect_cycles {
             return Ok(());
@@ -296,16 +527,109 @@ impl<S: StorageBackend + Send + Sync> FlowBackend<S> for Flow<S>
 where
     S::Error: Send + Sync + 'static,
 {
+    /// Add a node to the flow
+    ///
+    /// Registers a new executable node with the flow. Each node must have a unique ID
+    /// that will be used for routing and execution control.
+    ///
+    /// # Arguments
+    ///
+    /// * `id` - Unique identifier for the node
+    /// * `node` - Boxed node implementation that can be executed
+    ///
+    /// # Returns
+    ///
+    /// * `Ok(())` - Node was successfully added
+    /// * `Err(FlowError)` - Currently always returns `Ok`, but may validate in the future
+    ///
+    /// # Examples
+    ///
+    /// ```rust,no_run
+    /// use flow::{Flow, FlowBackend};
+    /// use storage::MemoryStorage;
+    ///
+    /// let mut flow: Flow<MemoryStorage> = Flow::new();
+    /// // In practice, you would create a proper NodeBackend implementation
+    /// // flow.add_node("processing_step".to_string(), node).unwrap();
+    /// ```
     fn add_node(&mut self, id: String, node: Box<dyn NodeRunner<S>>) -> Result<(), FlowError> {
         self.nodes.insert(id, node);
         Ok(())
     }
 
+    /// Add a route to the flow
+    ///
+    /// Defines a routing rule that determines how the flow transitions from one node
+    /// to another based on the action returned by the source node.
+    ///
+    /// # Arguments
+    ///
+    /// * `from_node_id` - ID of the source node
+    /// * `route` - Route definition including target node and conditions
+    ///
+    /// # Returns
+    ///
+    /// * `Ok(())` - Route was successfully added
+    /// * `Err(FlowError)` - Currently always returns `Ok`, but may validate in the future
+    ///
+    /// # Examples
+    ///
+    /// ```rust
+    /// use flow::{Flow, FlowBackend};
+    /// use flow::route::Route;
+    /// use storage::MemoryStorage;
+    ///
+    /// let mut flow: Flow<MemoryStorage> = Flow::new();
+    /// let route = Route {
+    ///     action: "next_step".to_string(),
+    ///     target_node_id: "target_node".to_string(),
+    ///     condition: None,
+    /// };
+    /// flow.add_route("source_node".to_string(), route).unwrap();
+    /// ```
     fn add_route(&mut self, from_node_id: String, route: Route) -> Result<(), FlowError> {
         self.routes.entry(from_node_id).or_default().push(route);
         Ok(())
     }
 
+    /// Execute the flow from the configured start node
+    ///
+    /// Begins workflow execution from the start node specified in the flow configuration.
+    /// This is the primary entry point for workflow execution.
+    ///
+    /// # Arguments
+    ///
+    /// * `store` - Mutable reference to the shared store for data communication
+    ///
+    /// # Returns
+    ///
+    /// * `Ok(FlowExecutionResult)` - Successful execution result with metadata
+    /// * `Err(FlowError)` - Execution error (node not found, cycles, etc.)
+    ///
+    /// # Errors
+    ///
+    /// * [`FlowError::NodeNotFound`] - Start node doesn't exist
+    /// * [`FlowError::MaxStepsExceeded`] - Execution exceeded step limit
+    /// * [`FlowError::CycleDetected`] - Infinite loop detected
+    /// * [`FlowError::NoRouteFound`] - No route available for node's action
+    ///
+    /// # Examples
+    ///
+    /// ```rust
+    /// use flow::{Flow, FlowBackend, FlowConfig};
+    /// use shared_store::SharedStore;
+    /// use storage::MemoryStorage;
+    ///
+    /// # async {
+    /// let mut flow: Flow<MemoryStorage> = Flow::new();
+    /// let mut store = SharedStore::with_storage(MemoryStorage::new());
+    ///
+    /// // Add nodes and routes to flow...
+    ///
+    /// let result = flow.execute(&mut store).await.unwrap();
+    /// println!("Execution completed in {} steps", result.steps_executed);
+    /// # };
+    /// ```
     async fn execute(
         &mut self,
         store: &mut SharedStore<S>,
@@ -314,6 +638,51 @@ where
         self.execute_from(store, start_node_id).await
     }
 
+    /// Execute the flow from a specific node
+    ///
+    /// Begins workflow execution from an arbitrary node rather than the configured
+    /// start node. Useful for debugging, testing, or resuming execution from a
+    /// specific point.
+    ///
+    /// # Arguments
+    ///
+    /// * `store` - Mutable reference to the shared store for data communication
+    /// * `start_node_id` - ID of the node to begin execution from
+    ///
+    /// # Returns
+    ///
+    /// * `Ok(FlowExecutionResult)` - Successful execution result with metadata
+    /// * `Err(FlowError)` - Execution error (node not found, cycles, etc.)
+    ///
+    /// # Execution Flow
+    ///
+    /// 1. Starts from the specified node
+    /// 2. Executes nodes sequentially following routing rules
+    /// 3. Checks for cycles and step limits at each iteration
+    /// 4. Continues until a terminal action is reached
+    /// 5. Returns detailed execution results
+    ///
+    /// # Performance Considerations
+    ///
+    /// - Each step includes cycle detection (O(n) where n is path length)
+    /// - Step counting prevents infinite loops in complex workflows
+    /// - Node execution is sequential (no parallel execution within a flow)
+    ///
+    /// # Examples
+    ///
+    /// ```rust
+    /// use flow::{Flow, FlowBackend};
+    /// use shared_store::SharedStore;
+    /// use storage::MemoryStorage;
+    ///
+    /// # async {
+    /// let mut flow: Flow<MemoryStorage> = Flow::new();
+    /// let mut store = SharedStore::with_storage(MemoryStorage::new());
+    ///
+    /// // Execute from a specific node (useful for testing)
+    /// let result = flow.execute_from(&mut store, "validation_step".to_string()).await.unwrap();
+    /// # };
+    /// ```
     async fn execute_from(
         &mut self,
         store: &mut SharedStore<S>,
@@ -364,14 +733,93 @@ where
         }
     }
 
+    /// Get the current flow configuration
+    ///
+    /// Returns a reference to the flow's configuration settings including
+    /// execution limits, terminal actions, and other behavioral controls.
+    ///
+    /// # Returns
+    ///
+    /// Reference to the current [`FlowConfig`]
+    ///
+    /// # Examples
+    ///
+    /// ```rust
+    /// use flow::{Flow, FlowBackend};
+    /// use storage::MemoryStorage;
+    ///
+    /// let flow: Flow<MemoryStorage> = Flow::new();
+    /// let config = flow.config();
+    /// println!("Max steps: {}", config.max_steps);
+    /// ```
     fn config(&self) -> &FlowConfig {
         &self.config
     }
 
+    /// Update the flow configuration
+    ///
+    /// Replaces the current configuration with new settings. This can be used
+    /// to modify execution behavior, timeouts, or other flow parameters.
+    ///
+    /// # Arguments
+    ///
+    /// * `config` - New configuration to apply
+    ///
+    /// # Examples
+    ///
+    /// ```rust
+    /// use flow::{Flow, FlowConfig, FlowBackend};
+    /// use storage::MemoryStorage;
+    ///
+    /// let mut flow: Flow<MemoryStorage> = Flow::new();
+    /// let new_config = FlowConfig {
+    ///     max_steps: 1000,
+    ///     detect_cycles: true,
+    ///     start_node_id: "entry_point".to_string(),
+    ///     terminal_actions: vec!["complete".to_string()],
+    /// };
+    /// flow.set_config(new_config);
+    /// ```
     fn set_config(&mut self, config: FlowConfig) {
         self.config = config;
     }
 
+    /// Validate the flow configuration and structure
+    ///
+    /// Performs comprehensive validation of the flow to ensure it can execute
+    /// successfully. This includes checking node references, route validity,
+    /// and configuration consistency.
+    ///
+    /// # Validation Checks
+    ///
+    /// 1. **Start Node Exists**: Verifies the configured start node is present
+    /// 2. **Route Integrity**: Ensures all route source and target nodes exist
+    /// 3. **Reachability**: Checks that all nodes can potentially be reached
+    /// 4. **Terminal Actions**: Validates terminal action configuration
+    ///
+    /// # Returns
+    ///
+    /// * `Ok(())` - Flow is valid and ready for execution
+    /// * `Err(FlowError::InvalidConfiguration)` - Validation failed with details
+    ///
+    /// # Examples
+    ///
+    /// ```rust
+    /// use flow::{Flow, FlowBackend};
+    /// use storage::MemoryStorage;
+    ///
+    /// let flow: Flow<MemoryStorage> = Flow::new();
+    /// match flow.validate() {
+    ///     Ok(()) => println!("Flow is valid"),
+    ///     Err(e) => eprintln!("Validation failed: {}", e),
+    /// }
+    /// ```
+    ///
+    /// # Performance
+    ///
+    /// Validation time is O(n + m) where n is the number of nodes and m is the
+    /// number of routes. It's recommended to validate flows during construction
+    /// rather than at runtime.
     fn validate(&self) -> Result<(), FlowError> {
         // Check if start node exists
         if !self.nodes.contains_key(&self.config.start_node_id) {

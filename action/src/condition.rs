@@ -47,8 +47,11 @@ pub enum ActionCondition {
 
     /// Compare a numeric value
     NumericCompare {
+        /// The key to compare.
         key: String,
+        /// The comparison operator.
         operator: ComparisonOperator,
+        /// The value to compare against.
         value: f64,
     },
 
@@ -66,28 +69,138 @@ pub enum ActionCondition {
 }
 
 /// Comparison operators for numeric conditions
+///
+/// These operators define how numeric values should be compared in
+/// `NumericCompare` conditions. All comparisons are performed as
+/// floating-point operations for consistency.
+///
+/// # Examples
+///
+/// ```rust
+/// use action::{ActionCondition, ComparisonOperator};
+///
+/// // Greater than comparison
+/// let condition = ActionCondition::numeric_compare(
+///     "score",
+///     ComparisonOperator::GreaterThan,
+///     90.0
+/// );
+///
+/// // Equal comparison (with epsilon tolerance)
+/// let equal_condition = ActionCondition::numeric_compare(
+///     "temperature",
+///     ComparisonOperator::Equal,
+///     98.6
+/// );
+/// ```
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
 pub enum ComparisonOperator {
+    /// Equality comparison (uses epsilon tolerance for floating-point)
     Equal,
+    /// Inequality comparison
     NotEqual,
+    /// Greater than comparison
     GreaterThan,
+    /// Greater than or equal comparison
     GreaterThanOrEqual,
+    /// Less than comparison
     LessThan,
+    /// Less than or equal comparison
     LessThanOrEqual,
 }
 
 impl ActionCondition {
     /// Create a condition that checks if a key exists
+    ///
+    /// This condition evaluates to true if the specified key exists in the
+    /// evaluation context, regardless of its value (including null).
+    ///
+    /// # Arguments
+    ///
+    /// * `key` - The key to check for existence
+    ///
+    /// # Examples
+    ///
+    /// ```rust
+    /// use action::ActionCondition;
+    /// use serde_json::json;
+    /// use std::collections::HashMap;
+    ///
+    /// let condition = ActionCondition::key_exists("user_id");
+    ///
+    /// let mut context = HashMap::new();
+    /// context.insert("user_id".to_string(), json!(123));
+    /// assert!(condition.evaluate(&context));
+    ///
+    /// context.clear();
+    /// assert!(!condition.evaluate(&context));
+    /// ```
     pub fn key_exists<S: Into<String>>(key: S) -> Self {
         ActionCondition::KeyExists(key.into())
     }
 
     /// Create a condition that checks if a key equals a value
+    ///
+    /// This condition evaluates to true if the specified key exists in the
+    /// context and its value exactly matches the provided value.
+    ///
+    /// # Arguments
+    ///
+    /// * `key` - The key to check
+    /// * `value` - The expected value
+    ///
+    /// # Examples
+    ///
+    /// ```rust
+    /// use action::ActionCondition;
+    /// use serde_json::json;
+    /// use std::collections::HashMap;
+    ///
+    /// let condition = ActionCondition::key_equals("status", json!("active"));
+    ///
+    /// let mut context = HashMap::new();
+    /// context.insert("status".to_string(), json!("active"));
+    /// assert!(condition.evaluate(&context));
+    ///
+    /// context.insert("status".to_string(), json!("inactive"));
+    /// assert!(!condition.evaluate(&context));
+    /// ```
     pub fn key_equals<S: Into<String>>(key: S, value: Value) -> Self {
         ActionCondition::KeyEquals(key.into(), value)
     }
 
     /// Create a numeric comparison condition
+    ///
+    /// This condition extracts a numeric value from the context and compares
+    /// it against a provided value using the specified operator. Non-numeric
+    /// values are treated as comparison failures.
+    ///
+    /// # Arguments
+    ///
+    /// * `key` - The key containing the numeric value to compare
+    /// * `operator` - The comparison operator to use
+    /// * `value` - The value to compare against
+    ///
+    /// # Examples
+    ///
+    /// ```rust
+    /// use action::{ActionCondition, ComparisonOperator};
+    /// use serde_json::json;
+    /// use std::collections::HashMap;
+    ///
+    /// let condition = ActionCondition::numeric_compare(
+    ///     "score",
+    ///     ComparisonOperator::GreaterThan,
+    ///     85.0
+    /// );
+    ///
+    /// let mut context = HashMap::new();
+    /// context.insert("score".to_string(), json!(92.5));
+    /// assert!(condition.evaluate(&context));
+    ///
+    /// context.insert("score".to_string(), json!(75.0));
+    /// assert!(!condition.evaluate(&context));
+    /// ```
     pub fn numeric_compare<S: Into<String>>(
         key: S,
         operator: ComparisonOperator,
@@ -101,16 +214,103 @@ impl ActionCondition {
     }
 
     /// Create an expression-based condition
+    ///
+    /// Expression conditions support simple string-based logic with variable
+    /// substitution and basic comparisons. This provides flexibility for
+    /// complex conditional logic that doesn't fit other condition types.
+    ///
+    /// Supported patterns:
+    /// - Variable substitution: `"${variable_name}"`
+    /// - Comparisons: `"${var} == value"`, `"${var} > 10"`
+    /// - Boolean literals: `"true"`, `"false"`
+    ///
+    /// # Arguments
+    ///
+    /// * `expr` - The expression string to evaluate
+    ///
+    /// # Examples
+    ///
+    /// ```rust
+    /// use action::ActionCondition;
+    /// use serde_json::json;
+    /// use std::collections::HashMap;
+    ///
+    /// // Variable substitution
+    /// let bool_cond = ActionCondition::expression("${is_ready}");
+    ///
+    /// // Comparison expression
+    /// let comp_cond = ActionCondition::expression("${count} > 5");
+    ///
+    /// let mut context = HashMap::new();
+    /// context.insert("is_ready".to_string(), json!(true));
+    /// context.insert("count".to_string(), json!(10));
+    ///
+    /// assert!(bool_cond.evaluate(&context));
+    /// assert!(comp_cond.evaluate(&context));
+    /// ```
     pub fn expression<S: Into<String>>(expr: S) -> Self {
         ActionCondition::Expression(expr.into())
     }
 
     /// Create an AND condition
+    ///
+    /// AND conditions evaluate to true only if ALL of the contained conditions
+    /// evaluate to true. Empty condition lists evaluate to true.
+    ///
+    /// # Arguments
+    ///
+    /// * `conditions` - Vector of conditions that must all be true
+    ///
+    /// # Examples
+    ///
+    /// ```rust
+    /// use action::ActionCondition;
+    /// use serde_json::json;
+    /// use std::collections::HashMap;
+    ///
+    /// let cond1 = ActionCondition::key_exists("user_id");
+    /// let cond2 = ActionCondition::key_equals("status", json!("active"));
+    /// let and_cond = ActionCondition::and(vec![cond1, cond2]);
+    ///
+    /// let mut context = HashMap::new();
+    /// context.insert("user_id".to_string(), json!(123));
+    /// context.insert("status".to_string(), json!("active"));
+    /// assert!(and_cond.evaluate(&context));
+    ///
+    /// context.remove("user_id");
+    /// assert!(!and_cond.evaluate(&context)); // Missing user_id
+    /// ```
     pub fn and(conditions: Vec<ActionCondition>) -> Self {
         ActionCondition::And(conditions)
     }
 
     /// Create an OR condition
+    ///
+    /// OR conditions evaluate to true if ANY of the contained conditions
+    /// evaluate to true. Empty condition lists evaluate to false.
+    ///
+    /// # Arguments
+    ///
+    /// * `conditions` - Vector of conditions where at least one must be true
+    ///
+    /// # Examples
+    ///
+    /// ```rust
+    /// use action::ActionCondition;
+    /// use serde_json::json;
+    /// use std::collections::HashMap;
+    ///
+    /// let cond1 = ActionCondition::key_equals("role", json!("admin"));
+    /// let cond2 = ActionCondition::key_equals("role", json!("moderator"));
+    /// let or_cond = ActionCondition::or(vec![cond1, cond2]);
+    ///
+    /// let mut context = HashMap::new();
+    /// context.insert("role".to_string(), json!("admin"));
+    /// assert!(or_cond.evaluate(&context));
+    ///
+    /// context.insert("role".to_string(), json!("user"));
+    /// assert!(!or_cond.evaluate(&context)); // Neither admin nor moderator
+    /// ```
     pub fn or(conditions: Vec<ActionCondition>) -> Self {
         ActionCondition::Or(conditions)
     }
@@ -131,7 +331,36 @@ impl ActionCondition {
         ActionCondition::Not(Box::new(condition))
     }
 
-    /// Evaluate a condition (basic implementation - can be extended)
+    /// Evaluate a condition against a context
+    ///
+    /// This method evaluates the condition using the provided context map.
+    /// The context typically contains data from the workflow's shared store
+    /// or node execution results.
+    ///
+    /// # Arguments
+    ///
+    /// * `context` - Map containing key-value data for condition evaluation
+    ///
+    /// # Returns
+    ///
+    /// Boolean result of the condition evaluation
+    ///
+    /// # Examples
+    ///
+    /// ```rust
+    /// use action::ActionCondition;
+    /// use serde_json::json;
+    /// use std::collections::HashMap;
+    ///
+    /// let condition = ActionCondition::key_equals("status", json!("ready"));
+    ///
+    /// let mut context = HashMap::new();
+    /// context.insert("status".to_string(), json!("ready"));
+    /// assert!(condition.evaluate(&context));
+    ///
+    /// context.insert("status".to_string(), json!("waiting"));
+    /// assert!(!condition.evaluate(&context));
+    /// ```
     pub fn evaluate(&self, context: &HashMap<String, Value>) -> bool {
         match self {
             ActionCondition::Always => true,

@@ -1,144 +1,105 @@
+#![deny(missing_docs)]
 //! # CosmoFlow
 //!
-//! A type-safe workflow engine for Rust, inspired by PocketFlow and optimized for LLM applications.
+//! A Rust-native, lightweight, and extensible workflow engine for building
+//! complex, stateful, and event-driven applications. Inspired by PocketFlow and
+//! optimized for LLM applications.
+//!
+//! ## Core Concepts
+//!
+//! *   **Flow**: A collection of nodes and the routes between them, representing a
+//!     complete workflow.
+//! *   **Node**: A single unit of work in a workflow.
+//! *   **Action**: The result of a node's execution, used to determine the next
+//!     step in the flow.
+//! *   **Shared Store**: A key-value store used to share data between nodes.
+//! *   **Storage Backend**: A pluggable storage mechanism for the shared store.
 //!
 //! ## Quick Start
 //!
 //! ```rust
-//! use cosmoflow::{Flow, SharedStore, ExecutionContext};
-//!
+//! # #[cfg(feature = "storage-memory")]
 //! # async fn example() -> Result<(), Box<dyn std::error::Error>> {
+//! use cosmoflow::prelude::*;
+//! use cosmoflow::flows::FlowBackend;
+//! use std::time::Duration;
+//!
 //! // Create a shared store with memory backend
-//! let store = SharedStore::memory();
+//! let mut store = SharedStore::with_storage(MemoryStorage::new());
 //!
 //! // Create a flow
-//! let flow = Flow::builder("my-flow")
-//!     .with_store(store)
-//!     .build()?;
+//! let mut flow = Flow::new();
 //!
 //! // Execute the flow
-//! let context = ExecutionContext::new();
-//! let result = flow.execute(context).await?;
+//! let context = ExecutionContext::new(3, Duration::from_secs(1));
+//! let result = flow.execute(&mut store).await?;
 //! # Ok(())
 //! # }
 //! ```
 //!
-//! ## Features
+//! ## Feature Flags
+//!
+//! CosmoFlow uses a feature flag system to keep the core library lightweight
+//! and allow users to opt-in to additional functionality.
 //!
 //! ### Storage Backends
-//! - `storage-memory`: Fast in-memory storage
-//! - `storage-file`: Persistent file-based storage  
-//! - `storage-full`: Both memory and file storage
 //!
-//! ### Built-in Components
-//! - `builtin`: Pre-built node implementations
-//! - `builtin-full`: Built-ins with all storage backends
+//! *   `storage-memory`: In-memory storage backend (default).
+//! *   `storage-file`: File-based storage backend.
 //!
-//! ### Meta-Features
-//! - `minimal`: No features enabled (absolute minimum)
-//! - `basic`: Memory storage only (lightweight)
-//! - `standard`: Memory storage + built-in nodes (recommended)
-//! - `full`: All features enabled (kitchen sink)
+//! ### Built-in Nodes
 //!
-//! ## Architecture
+//! *   `builtin`: A collection of pre-built nodes for common tasks.
 //!
-//! CosmoFlow uses a modular architecture with separate crates for different concerns:
-//! - Storage backends (`storage` crate)
-//! - Node execution system (`node` crate)
-//! - Flow orchestration (`flow` crate)
-//! - Action definitions (`action` crate)
-//! - Built-in node types (`builtin` crate)
-//! - Shared data store (`shared_store` crate)
+//! ### Convenience Features
+//!
+//! *   `standard`: Enables `storage-memory` and `builtin` features.
+//! *   `full`: Enables all features.
 
-// ============================================================================
-// Core Exports - Always Available
-// ============================================================================
-
-// Re-export the main shared store
-pub use shared_store::SharedStore;
-
-// Main workflow types
+// Core Exports
+pub use action::{Action, ActionCondition};
 pub use flow::errors::FlowError;
 pub use flow::route::Route;
 pub use flow::{Flow, FlowBuilder, FlowConfig, FlowExecutionResult};
-
-// Node system essentials
 pub use node::{ExecutionContext, Node, NodeBackend, NodeError};
+pub use shared_store::SharedStore;
 
-// Action system
-pub use action::{Action, ActionCondition};
-
-// ============================================================================
-// Organized Module Exports
-// ============================================================================
-
-/// Storage backend abstractions and implementations
-///
-/// Available backends depend on enabled features:
-/// - `storage-memory`: [`MemoryStorage`]
-/// - `storage-file`: [`FileStorage`]
-pub mod storage {
-    pub use storage::StorageBackend;
-
-    #[cfg(feature = "storage-memory")]
-    pub use storage::backends::MemoryStorage;
-
-    #[cfg(feature = "storage-file")]
-    pub use storage::backends::FileStorage;
-
-    // Re-export from shared_store for convenience
-    pub use shared_store::SharedStore;
-}
-
-/// Node execution system and traits
-///
-/// Core types for building and executing workflow nodes.
-pub mod nodes {
-    pub use node::*;
-}
+// Module Exports
 
 /// Action definition and condition evaluation
-///
-/// Types for defining workflow actions and conditions.
 pub mod actions {
     pub use ::action::*;
 }
 
-/// Flow definition and execution
-///
-/// Core flow orchestration types and builders.
-pub mod flows {
-    pub use flow::*;
-}
-
 /// Built-in node implementations (optional)
-///
-/// Pre-built node types for common workflow operations.
-/// Only available when the `builtin` feature is enabled.
 #[cfg(feature = "builtin")]
 pub mod builtin {
     pub use builtin::*;
 }
 
-// ============================================================================
-// Type Aliases and Convenience
-// ============================================================================
+/// Flow definition and execution
+pub mod flows {
+    pub use flow::*;
+}
+
+/// Node execution system and traits
+pub mod nodes {
+    pub use node::*;
+}
+
+/// Storage backend abstractions and implementations
+pub mod storage {
+    pub use storage::StorageBackend;
+    #[cfg(feature = "storage-file")]
+    pub use storage::backends::FileStorage;
+    #[cfg(feature = "storage-memory")]
+    pub use storage::backends::MemoryStorage;
+}
 
 /// A convenient result type alias for CosmoFlow operations
 pub type Result<T> = std::result::Result<T, FlowError>;
 
-/// The prelude module for commonly used types
-///
-/// This module provides a convenient way to import the most commonly used
-/// types and traits in CosmoFlow applications.
-///
-/// # Example
-///
-/// ```rust
-/// use cosmoflow::prelude::*;
-///
-/// // Now you have access to Flow, SharedStore, Node, etc.
-/// ```
+/// The prelude module for commonly used types and traits.
 pub mod prelude {
     pub use crate::{
         Action, ActionCondition, ExecutionContext, Flow, FlowBuilder, FlowConfig,
@@ -150,9 +111,8 @@ pub mod prelude {
 
     pub use crate::storage::StorageBackend;
 
-    #[cfg(feature = "storage-memory")]
-    pub use crate::storage::MemoryStorage;
-
     #[cfg(feature = "storage-file")]
     pub use crate::storage::FileStorage;
+    #[cfg(feature = "storage-memory")]
+    pub use crate::storage::MemoryStorage;
 }

@@ -4,35 +4,237 @@ use serde_json::Value;
 use std::collections::HashMap;
 use thiserror::Error;
 
-/// Simple in-memory storage backend using HashMap
+/// High-performance in-memory storage backend using HashMap
 ///
-/// Internally stores data as JSON Values for flexibility while providing
-/// a generic interface for serializable/deserializable types.
+/// `MemoryStorage` provides extremely fast data access by storing all data in memory
+/// using a HashMap. This makes it ideal for development, testing, and scenarios where
+/// persistence is not required but performance is critical.
+///
+/// # Features
+///
+/// - **Zero I/O overhead**: All operations happen in memory
+/// - **Type safety**: Generic interface with automatic JSON serialization
+/// - **Thread-safe for reads**: Multiple readers can access data safely
+/// - **Configurable capacity**: Can pre-allocate HashMap capacity for performance
+/// - **Clone support**: Efficient cloning for workflow distribution
+///
+/// # Performance Characteristics
+///
+/// - **Read operations**: O(1) average case
+/// - **Write operations**: O(1) average case  
+/// - **Memory usage**: Proportional to stored data size
+/// - **Startup time**: Instant (no file loading)
+///
+/// # Use Cases
+///
+/// ## Development and Testing
+/// ```rust
+/// use storage::MemoryStorage;
+/// use storage::StorageBackend;
+///
+/// let mut storage = MemoryStorage::new();
+/// storage.set("test_key".to_string(), "test_value").unwrap();
+///
+/// let value: Option<String> = storage.get("test_key").unwrap();
+/// assert_eq!(value, Some("test_value".to_string()));
+/// ```
+///
+/// ## High-Performance Workflows
+/// ```rust
+/// use storage::{MemoryStorage, StorageBackend};
+/// use serde_json::json;
+///
+/// // Pre-allocate for better performance
+/// let mut storage = MemoryStorage::with_capacity(1000);
+///
+/// // Store complex data structures efficiently
+/// storage.set("metrics".to_string(), json!({
+///     "cpu_usage": 45.2,
+///     "memory_usage": 67.8,
+///     "active_connections": 1250
+/// })).unwrap();
+/// ```
+///
+/// ## Temporary Data Processing
+/// ```rust
+/// use storage::{MemoryStorage, StorageBackend};
+/// use serde::{Serialize, Deserialize};
+///
+/// #[derive(Serialize, Deserialize)]
+/// struct ProcessingState {
+///     stage: String,
+///     progress: f64,
+///     intermediate_results: Vec<i32>,
+/// }
+///
+/// let mut storage = MemoryStorage::new();
+/// let state = ProcessingState {
+///     stage: "data_analysis".to_string(),
+///     progress: 0.75,
+///     intermediate_results: vec![1, 2, 3, 4, 5],
+/// };
+///
+/// storage.set("current_state".to_string(), state).unwrap();
+/// ```
+///
+/// # Limitations
+///
+/// - **No persistence**: Data is lost when the process ends
+/// - **Memory constraints**: Limited by available system memory
+/// - **Single process**: Cannot share data between different processes
+/// - **No crash recovery**: No automatic data recovery mechanisms
+///
+/// # Thread Safety
+///
+/// While the struct implements `Send + Sync`, the actual HashMap operations
+/// are not thread-safe for mutations. Use external synchronization if you
+/// need concurrent write access from multiple threads.
 #[derive(Debug, Clone, Default)]
 pub struct MemoryStorage {
     data: HashMap<String, Value>,
 }
 
-/// Error type for in-memory storage operations
+/// Comprehensive error type for in-memory storage operations
+///
+/// `MemoryStorageError` captures the various failure modes specific to in-memory
+/// storage operations. Since memory storage doesn't involve I/O, errors are
+/// primarily related to data serialization and deserialization.
+///
+/// # Error Variants
+///
+/// ## SerializationError
+/// Occurs when converting Rust types to JSON fails. This can happen with:
+/// - Non-serializable types (those not implementing `Serialize`)
+/// - Circular references in data structures
+/// - Custom serialization logic that fails
+///
+/// ## DeserializationError
+/// Occurs when converting stored JSON back to Rust types fails. Common causes:
+/// - Type mismatches (storing as one type, retrieving as another)
+/// - Invalid JSON structure for the target type
+/// - Missing required fields in structs
+/// - Enum variant mismatches
+///
+/// # Examples
+///
+/// ## Handling Serialization Errors
+/// ```rust
+/// use storage::{MemoryStorage, MemoryStorageError, StorageBackend};
+/// use serde::Serialize;
+///
+/// #[derive(Serialize)]
+/// struct MyType {
+///     value: i32,
+/// }
+///
+/// let mut storage = MemoryStorage::new();
+/// let my_value = MyType { value: 42 };
+///
+/// // This would fail if MyType doesn't implement Serialize
+/// match storage.set("key".to_string(), my_value) {
+///     Ok(()) => println!("Stored successfully"),
+///     Err(MemoryStorageError::SerializationError(msg)) => {
+///         eprintln!("Failed to serialize: {}", msg);
+///     },
+///     Err(e) => eprintln!("Other error: {}", e),
+/// }
+/// ```
+///
+/// ## Handling Deserialization Errors
+/// ```rust
+/// use storage::{MemoryStorage, MemoryStorageError, StorageBackend};
+/// use serde::{Serialize, Deserialize};
+///
+/// #[derive(Serialize, Deserialize, Debug)]
+/// struct MyType {
+///     value: i32,
+/// }
+///
+/// let storage = MemoryStorage::new();
+///
+/// // This would fail if stored data doesn't match expected type
+/// match storage.get::<MyType>("key") {
+///     Ok(Some(value)) => println!("Retrieved: {:?}", value),
+///     Ok(None) => println!("Key not found"),
+///     Err(MemoryStorageError::DeserializationError(msg)) => {
+///         eprintln!("Failed to deserialize: {}", msg);
+///     },
+///     Err(e) => eprintln!("Other error: {}", e),
+/// }
+/// ```
 #[derive(Debug, Clone, Error)]
 pub enum MemoryStorageError {
     /// JSON serialization error
+    ///
+    /// Indicates that a Rust value could not be converted to JSON.
+    /// This typically happens when the type doesn't properly implement
+    /// `serde::Serialize` or contains unsupported data structures.
     #[error("Serialization error: {0}")]
     SerializationError(String),
+
     /// JSON deserialization error
+    ///
+    /// Indicates that stored JSON data could not be converted to the
+    /// requested Rust type. This commonly occurs with type mismatches
+    /// or when the JSON structure doesn't match the target type.
     #[error("Deserialization error: {0}")]
     DeserializationError(String),
 }
 
 impl MemoryStorage {
-    /// Create a new in-memory storage
+    /// Create a new empty in-memory storage
+    ///
+    /// Creates a new `MemoryStorage` instance with default HashMap capacity.
+    /// This is the most common way to create memory storage for general use.
+    ///
+    /// # Examples
+    ///
+    /// ```rust
+    /// use storage::MemoryStorage;
+    ///
+    /// let storage = MemoryStorage::new();
+    /// // Ready to store and retrieve data
+    /// ```
     pub fn new() -> Self {
         Self {
             data: HashMap::new(),
         }
     }
 
-    /// Create a new in-memory storage with specified capacity
+    /// Create a new in-memory storage with pre-allocated capacity
+    ///
+    /// Pre-allocates the internal HashMap with the specified capacity to avoid
+    /// reallocations during initial data insertion. Use this when you have a
+    /// good estimate of how many keys you'll be storing.
+    ///
+    /// # Arguments
+    ///
+    /// * `capacity` - Initial capacity for the internal HashMap
+    ///
+    /// # Performance Benefits
+    ///
+    /// - Reduces memory allocations during growth
+    /// - Improves performance for large datasets
+    /// - Prevents HashMap rehashing for known sizes
+    ///
+    /// # Examples
+    ///
+    /// ```rust
+    /// use storage::MemoryStorage;
+    ///
+    /// // Pre-allocate for storing 1000 workflow variables
+    /// let storage = MemoryStorage::with_capacity(1000);
+    ///
+    /// // More efficient than using new() for large datasets
+    /// let large_storage = MemoryStorage::with_capacity(10_000);
+    /// ```
+    ///
+    /// # When to Use
+    ///
+    /// - When you know approximate data size in advance
+    /// - For performance-critical applications
+    /// - When loading large datasets into memory
+    /// - For bulk operations with many keys
     pub fn with_capacity(capacity: usize) -> Self {
         Self {
             data: HashMap::with_capacity(capacity),

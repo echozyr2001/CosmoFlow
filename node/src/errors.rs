@@ -4,11 +4,15 @@ use thiserror::Error;
 #[derive(Debug, Error)]
 pub enum NodeError {
     #[error("Execution error: {0}")]
+    /// An error that occurs during node execution.
     ExecutionError(String),
+    /// An error that occurs in the storage backend.
     #[error("Storage error: {0}")]
     StorageError(String),
+    /// An error that occurs during input validation.
     #[error("Validation error: {0}")]
     ValidationError(String),
+    /// An error that occurs during the preparation phase of a node.
     #[error("Preparation error: {0}")]
     PrepError(String),
 }

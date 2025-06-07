@@ -1,3 +1,103 @@
+//! Large Language Model (LLM) integration nodes for AI-powered workflows.
+//!
+//! This module provides node implementations for integrating Large Language Models
+//! into CosmoFlow workflows. It supports OpenAI-compatible APIs and enables
+//! AI-powered processing, text generation, analysis, and decision-making within
+//! workflow automation.
+//!
+//! # Features
+//!
+//! - OpenAI API integration with configurable endpoints
+//! - Support for multiple LLM providers (OpenAI, Azure OpenAI, local models)
+//! - Streaming and non-streaming response modes
+//! - Template-based prompt generation with variable substitution
+//! - Conversation management with message history
+//! - Configurable model parameters (temperature, max tokens, etc.)
+//! - Error handling and retry mechanisms
+//! - Cost tracking and usage monitoring
+//!
+//! # Available Nodes
+//!
+//! - [`MockLlmNodeBackend`] - Mock LLM responses for testing and development
+//! - [`ApiRequestNodeBackend`] - Production LLM API integration with full features
+//!
+//! # Configuration
+//!
+//! All LLM nodes use the [`ApiConfig`] struct for configuration, which supports:
+//! - API authentication and endpoints
+//! - Model selection and parameters
+//! - Request timeouts and retry settings
+//! - Streaming options
+//!
+//! # Examples
+//!
+//! ## Basic Text Generation
+//!
+//! ```rust
+//! use builtin::llm::{MockLlmNodeBackend, ApiConfig};
+//! use action::Action;
+//!
+//! let config = ApiConfig::new("your-api-key")
+//!     .with_model("gpt-4")
+//!     .with_max_tokens(500);
+//!
+//! let prompt_node = MockLlmNodeBackend::new(
+//!     "user_prompt",
+//!     "story_result",
+//!     "Once upon a time, robots learned to paint...",
+//!     Action::simple("review_story")
+//! );
+//! ```
+//!
+//! ## Template-Based Processing
+//!
+//! ```rust
+//! use builtin::llm::{MockLlmNodeBackend, ApiConfig};
+//! use action::Action;
+//!
+//! let config = ApiConfig::default();
+//!
+//! let analysis_node = MockLlmNodeBackend::new(
+//!     "user_feedback",
+//!     "sentiment_analysis",
+//!     "Sentiment: Positive",
+//!     Action::simple("process_sentiment")
+//! );
+//! ```
+//!
+//! ## Conversation Management
+//!
+//! ```rust
+//! use builtin::llm::{ApiRequestNodeBackend, ApiConfig};
+//! use action::Action;
+//!
+//! let config = ApiConfig::new("your-api-key")
+//!     .with_temperature(0.8);
+//!
+//! let chat_node = ApiRequestNodeBackend::new(
+//!     "conversation_messages",
+//!     "assistant_response",
+//!     Action::simple("continue_conversation")
+//! );
+//! ```
+//!
+//! # Security Considerations
+//!
+//! - Store API keys securely using environment variables
+//! - Validate and sanitize user inputs before sending to LLMs
+//! - Be aware of data privacy when using external LLM services
+//! - Monitor usage and costs to prevent unexpected charges
+//! - Consider using local models for sensitive data processing
+//!
+//! # Error Handling
+//!
+//! All LLM nodes handle common error scenarios:
+//! - Network connectivity issues
+//! - API rate limiting and quota exceeded
+//! - Invalid API keys or authentication failures
+//! - Model-specific errors (context length, content filtering)
+//! - Malformed responses and parsing errors
+
 use std::time::Duration;
 
 use action::Action;
@@ -14,6 +114,65 @@ use shared_store::SharedStore;
 use storage::StorageBackend;
 
 #[derive(Debug, Clone)]
+/// Configuration for LLM API connections and request parameters.
+///
+/// ApiConfig centralizes all configuration needed to connect to and interact
+/// with Large Language Model APIs. It supports OpenAI-compatible endpoints
+/// including OpenAI, Azure OpenAI, and local model servers.
+///
+/// # Default Behavior
+///
+/// - Reads API key from `OPENAI_API_KEY` environment variable
+/// - Uses `gpt-3.5-turbo` model with 1000 max tokens
+/// - Sets temperature to 0.7 for balanced creativity/consistency
+/// - Configures 30-second request timeout
+/// - Disables streaming by default
+///
+/// # Examples
+///
+/// ## Basic Configuration
+///
+/// ```rust
+/// use builtin::llm::ApiConfig;
+///
+/// // Using environment variable for API key
+/// let config = ApiConfig::default();
+///
+/// // Explicit API key
+/// let config = ApiConfig::new("sk-your-api-key-here");
+/// ```
+///
+/// ## Advanced Configuration
+///
+/// ```rust
+/// use builtin::llm::ApiConfig;
+///
+/// let config = ApiConfig::new("your-api-key")
+///     .with_model("gpt-4")
+///     .with_max_tokens(2000)
+///     .with_temperature(0.3)      // More deterministic
+///     .with_timeout(60);          // Longer timeout for complex requests
+/// ```
+///
+/// ## Custom Endpoint (e.g., Azure OpenAI)
+///
+/// ```rust
+/// use builtin::llm::ApiConfig;
+///
+/// let azure_config = ApiConfig::new("your-azure-key")
+///     .with_base_url("https://your-resource.openai.azure.com")
+///     .with_model("gpt-35-turbo");
+/// ```
+///
+/// ## Local Model Server
+///
+/// ```rust
+/// use builtin::llm::ApiConfig;
+///
+/// let local_config = ApiConfig::new("not-needed")
+///     .with_base_url("http://localhost:8000/v1")
+///     .with_model("llama2");
+/// ```
 pub struct ApiConfig {
     /// API key for authentication
     pub api_key: String,
@@ -130,6 +289,49 @@ impl ApiConfig {
 // LLM nodes implementation will be added here
 
 /// A mock LLM node for testing and examples
+///
+/// The MockLlmNodeBackend provides a simple simulation of LLM behavior without
+/// making actual API calls. This is useful for testing workflows, development,
+/// and demonstrations where you don't want to incur API costs or need predictable
+/// responses.
+///
+/// # Features
+///
+/// - Configurable mock responses
+/// - Template variable substitution in prompts
+/// - Simulated processing delays
+/// - Error handling and fallback responses
+/// - Retry mechanism support
+///
+/// # Examples
+///
+/// ## Basic Mock Response
+///
+/// ```rust
+/// use builtin::llm::MockLlmNodeBackend;
+/// use action::Action;
+///
+/// let mock_node = MockLlmNodeBackend::new(
+///     "user_prompt",
+///     "ai_response",
+///     "This is a mock AI response for testing purposes.",
+///     Action::simple("continue")
+/// );
+/// ```
+///
+/// ## Template Response
+///
+/// ```rust
+/// use builtin::llm::MockLlmNodeBackend;
+/// use action::Action;
+///
+/// let template_node = MockLlmNodeBackend::new(
+///     "analysis_request",
+///     "analysis_result",
+///     "Analysis complete. The input '${user_input}' has been processed successfully.",
+///     Action::simple("review_analysis")
+/// );
+/// ```
 pub struct MockLlmNodeBackend {
     prompt_key: String,
     output_key: String,
@@ -271,6 +473,82 @@ impl<S: StorageBackend + Send + Sync> NodeBackend<S> for MockLlmNodeBackend {
 /// This node makes actual HTTP requests to LLM APIs (OpenAI, etc.)
 /// It supports various configuration options including retries,
 /// custom endpoints, message history, and error handling.
+///
+/// The ApiRequestNodeBackend is the primary node for production LLM integration,
+/// providing full API compatibility and advanced features like conversation
+/// management, streaming responses, and sophisticated error handling.
+///
+/// # Features
+///
+/// - Full OpenAI API compatibility (and compatible services)
+/// - Conversation history management
+/// - Streaming and non-streaming responses
+/// - Template variable substitution in prompts
+/// - Comprehensive error handling with fallback responses
+/// - Configurable retry mechanisms with exponential backoff
+/// - Request/response logging and monitoring
+/// - Cost tracking and usage analytics
+///
+/// # Supported Input Formats
+///
+/// The node accepts several input formats for maximum flexibility:
+/// - Single string prompts
+/// - Array of message objects for conversation history
+/// - Template strings with variable substitution
+///
+/// # Examples
+///
+/// ## Simple Text Generation
+///
+/// ```rust
+/// use builtin::llm::{ApiRequestNodeBackend, ApiConfig};
+/// use action::Action;
+///
+/// let config = ApiConfig::new("your-api-key")
+///     .with_model("gpt-4")
+///     .with_max_tokens(500);
+///
+/// let text_gen = ApiRequestNodeBackend::new(
+///     "user_prompt",
+///     "generated_text",
+///     Action::simple("review_text")
+/// ).with_config(config);
+/// ```
+///
+/// ## Conversation with System Message
+///
+/// ```rust
+/// use builtin::llm::{ApiRequestNodeBackend, ApiConfig};
+/// use action::Action;
+///
+/// let config = ApiConfig::default();
+///
+/// let chat_node = ApiRequestNodeBackend::new(
+///     "conversation_messages",
+///     "assistant_response",
+///     Action::simple("continue_chat")
+/// )
+/// .with_config(config)
+/// .with_system_message("You are a helpful assistant specialized in data analysis.")
+/// .with_retries(5);
+/// ```
+///
+/// ## Error Handling and Fallbacks
+///
+/// ```rust
+/// use builtin::llm::{ApiRequestNodeBackend, ApiConfig};
+/// use action::Action;
+/// use std::time::Duration;
+///
+/// let robust_node = ApiRequestNodeBackend::new(
+///     "analysis_request",
+///     "analysis_result",
+///     Action::simple("process_analysis")
+/// )
+/// .with_config(ApiConfig::default())
+/// .with_retries(3)
+/// .with_retry_delay(Duration::from_secs(2));
+/// ```
 #[derive(Debug, Clone)]
 pub struct ApiRequestNodeBackend {
     /// Configuration for the API

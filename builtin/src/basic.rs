@@ -1,3 +1,56 @@
+//! Basic node implementations for common workflow operations.
+//!
+//! This module provides fundamental node types that handle common workflow tasks
+//! such as logging, data manipulation, and basic control flow. These nodes serve
+//! as building blocks for more complex workflows and demonstrate best practices
+//! for node implementation.
+//!
+//! # Available Nodes
+//!
+//! - [`LogNodeBackend`] - Logs messages during workflow execution
+//! - [`SetValueNodeBackend`] - Sets values in the shared store
+//! - [`GetValueNodeBackend`] - Retrieves and transforms values from the shared store
+//! - [`ConditionalNodeBackend`] - Provides conditional routing based on store values
+//! - [`DelayNodeBackend`] - Introduces delays for timing control
+//! - [`DelayNodeBackend`] - Introduces delays for timing control
+//!
+//! # Examples
+//!
+//! ## Creating a Simple Log Node
+//!
+//! ```rust
+//! use builtin::basic::LogNodeBackend;
+//! use action::Action;
+//!
+//! let log_node = LogNodeBackend::new("Processing started", Action::simple("next"));
+//! ```
+//!
+//! ## Data Manipulation Workflow
+//!
+//! ```rust
+//! use builtin::basic::{SetValueNodeBackend, GetValueNodeBackend};
+//! use action::Action;
+//! use serde_json::json;
+//!
+//! // Set initial data
+//! let set_node = SetValueNodeBackend::new(
+//!     "user_count",
+//!     json!(100),
+//!     Action::simple("increment")
+//! );
+//!
+//! // Transform data
+//! let transform_node = GetValueNodeBackend::new(
+//!     "user_count",
+//!     "user_count_doubled",
+//!     |value| match value {
+//!         Some(v) if v.is_number() => json!(v.as_f64().unwrap_or(0.0) * 2.0),
+//!         _ => json!(0),
+//!     },
+//!     Action::simple("complete")
+//! );
+//! ```
+
 use std::time::Duration;
 
 use action::Action;
@@ -8,6 +61,41 @@ use shared_store::SharedStore;
 use storage::StorageBackend;
 
 /// A simple node that logs messages and passes through
+///
+/// The LogNodeBackend provides basic logging functionality for workflows,
+/// allowing you to output messages at specific points in the execution flow.
+/// This is particularly useful for debugging, monitoring, and providing
+/// user feedback during long-running processes.
+///
+/// # Features
+///
+/// - Configurable log messages with execution context
+/// - Retry support with customizable delays
+/// - Pass-through behavior (doesn't modify data flow)
+/// - Minimal performance overhead
+///
+/// # Examples
+///
+/// ## Basic Usage
+///
+/// ```rust
+/// use builtin::basic::LogNodeBackend;
+/// use action::Action;
+///
+/// let node = LogNodeBackend::new("Starting data processing", Action::simple("process"));
+/// ```
+///
+/// ## With Retry Configuration
+///
+/// ```rust
+/// use builtin::basic::LogNodeBackend;
+/// use action::Action;
+/// use std::time::Duration;
+///
+/// let node = LogNodeBackend::new("Critical checkpoint", Action::simple("continue"))
+///     .with_retries(3)
+///     .with_retry_delay(Duration::from_secs(1));
+/// ```
 pub struct LogNodeBackend {
     message: String,
     action: Action,
@@ -17,6 +105,23 @@ pub struct LogNodeBackend {
 
 impl LogNodeBackend {
     /// Create a new log node
+    ///
+    /// Creates a LogNodeBackend that will output the specified message during
+    /// execution and then route to the given action.
+    ///
+    /// # Arguments
+    ///
+    /// * `message` - The message to log during execution
+    /// * `action` - The action to return after logging
+    ///
+    /// # Examples
+    ///
+    /// ```rust
+    /// use builtin::basic::LogNodeBackend;
+    /// use action::Action;
+    ///
+    /// let node = LogNodeBackend::new("Processing complete", Action::simple("finish"));
+    /// ```
     pub fn new<S: Into<String>>(message: S, action: Action) -> Self {
         Self {
             message: message.into(),
@@ -27,12 +132,48 @@ impl LogNodeBackend {
     }
 
     /// Set maximum retries
+    ///
+    /// Configures how many times this node should be retried if it fails.
+    /// This is useful for nodes that might fail due to temporary conditions.
+    ///
+    /// # Arguments
+    ///
+    /// * `max_retries` - Maximum number of retry attempts (minimum 1)
+    ///
+    /// # Examples
+    ///
+    /// ```rust
+    /// use builtin::basic::LogNodeBackend;
+    /// use action::Action;
+    ///
+    /// let node = LogNodeBackend::new("Unreliable operation", Action::simple("next"))
+    ///     .with_retries(5);
+    /// ```
     pub fn with_retries(mut self, max_retries: usize) -> Self {
         self.max_retries = max_retries;
         self
     }
 
     /// Set retry delay
+    ///
+    /// Configures the delay between retry attempts. This helps avoid
+    /// overwhelming systems and provides backoff behavior for failed operations.
+    ///
+    /// # Arguments
+    ///
+    /// * `delay` - Duration to wait between retry attempts
+    ///
+    /// # Examples
+    ///
+    /// ```rust
+    /// use builtin::basic::LogNodeBackend;
+    /// use action::Action;
+    /// use std::time::Duration;
+    ///
+    /// let node = LogNodeBackend::new("Network operation", Action::simple("next"))
+    ///     .with_retries(3)
+    ///     .with_retry_delay(Duration::from_millis(500));
+    /// ```
     pub fn with_retry_delay(mut self, delay: Duration) -> Self {
         self.retry_delay = delay;
         self
@@ -89,6 +230,59 @@ impl<S: StorageBackend + Send + Sync> NodeBackend<S> for LogNodeBackend {
 }
 
 /// A node that sets a value in the shared store
+///
+/// The SetValueNodeBackend allows workflows to store data in the shared store
+/// for use by subsequent nodes. This is essential for passing data between
+/// workflow steps and maintaining state across the execution flow.
+///
+/// # Features
+///
+/// - Store any JSON-serializable value
+/// - Atomic operations (value is set during post-processing)
+/// - Error handling for storage failures
+/// - Configurable retry behavior
+///
+/// # Examples
+///
+/// ## Setting Simple Values
+///
+/// ```rust
+/// use builtin::basic::SetValueNodeBackend;
+/// use action::Action;
+/// use serde_json::json;
+///
+/// // Set a user ID
+/// let set_user = SetValueNodeBackend::new(
+///     "current_user_id",
+///     json!(12345),
+///     Action::simple("load_user_data")
+/// );
+///
+/// // Set configuration
+/// let set_config = SetValueNodeBackend::new(
+///     "config",
+///     json!({
+///         "max_connections": 100,
+///         "timeout": 30,
+///         "debug": true
+///     }),
+///     Action::simple("start_service")
+/// );
+/// ```
+///
+/// ## With Error Handling
+///
+/// ```rust
+/// use builtin::basic::SetValueNodeBackend;
+/// use action::Action;
+/// use serde_json::json;
+///
+/// let node = SetValueNodeBackend::new(
+///     "critical_data",
+///     json!("important_value"),
+///     Action::simple("continue")
+/// ).with_retries(3); // Retry up to 3 times if storage fails
+/// ```
 pub struct SetValueNodeBackend {
     key: String,
     value: Value,
@@ -98,6 +292,29 @@ pub struct SetValueNodeBackend {
 
 impl SetValueNodeBackend {
     /// Create a new set value node
+    ///
+    /// Creates a SetValueNodeBackend that will store the specified key-value
+    /// pair in the shared store during the post-processing phase.
+    ///
+    /// # Arguments
+    ///
+    /// * `key` - The key under which to store the value
+    /// * `value` - The value to store (must be JSON-serializable)
+    /// * `action` - The action to return after setting the value
+    ///
+    /// # Examples
+    ///
+    /// ```rust
+    /// use builtin::basic::SetValueNodeBackend;
+    /// use action::Action;
+    /// use serde_json::json;
+    ///
+    /// let node = SetValueNodeBackend::new(
+    ///     "process_status",
+    ///     json!("completed"),
+    ///     Action::simple("cleanup")
+    /// );
+    /// ```
     pub fn new<S: Into<String>>(key: S, value: Value, action: Action) -> Self {
         Self {
             key: key.into(),
@@ -159,6 +376,102 @@ impl<S: StorageBackend + Send + Sync> NodeBackend<S> for SetValueNodeBackend {
 }
 
 /// A node that gets a value from the shared store and optionally transforms it
+///
+/// The GetValueNodeBackend retrieves data from the shared store and applies
+/// an optional transformation function before storing the result under a new key.
+/// This is useful for data processing, format conversion, and computation steps
+/// within workflows.
+///
+/// # Type Parameters
+///
+/// * `F` - A function that takes an `Option<Value>` and returns a `Value`.
+///   This function is applied to transform the retrieved data.
+///
+/// # Features
+///
+/// - Retrieve values by key from the shared store
+/// - Apply custom transformation functions
+/// - Handle missing values gracefully
+/// - Store transformed results under different keys
+/// - Configurable retry behavior
+///
+/// # Examples
+///
+/// ## Simple Value Retrieval
+///
+/// ```rust
+/// use builtin::basic::GetValueNodeBackend;
+/// use action::Action;
+/// use serde_json::{json, Value};
+///
+/// // Pass through values unchanged
+/// let pass_through = GetValueNodeBackend::new(
+///     "input_data",
+///     "output_data",
+///     |value| value.unwrap_or(json!(null)),
+///     Action::simple("continue")
+/// );
+/// ```
+///
+/// ## Data Transformation
+///
+/// ```rust
+/// use builtin::basic::GetValueNodeBackend;
+/// use action::Action;
+/// use serde_json::{json, Value};
+///
+/// // Double numeric values
+/// let doubler = GetValueNodeBackend::new(
+///     "number",
+///     "doubled_number",
+///     |value| match value {
+///         Some(v) if v.is_number() => {
+///             json!(v.as_f64().unwrap_or(0.0) * 2.0)
+///         },
+///         _ => json!(0),
+///     },
+///     Action::simple("next")
+/// );
+///
+/// // Convert to uppercase string
+/// let uppercase = GetValueNodeBackend::new(
+///     "text",
+///     "uppercase_text",
+///     |value| match value {
+///         Some(v) if v.is_string() => {
+///             json!(v.as_str().unwrap_or("").to_uppercase())
+///         },
+///         _ => json!(""),
+///     },
+///     Action::simple("format_complete")
+/// );
+/// ```
+///
+/// ## Complex Data Processing
+///
+/// ```rust
+/// use builtin::basic::GetValueNodeBackend;
+/// use action::Action;
+/// use serde_json::{json, Value};
+///
+/// // Extract and process array data
+/// let array_processor = GetValueNodeBackend::new(
+///     "user_list",
+///     "active_users",
+///     |value| {
+///         match value {
+///             Some(Value::Array(users)) => {
+///                 let active: Vec<_> = users.into_iter()
+///                     .filter(|user| user.get("active").and_then(Value::as_bool).unwrap_or(false))
+///                     .collect();
+///                 json!(active)
+///             },
+///             _ => json!([]),
+///         }
+///     },
+///     Action::simple("process_users")
+/// );
+/// ```
 pub struct GetValueNodeBackend<F>
 where
     F: Fn(Option<Value>) -> Value + Send + Sync,
@@ -175,6 +488,35 @@ where
     F: Fn(Option<Value>) -> Value + Send + Sync,
 {
     /// Create a new get value node
+    ///
+    /// Creates a GetValueNodeBackend that retrieves a value from the shared store,
+    /// applies a transformation function, and stores the result under a new key.
+    ///
+    /// # Arguments
+    ///
+    /// * `key` - The key to retrieve from the shared store
+    /// * `output_key` - The key under which to store the transformed result
+    /// * `transform` - Function to transform the retrieved value
+    /// * `action` - The action to return after processing
+    ///
+    /// # Examples
+    ///
+    /// ```rust
+    /// use builtin::basic::GetValueNodeBackend;
+    /// use action::Action;
+    /// use serde_json::{json, Value};
+    ///
+    /// // Create a node that increments a counter
+    /// let increment_node = GetValueNodeBackend::new(
+    ///     "counter",
+    ///     "counter",
+    ///     |value| {
+    ///         let current = value.unwrap_or(json!(0));
+    ///         json!(current.as_i64().unwrap_or(0) + 1)
+    ///     },
+    ///     Action::simple("continue")
+    /// );
+    /// ```
     pub fn new<S1: Into<String>, S2: Into<String>>(
         key: S1,
         output_key: S2,
@@ -248,6 +590,74 @@ where
 }
 
 /// A conditional node that chooses actions based on store content
+///
+/// The ConditionalNodeBackend evaluates a condition function against the
+/// shared store and returns different actions based on the result. This
+/// enables dynamic workflow routing based on runtime data.
+///
+/// # Type Parameters
+///
+/// * `F` - A function that takes a reference to the SharedStore and returns a boolean
+/// * `S` - The storage backend type
+///
+/// # Features
+///
+/// - Dynamic action selection based on store state
+/// - Custom condition functions for maximum flexibility
+/// - Support for complex conditional logic
+/// - Configurable retry behavior
+///
+/// # Examples
+///
+/// ## Simple Value Checks
+///
+/// ```rust
+/// use builtin::basic::ConditionalNodeBackend;
+/// use action::Action;
+/// use serde_json::json;
+/// use storage::MemoryStorage;
+///
+/// let condition_node = ConditionalNodeBackend::<_, MemoryStorage>::new(
+///     |store| {
+///         store.get("user_authenticated")
+///             .ok()
+///             .flatten()
+///             .and_then(|v: serde_json::Value| v.as_bool())
+///             .unwrap_or(false)
+///     },
+///     Action::simple("dashboard"),     // If authenticated
+///     Action::simple("login_page")     // If not authenticated
+/// );
+/// ```
+///
+/// ## Complex Conditions
+///
+/// ```rust
+/// use builtin::basic::ConditionalNodeBackend;
+/// use action::Action;
+/// use serde_json::json;
+/// use storage::MemoryStorage;
+///
+/// let complex_condition = ConditionalNodeBackend::<_, MemoryStorage>::new(
+///     |store| {
+///         let user_count = store.get("active_users")
+///             .ok()
+///             .flatten()
+///             .and_then(|v: serde_json::Value| v.as_i64())
+///             .unwrap_or(0);
+///         
+///         let server_load = store.get("cpu_usage")
+///             .ok()
+///             .flatten()
+///             .and_then(|v: serde_json::Value| v.as_f64())
+///             .unwrap_or(0.0);
+///         
+///         user_count > 100 && server_load < 80.0
+///     },
+///     Action::simple("scale_up"),      // High usage, low load
+///     Action::simple("maintain")       // Normal operation
+/// );
+/// ```
 pub struct ConditionalNodeBackend<F, S>
 where
     F: Fn(&SharedStore<S>) -> bool + Send + Sync,
@@ -266,6 +676,29 @@ where
     S: StorageBackend,
 {
     /// Create a new conditional node
+    ///
+    /// Creates a ConditionalNodeBackend that evaluates the provided condition
+    /// function against the shared store and returns the appropriate action.
+    ///
+    /// # Arguments
+    ///
+    /// * `condition` - Function that evaluates the store and returns a boolean
+    /// * `if_true` - Action to return when condition is true
+    /// * `if_false` - Action to return when condition is false
+    ///
+    /// # Examples
+    ///
+    /// ```rust
+    /// use builtin::basic::ConditionalNodeBackend;
+    /// use action::Action;
+    /// use storage::MemoryStorage;
+    ///
+    /// let node = ConditionalNodeBackend::<_, MemoryStorage>::new(
+    ///     |store| store.get("ready").ok().flatten().and_then(|v: serde_json::Value| v.as_bool()).unwrap_or(false),
+    ///     Action::simple("proceed"),
+    ///     Action::simple("wait")
+    /// );
+    /// ```
     pub fn new(condition: F, if_true: Action, if_false: Action) -> Self {
         Self {
             condition,
@@ -333,6 +766,62 @@ where
 }
 
 /// A delay node that waits for a specified duration
+///
+/// The DelayNodeBackend introduces a pause in workflow execution for the
+/// specified duration. This is useful for rate limiting, scheduling delays,
+/// waiting for external systems, or implementing backoff strategies.
+///
+/// # Features
+///
+/// - Configurable delay duration
+/// - Non-blocking async implementation
+/// - Precise timing using tokio::time::sleep
+/// - Configurable retry behavior
+/// - Minimal resource usage during delay
+///
+/// # Examples
+///
+/// ## Basic Delay
+///
+/// ```rust
+/// use builtin::basic::DelayNodeBackend;
+/// use action::Action;
+/// use std::time::Duration;
+///
+/// // Wait 5 seconds before continuing
+/// let delay_node = DelayNodeBackend::new(
+///     Duration::from_secs(5),
+///     Action::simple("continue")
+/// );
+/// ```
+///
+/// ## Rate Limiting
+///
+/// ```rust
+/// use builtin::basic::DelayNodeBackend;
+/// use action::Action;
+/// use std::time::Duration;
+///
+/// // Rate limit API calls to 1 per second
+/// let rate_limit = DelayNodeBackend::new(
+///     Duration::from_secs(1),
+///     Action::simple("api_call")
+/// ).with_retries(3);
+/// ```
+///
+/// ## Backoff Strategy
+///
+/// ```rust
+/// use builtin::basic::DelayNodeBackend;
+/// use action::Action;
+/// use std::time::Duration;
+///
+/// // Exponential backoff delay
+/// let backoff_delay = DelayNodeBackend::new(
+///     Duration::from_millis(500), // Base delay
+///     Action::simple("retry_operation")
+/// );
+/// ```
 pub struct DelayNodeBackend {
     duration: Duration,
     action: Action,
@@ -341,6 +830,28 @@ pub struct DelayNodeBackend {
 
 impl DelayNodeBackend {
     /// Create a new delay node
+    ///
+    /// Creates a DelayNodeBackend that will pause execution for the specified
+    /// duration before returning the given action.
+    ///
+    /// # Arguments
+    ///
+    /// * `duration` - How long to wait before continuing
+    /// * `action` - The action to return after the delay
+    ///
+    /// # Examples
+    ///
+    /// ```rust
+    /// use builtin::basic::DelayNodeBackend;
+    /// use action::Action;
+    /// use std::time::Duration;
+    ///
+    /// // Wait 30 seconds before proceeding
+    /// let node = DelayNodeBackend::new(
+    ///     Duration::from_secs(30),
+    ///     Action::simple("timeout_complete")
+    /// );
+    /// ```
     pub fn new(duration: Duration, action: Action) -> Self {
         Self {
             duration,
@@ -399,21 +910,93 @@ impl<S: StorageBackend + Send + Sync> NodeBackend<S> for DelayNodeBackend {
 }
 
 /// Helper function to create a simple log node with default settings
+///
+/// Creates a LogNodeBackend with default configuration and a "continue" action.
+/// This is a convenience function for quickly adding logging to workflows.
+///
+/// # Arguments
+///
+/// * `message` - The message to log
+///
+/// # Examples
+///
+/// ```rust
+/// use builtin::basic::log;
+///
+/// let checkpoint = log("Reached checkpoint 1");
+/// let status = log("Processing completed successfully");
+/// ```
 pub fn log<S: Into<String>>(message: S) -> LogNodeBackend {
     LogNodeBackend::new(message, Action::simple("continue"))
 }
 
 /// Helper function to create a simple set value node
+///
+/// Creates a SetValueNodeBackend with default configuration and a "continue" action.
+/// This is a convenience function for quickly setting values in workflows.
+///
+/// # Arguments
+///
+/// * `key` - The key under which to store the value
+/// * `value` - The value to store
+///
+/// # Examples
+///
+/// ```rust
+/// use builtin::basic::set_value;
+/// use serde_json::json;
+///
+/// let set_status = set_value("process_status", json!("started"));
+/// let set_config = set_value("max_retries", json!(3));
+/// ```
 pub fn set_value<S: Into<String>>(key: S, value: Value) -> SetValueNodeBackend {
     SetValueNodeBackend::new(key, value, Action::simple("continue"))
 }
 
 /// Helper function to create a simple delay node
+///
+/// Creates a DelayNodeBackend with default configuration and a "continue" action.
+/// This is a convenience function for quickly adding delays to workflows.
+///
+/// # Arguments
+///
+/// * `duration` - How long to wait
+///
+/// # Examples
+///
+/// ```rust
+/// use builtin::basic::delay;
+/// use std::time::Duration;
+///
+/// let short_pause = delay(Duration::from_millis(100));
+/// let long_pause = delay(Duration::from_secs(10));
+/// ```
 pub fn delay(duration: Duration) -> DelayNodeBackend {
     DelayNodeBackend::new(duration, Action::simple("continue"))
 }
 
 /// Helper function to create a get value node with identity transform
+///
+/// Creates a GetValueNodeBackend that copies a value from one key to another
+/// without modification. This is useful for renaming keys or creating backups
+/// of values in the shared store.
+///
+/// # Arguments
+///
+/// * `key` - The key to retrieve from
+/// * `output_key` - The key to store the result under
+///
+/// # Examples
+///
+/// ```rust
+/// use builtin::basic::get_value;
+///
+/// // Copy a value to a new key
+/// let copy_value = get_value("original_data", "backup_data");
+///
+/// // Rename a value (use with subsequent delete of original)
+/// let rename_value = get_value("temp_result", "final_result");
+/// ```
 pub fn get_value<S1: Into<String>, S2: Into<String>>(
     key: S1,
     output_key: S2,

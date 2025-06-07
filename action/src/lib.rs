@@ -1,42 +1,20 @@
-//! Action system for CosmoFlow workflows
+#![deny(missing_docs)]
+//! # CosmoFlow Action
 //!
-//! This crate provides types and functionality for representing and evaluating
-//! actions that control flow between nodes in CosmoFlow workflows.
+//! This crate provides the action and condition types used to control workflow
+//! execution in the CosmoFlow engine.
 //!
-//! # Core Types
+//! It defines the [`Action`] and [`ActionCondition`] enums, which allow nodes
+//! to return control flow decisions to the engine. This crate is a low-level
+//! component of CosmoFlow and is not intended to be used directly in most
+//! applications.
 //!
-//! - [`Action`] - Represents various types of actions (simple, parameterized, conditional, etc.)
-//! - [`ActionCondition`] - Represents conditions for conditional actions
-//! - [`ComparisonOperator`] - Operators for numeric comparisons in conditions
-//!
-//! # Examples
-//!
-//! ## Basic Usage
-//!
-//! ```
-//! use action::Action;
-//! use serde_json::json;
-//! use std::collections::HashMap;
-//!
-//! // Create a simple action
-//! let action = Action::simple("next_step");
-//!
-//! // Create a parameterized action
-//! let mut params = HashMap::new();
-//! params.insert("retry_count".to_string(), json!(3));
-//! let param_action = Action::with_params("retry", params);
-//!
-//! // Create a conditional action
-//! use action::ActionCondition;
-//! let condition = ActionCondition::key_equals("status", json!("ready"));
-//! let conditional = Action::conditional(
-//!     condition,
-//!     Action::simple("proceed"),
-//!     Action::simple("wait")
-//! );
-//! ```
+//! For more information, please see the main [`cosmoflow`](https://docs.rs/cosmoflow)
+//! crate documentation.
 
+/// The action module defines the `Action` enum and its variants.
 pub mod action;
+/// The condition module defines the `ActionCondition` enum and its variants.
 pub mod condition;
 
 pub use action::Action;

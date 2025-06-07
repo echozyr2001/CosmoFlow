@@ -1,4 +1,110 @@
+#![deny(missing_docs)]
+//! # Node - CosmoFlow Node Execution System
+//!
+//! This crate provides the core execution system for CosmoFlow workflows. It defines the
+//! `Node` trait and execution infrastructure that enables workflows to run individual
+//! processing units with proper error handling, retry logic, and execution context management.
+//!
+//! ## Key Features
+//!
+//! - **Async Execution**: Full async/await support for modern Rust applications
+//! - **Retry Logic**: Built-in retry mechanisms with configurable policies
+//! - **Error Handling**: Comprehensive error types and propagation
+//! - **Execution Context**: Rich context information for node execution
+//! - **Type Safety**: Compile-time guarantees for node implementations
+//!
+//! ## Quick Start
+//!
+//! ### Implementing a Custom Node
+//!
+//! ```rust
+//! use node::{Node, NodeBackend, ExecutionContext, NodeError};
+//! use shared_store::SharedStore;
+//! use action::Action;
+//! use async_trait::async_trait;
+//!
+//! struct MyCustomNode {
+//!     name: String,
+//! }
+//!
+//! #[async_trait]
+//! impl<S> NodeBackend<S> for MyCustomNode
+//! where
+//!     S: storage::StorageBackend + Send + Sync
+//! {
+//!     type PrepResult = ();
+//!     type ExecResult = String;
+//!     type Error = NodeError;
+//!
+//!     async fn prep(
+//!         &mut self,
+//!         _store: &SharedStore<S>,
+//!         _context: &ExecutionContext,
+//!     ) -> Result<Self::PrepResult, Self::Error> {
+//!         Ok(())
+//!     }
+//!
+//!     async fn exec(
+//!         &mut self,
+//!         _prep_result: Self::PrepResult,
+//!         _context: &ExecutionContext,
+//!     ) -> Result<Self::ExecResult, Self::Error> {
+//!         Ok(format!("Executed node: {}", self.name))
+//!     }
+//!
+//!     async fn post(
+//!         &mut self,
+//!         _store: &mut SharedStore<S>,
+//!         _prep_result: Self::PrepResult,
+//!         _exec_result: Self::ExecResult,
+//!         _context: &ExecutionContext,
+//!     ) -> Result<Action, Self::Error> {
+//!         Ok(Action::simple("complete"))
+//!     }
+//! }
+//! ```
+//!
+//! ### Using Execution Context
+//!
+//! ```rust
+//! use node::ExecutionContext;
+//! use std::time::Duration;
+//!
+//! let context = ExecutionContext::new(3, Duration::from_millis(500));
+//!
+//! println!("Execution ID: {}", context.execution_id);
+//! println!("Max retries: {}", context.max_retries);
+//! ```
+//!
+//! ## Core Types
+//!
+//! - [`ExecutionContext`]: Contains execution metadata and retry configuration
+//! - [`NodeBackend`]: Trait for implementing custom node types
+//! - [`Node`]: Wrapper that provides retry logic and error handling
+//! - [`NodeError`]: Comprehensive error types for node execution
+//!
+//! ## Error Handling
+//!
+//! The node system provides detailed error information:
+//!
+//! ```rust
+//! use node::NodeError;
+//!
+//! # let node_result: Result<(), NodeError> = Err(NodeError::ExecutionError("timeout".to_string()));
+//! match node_result {
+//!     Err(NodeError::ExecutionError(msg)) if msg.contains("timeout") => {
+//!         println!("Node execution timed out");
+//!     },
+//!     Err(NodeError::ValidationError(message)) => {
+//!         println!("Invalid input: {}", message);
+//!     },
+//!     _ => {}
+//! }
+//! ```
+
+/// The errors module contains the error types for the node crate.
 pub mod errors;
+/// The traits module contains the `NodeBackend` trait.
 pub mod traits;
 
 pub use errors::NodeError;
