@@ -305,6 +305,16 @@
 //! - `llm`: Large Language Model integration nodes
 //! - `testing`: Additional utilities for testing (development only)
 
+/// Basic workflow operations and utilities
 pub mod basic;
+/// Large Language Model integration nodes
 pub mod llm;
+/// High-level convenience functions for creating node instances
 pub mod nodes;
+
+pub use basic::{
+    ConditionalNodeBackend, DelayNodeBackend, GetValueNodeBackend, LogNodeBackend,
+    SetValueNodeBackend,
+};
+pub use llm::{ApiConfig, ApiRequestNodeBackend, MockLlmNodeBackend};
+pub use nodes::generic::*;

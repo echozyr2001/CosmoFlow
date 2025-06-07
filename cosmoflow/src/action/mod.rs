@@ -1,11 +1,11 @@
 #![deny(missing_docs)]
 //! # CosmoFlow Action
 //!
-//! This crate provides the action and condition types used to control workflow
+//! This module provides the action and condition types used to control workflow
 //! execution in the CosmoFlow engine.
 //!
 //! It defines the [`Action`] and [`ActionCondition`] enums, which allow nodes
-//! to return control flow decisions to the engine. This crate is a low-level
+//! to return control flow decisions to the engine. This module is a low-level
 //! component of CosmoFlow and is not intended to be used directly in most
 //! applications.
 //!

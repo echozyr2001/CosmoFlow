@@ -10,7 +10,7 @@ CosmoFlow follows a modular, layered architecture where each component has clear
 
 ### Flows
 
-The `flow` crate provides workflow orchestration and execution. A Flow represents a directed graph of nodes with routing rules.
+The `cosmoflow::flow` module provides workflow orchestration and execution. A Flow represents a directed graph of nodes with routing rules.
 
 **Key Features:**
 - Async execution model
@@ -29,7 +29,7 @@ let flow = Flow::builder("my-workflow")
 
 ### Nodes
 
-The `node` crate defines the execution units of workflows. Each node implements the `NodeBackend` trait.
+The `cosmoflow::node` module defines the execution units of workflows. Each node implements the `NodeBackend` trait.
 
 **Key Features:**
 - Async execution
@@ -50,7 +50,7 @@ impl NodeBackend for MyNode {
 
 ### Actions
 
-The `action` crate handles flow control between nodes, supporting simple transitions, parameterized routing, and conditional branching.
+The `cosmoflow::action` module handles flow control between nodes, supporting simple transitions, parameterized routing, and conditional branching.
 
 **Types of Actions:**
 - **Simple**: Direct transition to named node
@@ -67,7 +67,7 @@ let action = Action::conditional(condition, "authenticated_flow", "login_flow");
 
 ### Shared Store
 
-The `shared_store` crate provides type-safe data sharing between nodes with a simple `get()`/`set()` API.
+The `cosmoflow::shared_store` module provides type-safe data sharing between nodes with a simple `get()`/`set()` API.
 
 **Key Features:**
 - Type-safe operations
@@ -86,7 +86,7 @@ let user_id: String = store.get("user_id").await?;
 
 ### Storage Backends
 
-The `storage` crate provides pluggable storage implementations:
+The `cosmoflow::storage` module provides pluggable storage implementations:
 
 - **Memory**: Fast, non-persistent storage
 - **File**: Persistent file-based storage

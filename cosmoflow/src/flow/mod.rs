@@ -1172,7 +1172,7 @@ mod tests {
 
     #[tokio::test]
     async fn test_conditional_route() {
-        use crate::route::RouteCondition;
+        use crate::flow::route::RouteCondition;
 
         let mut flow = FlowBuilder::new()
             .start_node("start")

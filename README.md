@@ -96,32 +96,33 @@ question. You can also ask your question on [the discussions page][discussions].
 [Chat]: https://discord.gg/cosmoflow
 [discussions]: https://github.com/echozyr2001/CosmoFlow/discussions
 
-## Crate Ecosystem
+## Module Ecosystem
 
-CosmoFlow is built as a modular workspace. Each component is a separate crate,
-allowing you to use only what you need while maintaining full composability:
+CosmoFlow is built with a modular architecture. Each component is a module within the main
+`cosmoflow` crate, allowing you to use only what you need through feature flags while 
+maintaining full composability:
 
 * [`cosmoflow`]: Main integration and API crate for CosmoFlow workflows.
 
-* [`flow`]: Workflow orchestration engine for managing complex multi-node workflows.
+* [`cosmoflow::flow`]: Workflow orchestration engine for managing complex multi-node workflows.
 
-* [`node`]: Execution nodes system with async support and retry logic.
+* [`cosmoflow::node`]: Execution nodes system with async support and retry logic.
 
-* [`action`]: Control flow logic and condition evaluation.
+* [`cosmoflow::action`]: Control flow logic and condition evaluation.
 
-* [`shared_store`]: Thread-safe data communication layer between workflow components.
+* [`cosmoflow::shared_store`]: Thread-safe data communication layer between workflow components.
 
-* [`storage`]: Pluggable storage backends (memory, file, and custom implementations).
+* [`cosmoflow::storage`]: Pluggable storage backends (memory, file, and custom implementations).
 
-* [`builtin`]: Pre-built node components for common workflow operations.
+* [`cosmoflow::builtin`]: Pre-built node components for common workflow operations.
 
 [`cosmoflow`]: https://docs.rs/cosmoflow/latest/cosmoflow
-[`flow`]: ./flow/
-[`node`]: ./node/
-[`action`]: ./action/
-[`shared_store`]: ./shared_store/
-[`storage`]: ./storage/
-[`builtin`]: ./builtin/
+[`cosmoflow::flow`]: https://docs.rs/cosmoflow/latest/cosmoflow/flow/index.html
+[`cosmoflow::node`]: https://docs.rs/cosmoflow/latest/cosmoflow/node/index.html
+[`cosmoflow::action`]: https://docs.rs/cosmoflow/latest/cosmoflow/action/index.html
+[`cosmoflow::shared_store`]: https://docs.rs/cosmoflow/latest/cosmoflow/shared_store/index.html
+[`cosmoflow::storage`]: https://docs.rs/cosmoflow/latest/cosmoflow/storage/index.html
+[`cosmoflow::builtin`]: https://docs.rs/cosmoflow/latest/cosmoflow/builtin/index.html
 
 ## License
 

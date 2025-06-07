@@ -31,7 +31,6 @@
 //! let mut flow = Flow::new();
 //!
 //! // Execute the flow
-//! let context = ExecutionContext::new(3, Duration::from_secs(1));
 //! let result = flow.execute(&mut store).await?;
 //! # Ok(())
 //! # }
@@ -56,30 +55,24 @@
 //! *   `standard`: Enables `storage-memory` and `builtin` features.
 //! *   `full`: Enables all features.
 
-// Core Exports
-// FIXME: core export
-// pub use flow::errors::FlowError;
-// pub use flow::route::Route;
-// pub use flow::{Flow, FlowBuilder, FlowConfig, FlowExecutionResult};
+// ============================================================================
+// CORE EXPORTS
+// ============================================================================
 
+/// Shared store for data communication between workflow nodes
 pub mod shared_store;
 pub use shared_store::SharedStore;
-
-// Module Exports
 
 /// Action definition and condition evaluation
 pub mod action;
 pub use action::{Action, ActionCondition};
 
-/// Built-in node implementations (optional)
-#[cfg(feature = "builtin")]
-pub mod builtin;
-
 /// Flow definition and execution
 pub mod flow;
-pub use flow::errors::FlowError;
-pub use flow::route::Route;
-pub use flow::{Flow, FlowBuilder, FlowConfig, FlowExecutionResult};
+pub use flow::{
+    Flow, FlowBackend, FlowBuilder, FlowConfig, FlowExecutionResult, errors::FlowError,
+    route::Route,
+};
 
 /// Node execution system and traits
 pub mod node;
@@ -87,32 +80,50 @@ pub use node::{ExecutionContext, Node, NodeBackend, NodeError};
 
 /// Storage backend abstractions and implementations
 pub mod storage;
-// FIXME: re-export
-// pub mod storage {
-//     pub use storage::StorageBackend;
-//     #[cfg(feature = "storage-file")]
-//     pub use storage::backends::FileStorage;
-//     #[cfg(feature = "storage-memory")]
-//     pub use storage::backends::MemoryStorage;
-// }
+// Re-export storage types for convenience
+pub use storage::StorageBackend;
+
+// ============================================================================
+// FEATURE-GATED EXPORTS
+// ============================================================================
+
+/// Built-in node implementations (optional)
+#[cfg(feature = "builtin")]
+pub mod builtin;
+
+// ============================================================================
+// CONVENIENCE TYPE ALIAS
+// ============================================================================
 
 /// A convenient result type alias for CosmoFlow operations
 pub type Result<T> = std::result::Result<T, FlowError>;
 
+// ============================================================================
+// PRELUDE MODULE
+// ============================================================================
+
 /// The prelude module for commonly used types and traits.
+///
+/// This module provides a convenient way to import the most commonly used
+/// types and traits from CosmoFlow. Import this module to get started quickly:
+///
+/// ```rust
+/// use cosmoflow::prelude::*;
+/// ```
 pub mod prelude {
+    // Core types
     pub use crate::{
-        Action, ActionCondition, ExecutionContext, Flow, FlowBuilder, FlowConfig,
-        FlowExecutionResult, Node, NodeBackend, SharedStore,
+        Action, ActionCondition, ExecutionContext, Flow, FlowBackend, FlowBuilder, FlowConfig,
+        FlowExecutionResult, Node, NodeBackend, SharedStore, StorageBackend,
     };
 
+    // Feature-gated re-exports
     #[cfg(feature = "builtin")]
     pub use crate::builtin::*;
 
-    pub use crate::storage::StorageBackend;
+    #[cfg(feature = "storage-memory")]
+    pub use crate::storage::MemoryStorage;
 
     #[cfg(feature = "storage-file")]
     pub use crate::storage::FileStorage;
-    #[cfg(feature = "storage-memory")]
-    pub use crate::storage::MemoryStorage;
 }
