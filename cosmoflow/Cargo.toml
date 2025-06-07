@@ -8,7 +8,7 @@ license = "MIT"
 keywords = ["llm", "ai", "workflow", "cosmoai", "flow", "graph"]
 homepage = "https://github.com/echozyr2001/CosmoFlow"
 repository = "https://github.com/echozyr2001/CosmoFlow"
-readme = "../README.md"
+readme = "README.md"
 
 [dependencies]
 async-openai = { workspace = true }
