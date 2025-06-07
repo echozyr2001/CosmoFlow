@@ -71,6 +71,13 @@ jobs:
     runs-on: ubuntu-latest
     permissions:
       contents: read
+    strategy:
+      matrix:
+        # Test key feature combinations that are most likely to break
+        features:
+          - "--features minimal" # Most restrictive - catches missing feature gates
+          - "--features standard" # Common usage
+          - "--all-features" # Full functionality
     steps:
       - name: Install system dependencies
         run: sudo apt-get update && sudo apt-get install -y libsqlite3-dev
@@ -92,16 +99,22 @@ jobs:
         run: cargo install cargo-nextest --locked
 
       - name: Run Tests with Nextest
-        run: cargo nextest run --all-features --workspace
+        run: cargo nextest run ${{ matrix.features }} --workspace
 
-      - name: Run Doc Test
-        run: cargo test --doc --all-features --workspace
+      - name: Run Doc Tests
+        run: cargo test --doc ${{ matrix.features }} --workspace
 
   build:
     name: Build Check
     runs-on: ubuntu-latest
     permissions:
       contents: read
+    strategy:
+      matrix:
+        # Test build for different feature sets
+        features:
+          - "--features minimal" # Minimal build
+          - "--all-features" # Full build
     steps:
       - name: Install system dependencies
         run: sudo apt-get update && sudo apt-get install -y libsqlite3-dev
@@ -120,7 +133,43 @@ jobs:
             target
 
       - name: Build Project
-        run: cargo build --all-features --workspace
+        run: cargo build ${{ matrix.features }} --workspace
+
+  feature-gate-check:
+    name: Feature Gate Validation
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+    strategy:
+      matrix:
+        features:
+          - "--no-default-features"
+          - "--features minimal"
+          - "--features basic"
+          - "--features standard"
+          - "--all-features"
+    steps:
+      - name: Install system dependencies
+        run: sudo apt-get update && sudo apt-get install -y libsqlite3-dev
+
+      - name: Checkout Code
+        uses: actions/checkout@v4
+
+      - name: Setup Rust Toolchain
+        uses: actions-rust-lang/setup-rust-toolchain@v1
+        with:
+          toolchain: stable
+          cache: true
+          cache-directories: |-
+            ~/.cargo/registry
+            ~/.cargo/git
+            target
+
+      - name: Check compilation
+        run: cargo check ${{ matrix.features }} --workspace
+
+      - name: Run doc tests (quick check)
+        run: cargo test --doc ${{ matrix.features }} --workspace
 
 concurrency:
   group: ${{ github.workflow }}-${{ github.event.pull_request.number || github.sha }}
