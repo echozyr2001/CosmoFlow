@@ -57,7 +57,6 @@
 //! *   `full`: Enables all features.
 
 // Core Exports
-pub use action::{Action, ActionCondition};
 pub use flow::errors::FlowError;
 pub use flow::route::Route;
 pub use flow::{Flow, FlowBuilder, FlowConfig, FlowExecutionResult};
@@ -69,9 +68,8 @@ pub use shared_store::SharedStore;
 // Module Exports
 
 /// Action definition and condition evaluation
-pub mod actions {
-    pub use ::action::*;
-}
+pub mod action;
+pub use action::{Action, ActionCondition};
 
 /// Built-in node implementations (optional)
 #[cfg(feature = "builtin")]
