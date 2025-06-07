@@ -24,8 +24,8 @@
 //! ## Basic Node Creation
 //!
 //! ```rust
-//! use builtin::nodes::generic;
-//! use storage::MemoryStorage;
+//! use cosmoflow::builtin::nodes::generic;
+//! use cosmoflow::storage::MemoryStorage;
 //! use std::time::Duration;
 //! use serde_json::json;
 //!
@@ -38,9 +38,9 @@
 //! ## Workflow Integration
 //!
 //! ```rust
-//! use builtin::nodes::generic;
+//! use cosmoflow::builtin::nodes::generic;
 //! use serde_json::json;
-//! use storage::MemoryStorage;
+//! use cosmoflow::storage::MemoryStorage;
 //!
 //! // Create nodes for workflow
 //! let start_node = generic::log_node::<MemoryStorage>("Workflow started");
@@ -53,10 +53,10 @@
 
 use std::time::Duration;
 
-use node::Node;
+use crate::node::Node;
 use serde_json::Value;
 
-use crate::basic::*;
+use super::basic::*;
 
 /// Generic node creation functions for custom storage backends
 ///
@@ -69,7 +69,7 @@ use crate::basic::*;
 /// All functions return [`Node`] instances that wrap the corresponding
 /// [`node::NodeBackend`] implementations with full execution capabilities.
 pub mod generic {
-    use storage::StorageBackend;
+    use crate::storage::StorageBackend;
 
     use super::*;
 
@@ -86,8 +86,8 @@ pub mod generic {
     /// # Examples
     ///
     /// ```rust
-    /// use builtin::nodes::generic;
-    /// use storage::MemoryStorage;
+    /// use cosmoflow::builtin::nodes::generic;
+    /// use cosmoflow::storage::MemoryStorage;
     ///
     /// let checkpoint = generic::log_node::<MemoryStorage>("Reached checkpoint 1");
     /// let status = generic::log_node::<MemoryStorage>("Processing completed");
@@ -110,8 +110,8 @@ pub mod generic {
     /// # Examples
     ///
     /// ```rust
-    /// use builtin::nodes::generic;
-    /// use storage::MemoryStorage;
+    /// use cosmoflow::builtin::nodes::generic;
+    /// use cosmoflow::storage::MemoryStorage;
     /// use serde_json::json;
     ///
     /// // Store simple values
@@ -145,8 +145,8 @@ pub mod generic {
     /// # Examples
     ///
     /// ```rust
-    /// use builtin::nodes::generic;
-    /// use storage::MemoryStorage;
+    /// use cosmoflow::builtin::nodes::generic;
+    /// use cosmoflow::storage::MemoryStorage;
     /// use std::time::Duration;
     ///
     /// // Short delays for rate limiting
@@ -177,8 +177,8 @@ pub mod generic {
     /// # Examples
     ///
     /// ```rust
-    /// use builtin::nodes::generic;
-    /// use storage::MemoryStorage;
+    /// use cosmoflow::builtin::nodes::generic;
+    /// use cosmoflow::storage::MemoryStorage;
     ///
     /// // Copy values between keys
     /// let copy_user_data = generic::get_value_node::<MemoryStorage>(
@@ -226,9 +226,9 @@ pub mod generic {
     /// # Examples
     ///
     /// ```rust
-    /// use builtin::nodes::generic;
-    /// use storage::MemoryStorage;
-    /// use action::Action;
+    /// use cosmoflow::builtin::nodes::generic;
+    /// use cosmoflow::storage::MemoryStorage;
+    /// use cosmoflow::action::Action;
     ///
     /// // Simple value comparison
     /// let score_check = generic::conditional_node::<_, MemoryStorage>(
@@ -286,11 +286,11 @@ pub mod generic {
     /// * `S` - The storage backend type
     pub fn conditional_node<F, S: StorageBackend>(
         condition: F,
-        if_true: action::Action,
-        if_false: action::Action,
+        if_true: crate::action::Action,
+        if_false: crate::action::Action,
     ) -> Node<ConditionalNodeBackend<F, S>, S>
     where
-        F: Fn(&shared_store::SharedStore<S>) -> bool + Send + Sync,
+        F: Fn(&crate::shared_store::SharedStore<S>) -> bool + Send + Sync,
     {
         Node::new(ConditionalNodeBackend::new(condition, if_true, if_false))
     }

@@ -28,10 +28,10 @@
 //! - **CounterNode**: Maintain and increment counters
 //!
 //! ```rust
-//! use builtin::basic::*;
-//! use shared_store::SharedStore;
-//! use storage::MemoryStorage;
-//! use action::Action;
+//! use cosmoflow::builtin::basic::*;
+//! use cosmoflow::shared_store::SharedStore;
+//! use cosmoflow::storage::MemoryStorage;
+//! use cosmoflow::action::Action;
 //!
 //! // Create basic nodes
 //! let log_node = LogNodeBackend::new("Processing started", Action::simple("continue"));
@@ -50,7 +50,7 @@
 //! - **Rate Limiting**: Built-in request throttling and retry logic
 //!
 //! ```rust
-//! use builtin::llm::*;
+//! use cosmoflow::builtin::llm::*;
 //!
 //! // Configure OpenAI integration
 //! let config = ApiConfig::new("your-api-key")
@@ -66,8 +66,8 @@
 //! High-level functions for quickly creating commonly used node instances:
 //!
 //! ```rust
-//! use builtin::nodes::generic::*;
-//! use storage::MemoryStorage;
+//! use cosmoflow::builtin::nodes::generic::*;
+//! use cosmoflow::storage::MemoryStorage;
 //! use serde_json::json;
 //!
 //! // Quick node creation
@@ -75,8 +75,8 @@
 //! let set_value = set_value_node::<MemoryStorage>("step_count", json!(1));
 //! let conditional = conditional_node::<_, MemoryStorage>(
 //!     |store| store.get("status").ok().flatten().and_then(|v: serde_json::Value| v.as_bool()).unwrap_or(false),
-//!     action::Action::simple("ready"),
-//!     action::Action::simple("not_ready")
+//!     cosmoflow::action::Action::simple("ready"),
+//!     cosmoflow::action::Action::simple("not_ready")
 //! );
 //! // Note: openai_node is not yet implemented
 //! ```
@@ -87,9 +87,9 @@
 //! in CosmoFlow workflows:
 //!
 //! ```rust
-//! use builtin::nodes::generic::*;
+//! use cosmoflow::builtin::nodes::generic::*;
 //! use serde_json::json;
-//! use storage::MemoryStorage;
+//! use cosmoflow::storage::MemoryStorage;
 //!
 //! // Create nodes for workflow
 //! let start_node = log_node::<MemoryStorage>("Starting data processing");
@@ -116,7 +116,7 @@
 //! Built-in nodes include configurable retry mechanisms:
 //!
 //! ```rust
-//! use builtin::llm::*;
+//! use cosmoflow::builtin::llm::*;
 //!
 //! let config = ApiConfig::new("api-key")
 //!     .with_model("gpt-4")
@@ -129,9 +129,9 @@
 //! Many nodes support fallback behavior:
 //!
 //! ```rust
-//! use builtin::basic::*;
-//! use action::Action;
-//! use storage::MemoryStorage;
+//! use cosmoflow::builtin::basic::*;
+//! use cosmoflow::action::Action;
+//! use cosmoflow::storage::MemoryStorage;
 //!
 //! // Conditional nodes use closures for conditions
 //! let conditional = ConditionalNodeBackend::<_, MemoryStorage>::new(
@@ -162,7 +162,7 @@
 //! ## Environment-Based Configuration
 //!
 //! ```rust
-//! use builtin::llm::*;
+//! use cosmoflow::builtin::llm::*;
 //! use std::env;
 //!
 //! // Example API key (don't use real keys in examples)
@@ -181,8 +181,8 @@
 //! Most nodes support the builder pattern for configuration:
 //!
 //! ```rust
-//! use builtin::basic::*;
-//! use action::Action;
+//! use cosmoflow::builtin::basic::*;
+//! use cosmoflow::action::Action;
 //!
 //! // Basic LogNodeBackend construction
 //! let log_node = LogNodeBackend::new("Custom log message", Action::simple("continue"))
@@ -218,7 +218,7 @@
 //! #[cfg(test)]
 //! mod tests {
 //!     use super::*;
-//!     use builtin::testing::*;
+//!     use cosmoflow::builtin::testing::*;
 //!
 //!     #[tokio::test]
 //!     async fn test_log_node() {
@@ -237,10 +237,10 @@
 //! Built-in nodes serve as excellent examples for creating custom implementations:
 //!
 //! ```rust
-//! use node::{NodeBackend, ExecutionContext};
-//! use shared_store::SharedStore;
-//! use storage::StorageBackend;
-//! use action::Action;
+//! use cosmoflow::node::{NodeBackend, ExecutionContext};
+//! use cosmoflow::shared_store::SharedStore;
+//! use cosmoflow::storage::StorageBackend;
+//! use cosmoflow::action::Action;
 //! use async_trait::async_trait;
 //! use serde::{Serialize, Deserialize};
 //!
@@ -254,7 +254,7 @@
 //! impl<S: StorageBackend> NodeBackend<S> for CustomProcessingNode {
 //!     type PrepResult = Vec<f64>;
 //!     type ExecResult = Vec<f64>; // Changed to avoid undefined ProcessingResult
-//!     type Error = node::NodeError; // Use existing NodeError
+//!     type Error = cosmoflow::node::NodeError; // Use existing NodeError
 //!
 //!     async fn prep(
 //!         &mut self,
@@ -262,8 +262,8 @@
 //!         _context: &ExecutionContext,
 //!     ) -> Result<Self::PrepResult, Self::Error> {
 //!         let input_data: Vec<f64> = store.get("input_data")
-//!             .map_err(|_| node::NodeError::ExecutionError("Missing input_data".to_string()))?
-//!             .ok_or_else(|| node::NodeError::ExecutionError("No input_data found".to_string()))?;
+//!             .map_err(|_| cosmoflow::node::NodeError::ExecutionError("Missing input_data".to_string()))?
+//!             .ok_or_else(|| cosmoflow::node::NodeError::ExecutionError("No input_data found".to_string()))?;
 //!         Ok(input_data)
 //!     }
 //!
@@ -285,7 +285,7 @@
 //!         _context: &ExecutionContext,
 //!     ) -> Result<Action, Self::Error> {
 //!         store.set("processing_result".to_string(), exec_result)
-//!             .map_err(|_| node::NodeError::ExecutionError("Failed to store result".to_string()))?;
+//!             .map_err(|_| cosmoflow::node::NodeError::ExecutionError("Failed to store result".to_string()))?;
 //!         Ok(Action::simple("next_step"))
 //!     }
 //! }

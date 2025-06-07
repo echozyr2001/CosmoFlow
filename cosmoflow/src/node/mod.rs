@@ -19,8 +19,8 @@
 //!
 //! ```rust
 //! use cosmoflow::node::{Node, NodeBackend, ExecutionContext, NodeError};
-//! use shared_store::SharedStore;
-//! use action::Action;
+//! use cosmoflow::shared_store::SharedStore;
+//! use cosmoflow::action::Action;
 //! use async_trait::async_trait;
 //!
 //! struct MyCustomNode {

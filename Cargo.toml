@@ -1,12 +1,12 @@
 [workspace]
 members = [
   "cosmoflow",
-  "shared_store",
-  "storage",
-  "action",
-  "node",
-  "builtin",
-  "flow",
+  # "shared_store",
+  # "storage",
+  # "action",
+  # "node",
+  # "builtin",
+  # "flow",
 ]
 default-members = ["cosmoflow"]
 resolver = "2"
@@ -31,9 +31,9 @@ futures = "0.3"
 rand = "0.8"
 
 cosmoflow = { path = "cosmoflow" }
-shared_store = { path = "shared_store" }
-storage = { path = "storage" }
-action = { path = "action" }
-node = { path = "node" }
-flow = { path = "flow" }
-builtin = { path = "builtin" }
+# shared_store = { path = "shared_store" }
+# storage = { path = "storage" }
+# action = { path = "action" }
+# node = { path = "node" }
+# flow = { path = "flow" }
+# builtin = { path = "builtin" }

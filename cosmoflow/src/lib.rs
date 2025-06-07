@@ -73,9 +73,7 @@ pub use action::{Action, ActionCondition};
 
 /// Built-in node implementations (optional)
 #[cfg(feature = "builtin")]
-pub mod builtin {
-    pub use builtin::*;
-}
+pub mod builtin;
 
 /// Flow definition and execution
 pub mod flow;

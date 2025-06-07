@@ -3,14 +3,6 @@
 version = 4
 
 [[package]]
-name = "action"
-version = "0.1.0"
-dependencies = [
- "serde",
- "serde_json",
-]
-
-[[package]]
 name = "addr2line"
 version = "0.24.2"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -121,23 +113,6 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "1b8e56985ec62d17e9c1001dc89c88ecd7dc08e47eba5ec7c29c7b5eeecde967"
 
 [[package]]
-name = "builtin"
-version = "0.1.0"
-dependencies = [
- "action",
- "async-openai",
- "async-trait",
- "futures",
- "node",
- "rand 0.8.5",
- "serde",
- "serde_json",
- "shared_store",
- "storage",
- "tokio",
-]
-
-[[package]]
 name = "bumpalo"
 version = "3.17.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -190,8 +165,10 @@ checksum = "773648b94d0e5d620f64f280777445740e61fe701025087ec8b57f45c791888b"
 name = "cosmoflow"
 version = "0.1.0"
 dependencies = [
+ "async-openai",
  "async-trait",
- "builtin",
+ "futures",
+ "rand 0.8.5",
  "serde",
  "serde_json",
  "tempfile",
@@ -303,20 +280,6 @@ name = "fastrand"
 version = "2.3.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "37909eebbb50d72f9059c3b6d82c0463f2ff062c9e95845c43a6c9c0355411be"
-
-[[package]]
-name = "flow"
-version = "0.1.0"
-dependencies = [
- "action",
- "async-trait",
- "node",
- "serde_json",
- "shared_store",
- "storage",
- "thiserror 2.0.12",
- "tokio",
-]
 
 [[package]]
 name = "fnv"
@@ -794,21 +757,6 @@ dependencies = [
 ]
 
 [[package]]
-name = "node"
-version = "0.1.0"
-dependencies = [
- "action",
- "async-trait",
- "serde",
- "serde_json",
- "shared_store",
- "storage",
- "thiserror 2.0.12",
- "tokio",
- "uuid",
-]
-
-[[package]]
 name = "nom"
 version = "7.1.3"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -1259,14 +1207,6 @@ dependencies = [
 ]
 
 [[package]]
-name = "shared_store"
-version = "0.1.0"
-dependencies = [
- "serde",
- "storage",
-]
-
-[[package]]
 name = "shlex"
 version = "1.3.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -1302,16 +1242,6 @@ name = "stable_deref_trait"
 version = "1.2.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "a8f112729512f8e442d81f95a8a7ddf2b7c6b8a1a6f509a95864142b30cab2d3"
-
-[[package]]
-name = "storage"
-version = "0.1.0"
-dependencies = [
- "serde",
- "serde_json",
- "tempfile",
- "thiserror 2.0.12",
-]
 
 [[package]]
 name = "strsim"

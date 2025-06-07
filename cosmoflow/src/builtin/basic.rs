@@ -19,8 +19,8 @@
 //! ## Creating a Simple Log Node
 //!
 //! ```rust
-//! use builtin::basic::LogNodeBackend;
-//! use action::Action;
+//! use cosmoflow::builtin::basic::LogNodeBackend;
+//! use cosmoflow::action::Action;
 //!
 //! let log_node = LogNodeBackend::new("Processing started", Action::simple("next"));
 //! ```
@@ -28,8 +28,8 @@
 //! ## Data Manipulation Workflow
 //!
 //! ```rust
-//! use builtin::basic::{SetValueNodeBackend, GetValueNodeBackend};
-//! use action::Action;
+//! use cosmoflow::builtin::basic::{SetValueNodeBackend, GetValueNodeBackend};
+//! use cosmoflow::action::Action;
 //! use serde_json::json;
 //!
 //! // Set initial data
@@ -53,12 +53,12 @@
 
 use std::time::Duration;
 
-use action::Action;
+use crate::action::Action;
+use crate::node::{ExecutionContext, NodeBackend, NodeError};
+use crate::shared_store::SharedStore;
+use crate::storage::StorageBackend;
 use async_trait::async_trait;
-use node::{ExecutionContext, NodeBackend, NodeError};
 use serde_json::Value;
-use shared_store::SharedStore;
-use storage::StorageBackend;
 
 /// A simple node that logs messages and passes through
 ///
@@ -79,8 +79,8 @@ use storage::StorageBackend;
 /// ## Basic Usage
 ///
 /// ```rust
-/// use builtin::basic::LogNodeBackend;
-/// use action::Action;
+/// use cosmoflow::builtin::basic::LogNodeBackend;
+/// use cosmoflow::action::Action;
 ///
 /// let node = LogNodeBackend::new("Starting data processing", Action::simple("process"));
 /// ```
@@ -88,8 +88,8 @@ use storage::StorageBackend;
 /// ## With Retry Configuration
 ///
 /// ```rust
-/// use builtin::basic::LogNodeBackend;
-/// use action::Action;
+/// use cosmoflow::builtin::basic::LogNodeBackend;
+/// use cosmoflow::action::Action;
 /// use std::time::Duration;
 ///
 /// let node = LogNodeBackend::new("Critical checkpoint", Action::simple("continue"))
@@ -117,8 +117,8 @@ impl LogNodeBackend {
     /// # Examples
     ///
     /// ```rust
-    /// use builtin::basic::LogNodeBackend;
-    /// use action::Action;
+    /// use cosmoflow::builtin::basic::LogNodeBackend;
+    /// use cosmoflow::action::Action;
     ///
     /// let node = LogNodeBackend::new("Processing complete", Action::simple("finish"));
     /// ```
@@ -143,8 +143,8 @@ impl LogNodeBackend {
     /// # Examples
     ///
     /// ```rust
-    /// use builtin::basic::LogNodeBackend;
-    /// use action::Action;
+    /// use cosmoflow::builtin::basic::LogNodeBackend;
+    /// use cosmoflow::action::Action;
     ///
     /// let node = LogNodeBackend::new("Unreliable operation", Action::simple("next"))
     ///     .with_retries(5);
@@ -166,8 +166,8 @@ impl LogNodeBackend {
     /// # Examples
     ///
     /// ```rust
-    /// use builtin::basic::LogNodeBackend;
-    /// use action::Action;
+    /// use cosmoflow::builtin::basic::LogNodeBackend;
+    /// use cosmoflow::action::Action;
     /// use std::time::Duration;
     ///
     /// let node = LogNodeBackend::new("Network operation", Action::simple("next"))
@@ -247,8 +247,8 @@ impl<S: StorageBackend + Send + Sync> NodeBackend<S> for LogNodeBackend {
 /// ## Setting Simple Values
 ///
 /// ```rust
-/// use builtin::basic::SetValueNodeBackend;
-/// use action::Action;
+/// use cosmoflow::builtin::basic::SetValueNodeBackend;
+/// use cosmoflow::action::Action;
 /// use serde_json::json;
 ///
 /// // Set a user ID
@@ -273,8 +273,8 @@ impl<S: StorageBackend + Send + Sync> NodeBackend<S> for LogNodeBackend {
 /// ## With Error Handling
 ///
 /// ```rust
-/// use builtin::basic::SetValueNodeBackend;
-/// use action::Action;
+/// use cosmoflow::builtin::basic::SetValueNodeBackend;
+/// use cosmoflow::action::Action;
 /// use serde_json::json;
 ///
 /// let node = SetValueNodeBackend::new(
@@ -305,8 +305,8 @@ impl SetValueNodeBackend {
     /// # Examples
     ///
     /// ```rust
-    /// use builtin::basic::SetValueNodeBackend;
-    /// use action::Action;
+    /// use cosmoflow::builtin::basic::SetValueNodeBackend;
+    /// use cosmoflow::action::Action;
     /// use serde_json::json;
     ///
     /// let node = SetValueNodeBackend::new(
@@ -400,8 +400,8 @@ impl<S: StorageBackend + Send + Sync> NodeBackend<S> for SetValueNodeBackend {
 /// ## Simple Value Retrieval
 ///
 /// ```rust
-/// use builtin::basic::GetValueNodeBackend;
-/// use action::Action;
+/// use cosmoflow::builtin::basic::GetValueNodeBackend;
+/// use cosmoflow::action::Action;
 /// use serde_json::{json, Value};
 ///
 /// // Pass through values unchanged
@@ -416,8 +416,8 @@ impl<S: StorageBackend + Send + Sync> NodeBackend<S> for SetValueNodeBackend {
 /// ## Data Transformation
 ///
 /// ```rust
-/// use builtin::basic::GetValueNodeBackend;
-/// use action::Action;
+/// use cosmoflow::builtin::basic::GetValueNodeBackend;
+/// use cosmoflow::action::Action;
 /// use serde_json::{json, Value};
 ///
 /// // Double numeric values
@@ -450,8 +450,8 @@ impl<S: StorageBackend + Send + Sync> NodeBackend<S> for SetValueNodeBackend {
 /// ## Complex Data Processing
 ///
 /// ```rust
-/// use builtin::basic::GetValueNodeBackend;
-/// use action::Action;
+/// use cosmoflow::builtin::basic::GetValueNodeBackend;
+/// use cosmoflow::action::Action;
 /// use serde_json::{json, Value};
 ///
 /// // Extract and process array data
@@ -502,8 +502,8 @@ where
     /// # Examples
     ///
     /// ```rust
-    /// use builtin::basic::GetValueNodeBackend;
-    /// use action::Action;
+    /// use cosmoflow::builtin::basic::GetValueNodeBackend;
+    /// use cosmoflow::action::Action;
     /// use serde_json::{json, Value};
     ///
     /// // Create a node that increments a counter
@@ -612,10 +612,10 @@ where
 /// ## Simple Value Checks
 ///
 /// ```rust
-/// use builtin::basic::ConditionalNodeBackend;
-/// use action::Action;
+/// use cosmoflow::builtin::basic::ConditionalNodeBackend;
+/// use cosmoflow::action::Action;
 /// use serde_json::json;
-/// use storage::MemoryStorage;
+/// use cosmoflow::storage::MemoryStorage;
 ///
 /// let condition_node = ConditionalNodeBackend::<_, MemoryStorage>::new(
 ///     |store| {
@@ -633,10 +633,10 @@ where
 /// ## Complex Conditions
 ///
 /// ```rust
-/// use builtin::basic::ConditionalNodeBackend;
-/// use action::Action;
+/// use cosmoflow::builtin::basic::ConditionalNodeBackend;
+/// use cosmoflow::action::Action;
 /// use serde_json::json;
-/// use storage::MemoryStorage;
+/// use cosmoflow::storage::MemoryStorage;
 ///
 /// let complex_condition = ConditionalNodeBackend::<_, MemoryStorage>::new(
 ///     |store| {
@@ -689,9 +689,9 @@ where
     /// # Examples
     ///
     /// ```rust
-    /// use builtin::basic::ConditionalNodeBackend;
-    /// use action::Action;
-    /// use storage::MemoryStorage;
+    /// use cosmoflow::builtin::basic::ConditionalNodeBackend;
+    /// use cosmoflow::action::Action;
+    /// use cosmoflow::storage::MemoryStorage;
     ///
     /// let node = ConditionalNodeBackend::<_, MemoryStorage>::new(
     ///     |store| store.get("ready").ok().flatten().and_then(|v: serde_json::Value| v.as_bool()).unwrap_or(false),
@@ -784,8 +784,8 @@ where
 /// ## Basic Delay
 ///
 /// ```rust
-/// use builtin::basic::DelayNodeBackend;
-/// use action::Action;
+/// use cosmoflow::builtin::basic::DelayNodeBackend;
+/// use cosmoflow::action::Action;
 /// use std::time::Duration;
 ///
 /// // Wait 5 seconds before continuing
@@ -798,8 +798,8 @@ where
 /// ## Rate Limiting
 ///
 /// ```rust
-/// use builtin::basic::DelayNodeBackend;
-/// use action::Action;
+/// use cosmoflow::builtin::basic::DelayNodeBackend;
+/// use cosmoflow::action::Action;
 /// use std::time::Duration;
 ///
 /// // Rate limit API calls to 1 per second
@@ -812,8 +812,8 @@ where
 /// ## Backoff Strategy
 ///
 /// ```rust
-/// use builtin::basic::DelayNodeBackend;
-/// use action::Action;
+/// use cosmoflow::builtin::basic::DelayNodeBackend;
+/// use cosmoflow::action::Action;
 /// use std::time::Duration;
 ///
 /// // Exponential backoff delay
@@ -842,8 +842,8 @@ impl DelayNodeBackend {
     /// # Examples
     ///
     /// ```rust
-    /// use builtin::basic::DelayNodeBackend;
-    /// use action::Action;
+    /// use cosmoflow::builtin::basic::DelayNodeBackend;
+    /// use cosmoflow::action::Action;
     /// use std::time::Duration;
     ///
     /// // Wait 30 seconds before proceeding
@@ -921,7 +921,7 @@ impl<S: StorageBackend + Send + Sync> NodeBackend<S> for DelayNodeBackend {
 /// # Examples
 ///
 /// ```rust
-/// use builtin::basic::log;
+/// use cosmoflow::builtin::basic::log;
 ///
 /// let checkpoint = log("Reached checkpoint 1");
 /// let status = log("Processing completed successfully");
@@ -943,7 +943,7 @@ pub fn log<S: Into<String>>(message: S) -> LogNodeBackend {
 /// # Examples
 ///
 /// ```rust
-/// use builtin::basic::set_value;
+/// use cosmoflow::builtin::basic::set_value;
 /// use serde_json::json;
 ///
 /// let set_status = set_value("process_status", json!("started"));
@@ -965,7 +965,7 @@ pub fn set_value<S: Into<String>>(key: S, value: Value) -> SetValueNodeBackend {
 /// # Examples
 ///
 /// ```rust
-/// use builtin::basic::delay;
+/// use cosmoflow::builtin::basic::delay;
 /// use std::time::Duration;
 ///
 /// let short_pause = delay(Duration::from_millis(100));
@@ -989,7 +989,7 @@ pub fn delay(duration: Duration) -> DelayNodeBackend {
 /// # Examples
 ///
 /// ```rust
-/// use builtin::basic::get_value;
+/// use cosmoflow::builtin::basic::get_value;
 ///
 /// // Copy a value to a new key
 /// let copy_value = get_value("original_data", "backup_data");
@@ -1012,9 +1012,9 @@ pub fn get_value<S1: Into<String>, S2: Into<String>>(
 #[cfg(test)]
 mod tests {
     use super::*;
+    use crate::shared_store::SharedStore;
+    use crate::storage::MemoryStorage;
     use serde_json::json;
-    use shared_store::SharedStore;
-    use storage::MemoryStorage;
 
     #[tokio::test]
     async fn test_optimized_log_node() {

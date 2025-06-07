@@ -34,8 +34,8 @@
 //! ## Basic Text Generation
 //!
 //! ```rust
-//! use builtin::llm::{MockLlmNodeBackend, ApiConfig};
-//! use action::Action;
+//! use cosmoflow::builtin::llm::{MockLlmNodeBackend, ApiConfig};
+//! use cosmoflow::action::Action;
 //!
 //! let config = ApiConfig::new("your-api-key")
 //!     .with_model("gpt-4")
@@ -52,8 +52,8 @@
 //! ## Template-Based Processing
 //!
 //! ```rust
-//! use builtin::llm::{MockLlmNodeBackend, ApiConfig};
-//! use action::Action;
+//! use cosmoflow::builtin::llm::{MockLlmNodeBackend, ApiConfig};
+//! use cosmoflow::action::Action;
 //!
 //! let config = ApiConfig::default();
 //!
@@ -68,8 +68,8 @@
 //! ## Conversation Management
 //!
 //! ```rust
-//! use builtin::llm::{ApiRequestNodeBackend, ApiConfig};
-//! use action::Action;
+//! use cosmoflow::builtin::llm::{ApiRequestNodeBackend, ApiConfig};
+//! use cosmoflow::action::Action;
 //!
 //! let config = ApiConfig::new("your-api-key")
 //!     .with_temperature(0.8);
@@ -100,7 +100,10 @@
 
 use std::time::Duration;
 
-use action::Action;
+use crate::action::Action;
+use crate::node::{ExecutionContext, NodeBackend, NodeError};
+use crate::shared_store::SharedStore;
+use crate::storage::StorageBackend;
 use async_openai::{
     Client,
     config::OpenAIConfig,
@@ -108,10 +111,7 @@ use async_openai::{
 };
 use async_trait::async_trait;
 use futures::StreamExt;
-use node::{ExecutionContext, NodeBackend, NodeError};
 use serde_json::Value;
-use shared_store::SharedStore;
-use storage::StorageBackend;
 
 #[derive(Debug, Clone)]
 /// Configuration for LLM API connections and request parameters.
@@ -133,7 +133,7 @@ use storage::StorageBackend;
 /// ## Basic Configuration
 ///
 /// ```rust
-/// use builtin::llm::ApiConfig;
+/// use cosmoflow::builtin::llm::ApiConfig;
 ///
 /// // Using environment variable for API key
 /// let config = ApiConfig::default();
@@ -145,7 +145,7 @@ use storage::StorageBackend;
 /// ## Advanced Configuration
 ///
 /// ```rust
-/// use builtin::llm::ApiConfig;
+/// use cosmoflow::builtin::llm::ApiConfig;
 ///
 /// let config = ApiConfig::new("your-api-key")
 ///     .with_model("gpt-4")
@@ -157,7 +157,7 @@ use storage::StorageBackend;
 /// ## Custom Endpoint (e.g., Azure OpenAI)
 ///
 /// ```rust
-/// use builtin::llm::ApiConfig;
+/// use cosmoflow::builtin::llm::ApiConfig;
 ///
 /// let azure_config = ApiConfig::new("your-azure-key")
 ///     .with_base_url("https://your-resource.openai.azure.com")
@@ -167,7 +167,7 @@ use storage::StorageBackend;
 /// ## Local Model Server
 ///
 /// ```rust
-/// use builtin::llm::ApiConfig;
+/// use cosmoflow::builtin::llm::ApiConfig;
 ///
 /// let local_config = ApiConfig::new("not-needed")
 ///     .with_base_url("http://localhost:8000/v1")
@@ -308,8 +308,8 @@ impl ApiConfig {
 /// ## Basic Mock Response
 ///
 /// ```rust
-/// use builtin::llm::MockLlmNodeBackend;
-/// use action::Action;
+/// use cosmoflow::builtin::llm::MockLlmNodeBackend;
+/// use cosmoflow::action::Action;
 ///
 /// let mock_node = MockLlmNodeBackend::new(
 ///     "user_prompt",
@@ -322,8 +322,8 @@ impl ApiConfig {
 /// ## Template Response
 ///
 /// ```rust
-/// use builtin::llm::MockLlmNodeBackend;
-/// use action::Action;
+/// use cosmoflow::builtin::llm::MockLlmNodeBackend;
+/// use cosmoflow::action::Action;
 ///
 /// let template_node = MockLlmNodeBackend::new(
 ///     "analysis_request",
@@ -501,8 +501,8 @@ impl<S: StorageBackend + Send + Sync> NodeBackend<S> for MockLlmNodeBackend {
 /// ## Simple Text Generation
 ///
 /// ```rust
-/// use builtin::llm::{ApiRequestNodeBackend, ApiConfig};
-/// use action::Action;
+/// use cosmoflow::builtin::llm::{ApiRequestNodeBackend, ApiConfig};
+/// use cosmoflow::action::Action;
 ///
 /// let config = ApiConfig::new("your-api-key")
 ///     .with_model("gpt-4")
@@ -518,8 +518,8 @@ impl<S: StorageBackend + Send + Sync> NodeBackend<S> for MockLlmNodeBackend {
 /// ## Conversation with System Message
 ///
 /// ```rust
-/// use builtin::llm::{ApiRequestNodeBackend, ApiConfig};
-/// use action::Action;
+/// use cosmoflow::builtin::llm::{ApiRequestNodeBackend, ApiConfig};
+/// use cosmoflow::action::Action;
 ///
 /// let config = ApiConfig::default();
 ///
@@ -536,8 +536,8 @@ impl<S: StorageBackend + Send + Sync> NodeBackend<S> for MockLlmNodeBackend {
 /// ## Error Handling and Fallbacks
 ///
 /// ```rust
-/// use builtin::llm::{ApiRequestNodeBackend, ApiConfig};
-/// use action::Action;
+/// use cosmoflow::builtin::llm::{ApiRequestNodeBackend, ApiConfig};
+/// use cosmoflow::action::Action;
 /// use std::time::Duration;
 ///
 /// let robust_node = ApiRequestNodeBackend::new(

@@ -17,9 +17,9 @@ async-trait = { workspace = true }
 serde = { workspace = true }
 uuid = { workspace = true }
 tokio = { workspace = true }
-
-# Optional dependencies
-builtin = { workspace = true, optional = true }
+async-openai = { workspace = true }
+futures = { workspace = true }
+rand = { workspace = true }
 
 [dev-dependencies]
 tokio = { workspace = true }
@@ -34,11 +34,11 @@ storage-file = []
 storage-full = ["storage-memory", "storage-file"]
 
 # Optional functionality features
-builtin = ["dep:builtin"]
-builtin-full = ["builtin", "storage-full"]
+builtin = []
+# builtin-full = ["builtin", "storage-full"]
 
 # Convenience meta-features
 minimal = []
 basic = ["storage-memory"]
-standard = ["storage-memory", "builtin"]
-full = ["storage-full", "builtin-full"]
+standard = ["storage-memory"]
+full = ["storage-full"]
