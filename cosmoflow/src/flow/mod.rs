@@ -16,6 +16,8 @@
 //! ## Quick Start
 //!
 //! ```rust
+//! # #[cfg(feature = "storage-memory")]
+//! # {
 //! use cosmoflow::flow::{Flow, FlowBuilder, FlowBackend};
 //! use cosmoflow::shared_store::SharedStore;
 //! use cosmoflow::storage::backends::MemoryStorage;
@@ -34,6 +36,7 @@
 //! println!("Flow completed with {} steps", result.steps_executed);
 //! # Ok(())
 //! # }
+//! # }
 //! ```
 //!
 //! ## Core Types
@@ -48,6 +51,8 @@
 //! The flow crate provides comprehensive error handling through [`FlowError`]:
 //!
 //! ```rust
+//! # #[cfg(feature = "storage-memory")]
+//! # {
 //! use cosmoflow::flow::{Flow, errors::FlowError, FlowBackend};
 //!
 //! # async fn example() -> Result<(), FlowError> {
@@ -62,6 +67,7 @@
 //!     Err(e) => eprintln!("Flow error: {}", e),
 //! }
 //! # Ok(())
+//! # }
 //! # }
 //! ```
 
@@ -90,6 +96,8 @@ use route::{Route, RouteCondition};
 /// # Examples
 ///
 /// ```rust
+/// # #[cfg(feature = "storage-memory")]
+/// # {
 /// use cosmoflow::flow::{Flow, FlowExecutionResult, FlowBackend};
 /// use cosmoflow::action::Action;
 ///
@@ -105,6 +113,7 @@ use route::{Route, RouteCondition};
 ///     println!("Flow failed at node: {}", result.last_node_id);
 /// }
 /// # Ok(())
+/// # }
 /// # }
 /// ```
 #[derive(Debug, Clone)]
@@ -337,6 +346,8 @@ impl<S: StorageBackend + 'static> FlowBuilder<S> {
 /// # Examples
 ///
 /// ```rust
+/// # #[cfg(feature = "storage-memory")]
+/// # {
 /// use cosmoflow::flow::{Flow, FlowConfig};
 /// use cosmoflow::storage::MemoryStorage;
 ///
@@ -351,6 +362,7 @@ impl<S: StorageBackend + 'static> FlowBuilder<S> {
 ///     terminal_actions: vec!["complete".to_string(), "error".to_string()],
 /// };
 /// let flow: Flow<MemoryStorage> = Flow::with_config(config);
+/// # }
 /// ```
 ///
 /// # Thread Safety
@@ -373,10 +385,13 @@ impl<S: StorageBackend> Flow<S> {
     /// # Examples
     ///
     /// ```rust
+    /// # #[cfg(feature = "storage-memory")]
+    /// # {
     /// use cosmoflow::flow::Flow;
     /// use cosmoflow::storage::MemoryStorage;
     ///
     /// let flow: Flow<MemoryStorage> = Flow::new();
+    /// # }
     /// ```
     pub fn new() -> Self {
         Self {
@@ -398,6 +413,8 @@ impl<S: StorageBackend> Flow<S> {
     /// # Examples
     ///
     /// ```rust
+    /// # #[cfg(feature = "storage-memory")]
+    /// # {
     /// use cosmoflow::flow::{Flow, FlowConfig};
     /// use cosmoflow::storage::MemoryStorage;
     ///
@@ -409,6 +426,7 @@ impl<S: StorageBackend> Flow<S> {
     /// };
     ///
     /// let flow: Flow<MemoryStorage> = Flow::with_config(config);
+    /// # }
     /// ```
     pub fn with_config(config: FlowConfig) -> Self {
         Self {
@@ -541,12 +559,15 @@ where
     /// # Examples
     ///
     /// ```rust,no_run
+    /// # #[cfg(feature = "storage-memory")]
+    /// # {
     /// use cosmoflow::flow::{Flow, FlowBackend};
     /// use cosmoflow::storage::MemoryStorage;
     ///
     /// let mut flow: Flow<MemoryStorage> = Flow::new();
     /// // In practice, you would create a proper NodeBackend implementation
     /// // flow.add_node("processing_step".to_string(), node).unwrap();
+    /// # }
     /// ```
     fn add_node(&mut self, id: String, node: Box<dyn NodeRunner<S>>) -> Result<(), FlowError> {
         self.nodes.insert(id, node);
@@ -571,6 +592,8 @@ where
     /// # Examples
     ///
     /// ```rust
+    /// # #[cfg(feature = "storage-memory")]
+    /// # {
     /// use cosmoflow::flow::{Flow, FlowBackend};
     /// use cosmoflow::flow::route::Route;
     /// use cosmoflow::storage::MemoryStorage;
@@ -582,6 +605,8 @@ where
     ///     condition: None,
     /// };
     /// flow.add_route("source_node".to_string(), route).unwrap();
+    /// # }
+    /// ```
     /// ```
     fn add_route(&mut self, from_node_id: String, route: Route) -> Result<(), FlowError> {
         self.routes.entry(from_node_id).or_default().push(route);
@@ -612,6 +637,8 @@ where
     /// # Examples
     ///
     /// ```rust
+    /// # #[cfg(feature = "storage-memory")]
+    /// # {
     /// use cosmoflow::flow::{Flow, FlowBackend, FlowConfig};
     /// use cosmoflow::shared_store::SharedStore;
     /// use cosmoflow::storage::MemoryStorage;
@@ -623,6 +650,9 @@ where
     /// // Add nodes and routes to flow...
     ///
     /// let result = flow.execute(&mut store).await.unwrap();
+    /// # };
+    /// # }
+    /// ```
     /// println!("Execution completed in {} steps", result.steps_executed);
     /// # };
     /// ```
@@ -667,6 +697,8 @@ where
     /// # Examples
     ///
     /// ```rust
+    /// # #[cfg(feature = "storage-memory")]
+    /// # {
     /// use cosmoflow::flow::{Flow, FlowBackend};
     /// use cosmoflow::shared_store::SharedStore;
     /// use cosmoflow::storage::MemoryStorage;
@@ -678,6 +710,8 @@ where
     /// // Execute from a specific node (useful for testing)
     /// let result = flow.execute_from(&mut store, "validation_step".to_string()).await.unwrap();
     /// # };
+    /// # }
+    /// ```
     /// ```
     async fn execute_from(
         &mut self,
@@ -741,12 +775,15 @@ where
     /// # Examples
     ///
     /// ```rust
+    /// # #[cfg(feature = "storage-memory")]
+    /// # {
     /// use cosmoflow::flow::{Flow, FlowBackend};
     /// use cosmoflow::storage::MemoryStorage;
     ///
     /// let flow: Flow<MemoryStorage> = Flow::new();
     /// let config = flow.config();
     /// println!("Max steps: {}", config.max_steps);
+    /// # }
     /// ```
     fn config(&self) -> &FlowConfig {
         &self.config
@@ -764,6 +801,8 @@ where
     /// # Examples
     ///
     /// ```rust
+    /// # #[cfg(feature = "storage-memory")]
+    /// # {
     /// use cosmoflow::flow::{Flow, FlowConfig, FlowBackend};
     /// use cosmoflow::storage::MemoryStorage;
     ///
@@ -775,6 +814,7 @@ where
     ///     terminal_actions: vec!["complete".to_string()],
     /// };
     /// flow.set_config(new_config);
+    /// # }
     /// ```
     fn set_config(&mut self, config: FlowConfig) {
         self.config = config;
@@ -801,6 +841,8 @@ where
     /// # Examples
     ///
     /// ```rust
+    /// # #[cfg(feature = "storage-memory")]
+    /// # {
     /// use cosmoflow::flow::{Flow, FlowBackend};
     /// use cosmoflow::storage::MemoryStorage;
     ///
@@ -809,6 +851,7 @@ where
     ///     Ok(()) => println!("Flow is valid"),
     ///     Err(e) => eprintln!("Validation failed: {}", e),
     /// }
+    /// # }
     /// ```
     ///
     /// # Performance
