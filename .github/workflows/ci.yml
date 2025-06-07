@@ -1,0 +1,127 @@
+name: ci
+
+on:
+  pull_request:
+    types:
+      - opened
+      - synchronize
+      - reopened
+    branches:
+      - main
+  push:
+    branches:
+      - main
+  workflow_dispatch:
+
+jobs:
+  format-check:
+    name: Code Format Check
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+    steps:
+      - name: Install system dependencies
+        run: sudo apt-get update && sudo apt-get install -y libsqlite3-dev
+
+      - name: Checkout Code
+        uses: actions/checkout@v4
+
+      - name: Setup Rust Toolchain
+        uses: actions-rust-lang/setup-rust-toolchain@v1
+        with:
+          toolchain: nightly
+          components: rustfmt
+          cache: true
+          cache-directories: |-
+            ~/.cargo/registry
+            ~/.cargo/git
+            target
+
+      - name: Check Rust Format
+        run: cargo +nightly fmt --all --check
+
+  lint:
+    name: Lint Check
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+    steps:
+      - name: Install system dependencies
+        run: sudo apt-get update && sudo apt-get install -y libsqlite3-dev
+
+      - name: Checkout Code
+        uses: actions/checkout@v4
+
+      - name: Setup Rust Toolchain
+        uses: actions-rust-lang/setup-rust-toolchain@v1
+        with:
+          toolchain: nightly
+          components: clippy
+          cache: true
+          cache-directories: |-
+            ~/.cargo/registry
+            ~/.cargo/git
+            target
+
+      - name: Run Clippy
+        run: cargo +nightly clippy --all-features --workspace -- -D warnings
+
+  test:
+    name: Run Tests
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+    steps:
+      - name: Install system dependencies
+        run: sudo apt-get update && sudo apt-get install -y libsqlite3-dev
+
+      - name: Checkout Code
+        uses: actions/checkout@v4
+
+      - name: Setup Rust Toolchain
+        uses: actions-rust-lang/setup-rust-toolchain@v1
+        with:
+          toolchain: stable
+          cache: true
+          cache-directories: |-
+            ~/.cargo/registry
+            ~/.cargo/git
+            target
+
+      - name: Install nextest
+        run: cargo install cargo-nextest --locked
+
+      - name: Run Tests with Nextest
+        run: cargo nextest run --all-features --workspace
+
+      - name: Run Doc Test
+        run: cargo test --doc --all-features --workspace
+
+  build:
+    name: Build Check
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+    steps:
+      - name: Install system dependencies
+        run: sudo apt-get update && sudo apt-get install -y libsqlite3-dev
+
+      - name: Checkout Code
+        uses: actions/checkout@v4
+
+      - name: Setup Rust Toolchain
+        uses: actions-rust-lang/setup-rust-toolchain@v1
+        with:
+          toolchain: stable
+          cache: true
+          cache-directories: |-
+            ~/.cargo/registry
+            ~/.cargo/git
+            target
+
+      - name: Build Project
+        run: cargo build --all-features --workspace
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.event.pull_request.number || github.sha }}
+  cancel-in-progress: true
