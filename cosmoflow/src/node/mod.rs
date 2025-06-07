@@ -30,7 +30,7 @@
 //! #[async_trait]
 //! impl<S> NodeBackend<S> for MyCustomNode
 //! where
-//!     S: storage::StorageBackend + Send + Sync
+//!     S: cosmoflow::storage::StorageBackend + Send + Sync
 //! {
 //!     type PrepResult = ();
 //!     type ExecResult = String;

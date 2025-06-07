@@ -21,7 +21,7 @@
 //! # #[cfg(feature = "storage-memory")]
 //! # async fn example() -> Result<(), Box<dyn std::error::Error>> {
 //! use cosmoflow::prelude::*;
-//! use cosmoflow::flows::FlowBackend;
+//! use cosmoflow::flow::FlowBackend;
 //! use std::time::Duration;
 //!
 //! // Create a shared store with memory backend
@@ -57,9 +57,10 @@
 //! *   `full`: Enables all features.
 
 // Core Exports
-pub use flow::errors::FlowError;
-pub use flow::route::Route;
-pub use flow::{Flow, FlowBuilder, FlowConfig, FlowExecutionResult};
+// FIXME: core export
+// pub use flow::errors::FlowError;
+// pub use flow::route::Route;
+// pub use flow::{Flow, FlowBuilder, FlowConfig, FlowExecutionResult};
 
 pub mod shared_store;
 pub use shared_store::SharedStore;
@@ -77,9 +78,10 @@ pub mod builtin {
 }
 
 /// Flow definition and execution
-pub mod flows {
-    pub use flow::*;
-}
+pub mod flow;
+pub use flow::errors::FlowError;
+pub use flow::route::Route;
+pub use flow::{Flow, FlowBuilder, FlowConfig, FlowExecutionResult};
 
 /// Node execution system and traits
 pub mod node;
