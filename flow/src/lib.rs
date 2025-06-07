@@ -464,10 +464,8 @@ impl<S: StorageBackend> Flow<S> {
         // Find matching route
         for route in routes {
             if route.action == action_str {
-                // Check condition if present
-                if let Some(condition) = &route.condition
-                    && !condition.evaluate(store)
-                {
+                // Check condition if present - skip route if condition fails
+                if route.condition.as_ref().is_some_and(|c| !c.evaluate(store)) {
                     continue;
                 }
                 return Ok(Some(route.target_node_id.clone()));
