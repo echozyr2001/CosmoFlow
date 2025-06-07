@@ -465,10 +465,10 @@ impl<S: StorageBackend> Flow<S> {
         for route in routes {
             if route.action == action_str {
                 // Check condition if present
-                if let Some(condition) = &route.condition {
-                    if !condition.evaluate(store) {
-                        continue;
-                    }
+                if let Some(condition) = &route.condition
+                    && !condition.evaluate(store)
+                {
+                    continue;
                 }
                 return Ok(Some(route.target_node_id.clone()));
             }

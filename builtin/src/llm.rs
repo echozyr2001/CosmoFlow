@@ -868,10 +868,10 @@ impl ApiRequestNodeBackend {
             match result {
                 Ok(response) => {
                     // Extract content from the streaming response
-                    if let Some(choice) = response.choices.first() {
-                        if let Some(delta) = &choice.delta.content {
-                            accumulated_content.push_str(delta);
-                        }
+                    if let Some(choice) = response.choices.first()
+                        && let Some(delta) = &choice.delta.content
+                    {
+                        accumulated_content.push_str(delta);
                     }
                 }
                 Err(e) => {
