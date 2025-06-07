@@ -190,14 +190,15 @@ checksum = "773648b94d0e5d620f64f280777445740e61fe701025087ec8b57f45c791888b"
 name = "cosmoflow"
 version = "0.1.0"
 dependencies = [
+ "async-trait",
  "builtin",
  "flow",
- "node",
  "serde",
  "serde_json",
  "tempfile",
  "thiserror 2.0.12",
  "tokio",
+ "uuid",
 ]
 
 [[package]]

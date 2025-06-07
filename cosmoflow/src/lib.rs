@@ -60,7 +60,6 @@
 pub use flow::errors::FlowError;
 pub use flow::route::Route;
 pub use flow::{Flow, FlowBuilder, FlowConfig, FlowExecutionResult};
-pub use node::{ExecutionContext, Node, NodeBackend, NodeError};
 
 pub mod shared_store;
 pub use shared_store::SharedStore;
@@ -83,9 +82,8 @@ pub mod flows {
 }
 
 /// Node execution system and traits
-pub mod nodes {
-    pub use node::*;
-}
+pub mod node;
+pub use node::{ExecutionContext, Node, NodeBackend, NodeError};
 
 /// Storage backend abstractions and implementations
 pub mod storage;
