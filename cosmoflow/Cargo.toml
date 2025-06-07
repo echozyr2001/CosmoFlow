@@ -12,12 +12,12 @@ readme = "../README.md"
 
 [dependencies]
 shared_store = { workspace = true }
-storage = { workspace = true }
 node = { workspace = true }
 action = { workspace = true }
 flow = { workspace = true }
 thiserror = { workspace = true }
 serde_json = { workspace = true }
+serde = { workspace = true }
 
 # Optional dependencies
 builtin = { workspace = true, optional = true }
@@ -30,9 +30,9 @@ tempfile = { workspace = true }
 default = []
 
 # Storage backend features
-storage-memory = ["storage/memory"]
-storage-file = ["storage/file"]
-storage-full = ["storage-memory", "storage-file", "storage/full"]
+storage-memory = []
+storage-file = []
+storage-full = ["storage-memory", "storage-file"]
 
 # Optional functionality features
 builtin = ["dep:builtin"]

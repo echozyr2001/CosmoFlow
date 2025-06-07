@@ -88,13 +88,15 @@ pub mod nodes {
 }
 
 /// Storage backend abstractions and implementations
-pub mod storage {
-    pub use storage::StorageBackend;
-    #[cfg(feature = "storage-file")]
-    pub use storage::backends::FileStorage;
-    #[cfg(feature = "storage-memory")]
-    pub use storage::backends::MemoryStorage;
-}
+pub mod storage;
+// FIXME: re-export
+// pub mod storage {
+//     pub use storage::StorageBackend;
+//     #[cfg(feature = "storage-file")]
+//     pub use storage::backends::FileStorage;
+//     #[cfg(feature = "storage-memory")]
+//     pub use storage::backends::MemoryStorage;
+// }
 
 /// A convenient result type alias for CosmoFlow operations
 pub type Result<T> = std::result::Result<T, FlowError>;
