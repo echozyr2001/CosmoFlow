@@ -87,9 +87,17 @@ jobs:
             ~/.cargo/git
             target
 
-      - name: Install nextest
-        run: cargo install cargo-nextest --locked
+      - name: Cache cargo-nextest binary
+        uses: actions/cache@v3
+        with:
+          path: ~/.cargo/bin/cargo-nextest
+          key: nextest-${{ matrix.rust }}-v0.9.42
 
+      - name: Install nextest if not cached
+        run: |
+          if ! command -v cargo-nextest &>/dev/null || [[ "$(cargo nextest --version)" != "cargo-nextest 0.9.42" ]]; then
+            cargo install cargo-nextest --version 0.9.42 --locked;
+          fi
       - name: Run Tests
         run: cargo nextest run ${{ matrix.features }} --workspace
 
