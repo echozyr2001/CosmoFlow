@@ -62,6 +62,8 @@ pub use flow::errors::FlowError;
 pub use flow::route::Route;
 pub use flow::{Flow, FlowBuilder, FlowConfig, FlowExecutionResult};
 pub use node::{ExecutionContext, Node, NodeBackend, NodeError};
+
+pub mod shared_store;
 pub use shared_store::SharedStore;
 
 // Module Exports
