@@ -97,6 +97,7 @@ use thiserror::Error;
 /// if let Some(step) = current_step {
 ///     println!("Resuming workflow from step {}", step);
 /// }
+/// # std::fs::remove_file("workflow_state.json").ok();
 /// # Ok::<(), Box<dyn std::error::Error>>(())
 /// ```
 ///
