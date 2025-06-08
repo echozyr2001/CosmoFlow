@@ -294,10 +294,9 @@ impl<S: StorageBackend + 'static> FlowBuilder<S> {
         // Check if the action is a terminal action and warn the user
         if self.config.terminal_actions.contains(&action_str) {
             eprintln!(
-                "⚠️  WARNING: Route from '{}' uses terminal action '{}' which will terminate the workflow immediately.\n\
-                 💡 The target node '{}' will never be reached because '{}' is configured as a terminal action.\n\
-                 🔧 Consider using a different action name to avoid this issue.",
-                from_id, action_str, to_id, action_str
+                "⚠️  WARNING: Route from '{from_id}' uses terminal action '{action_str}' which will terminate the workflow immediately.\n\
+                 💡 The target node '{to_id}' will never be reached because '{action_str}' is configured as a terminal action.\n\
+                 🔧 Consider using a different action name to avoid this issue."
             );
         }
 
@@ -326,10 +325,9 @@ impl<S: StorageBackend + 'static> FlowBuilder<S> {
         // Check if the action is a terminal action and warn the user
         if self.config.terminal_actions.contains(&action_str) {
             eprintln!(
-                "⚠️  WARNING: Conditional route from '{}' uses terminal action '{}' which will terminate the workflow immediately.\n\
-                 💡 The target node '{}' will never be reached because '{}' is configured as a terminal action.\n\
-                 🔧 Consider using a different action name to avoid this issue.",
-                from_id, action_str, to_id, action_str
+                "⚠️  WARNING: Conditional route from '{from_id}' uses terminal action '{action_str}' which will terminate the workflow immediately.\n\
+                 💡 The target node '{to_id}' will never be reached because '{action_str}' is configured as a terminal action.\n\
+                 🔧 Consider using a different action name to avoid this issue."
             );
         }
 
