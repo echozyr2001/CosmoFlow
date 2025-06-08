@@ -288,9 +288,21 @@ impl<S: StorageBackend + 'static> FlowBuilder<S> {
         to: impl Into<String>,
     ) -> Self {
         let from_id = from.into();
+        let action_str = action.into();
+        let to_id = to.into();
+
+        // Check if the action is a terminal action and warn the user
+        if self.config.terminal_actions.contains(&action_str) {
+            eprintln!(
+                "⚠️  WARNING: Route from '{from_id}' uses terminal action '{action_str}' which will terminate the workflow immediately.\n\
+                 💡 The target node '{to_id}' will never be reached because '{action_str}' is configured as a terminal action.\n\
+                 🔧 Consider using a different action name to avoid this issue."
+            );
+        }
+
         let route = Route {
-            action: action.into(),
-            target_node_id: to.into(),
+            action: action_str,
+            target_node_id: to_id,
             condition: None,
         };
 
@@ -307,9 +319,21 @@ impl<S: StorageBackend + 'static> FlowBuilder<S> {
         condition: RouteCondition,
     ) -> Self {
         let from_id = from.into();
+        let action_str = action.into();
+        let to_id = to.into();
+
+        // Check if the action is a terminal action and warn the user
+        if self.config.terminal_actions.contains(&action_str) {
+            eprintln!(
+                "⚠️  WARNING: Conditional route from '{from_id}' uses terminal action '{action_str}' which will terminate the workflow immediately.\n\
+                 💡 The target node '{to_id}' will never be reached because '{action_str}' is configured as a terminal action.\n\
+                 🔧 Consider using a different action name to avoid this issue."
+            );
+        }
+
         let route = Route {
-            action: action.into(),
-            target_node_id: to.into(),
+            action: action_str,
+            target_node_id: to_id,
             condition: Some(condition),
         };
 
@@ -1231,5 +1255,44 @@ mod tests {
         assert!(result.is_ok());
         let result = result.unwrap();
         assert_eq!(result.execution_path, vec!["start", "success"]);
+    }
+
+    #[test]
+    fn test_terminal_action_warning_in_route() {
+        // Test that building a flow with terminal actions in routes doesn't panic
+        // The warning will be printed to stderr during execution
+        let _flow = FlowBuilder::<MemoryStorage>::new()
+            .route("node1", "complete", "node2") // This should trigger a warning
+            .build();
+
+        // This test mainly ensures the code compiles and runs without panic
+        // In a real-world scenario, you might want to capture stderr to verify the warning
+    }
+
+    #[test]
+    fn test_terminal_action_warning_in_conditional_route() {
+        use crate::flow::route::RouteCondition;
+
+        let _flow = FlowBuilder::<MemoryStorage>::new()
+            .conditional_route("node1", "end", "node2", RouteCondition::Always) // This should trigger a warning
+            .build();
+    }
+
+    #[test]
+    fn test_non_terminal_action_no_warning() {
+        // This should not trigger any warning
+        let _flow = FlowBuilder::<MemoryStorage>::new()
+            .route("node1", "custom_action", "node2")
+            .build();
+    }
+
+    #[test]
+    fn test_multiple_terminal_actions_warnings() {
+        let _flow = FlowBuilder::<MemoryStorage>::new()
+            .route("node1", "complete", "node2") // Warning 1
+            .route("node2", "finish", "node3") // Warning 2
+            .route("node3", "end", "node4") // Warning 3
+            .route("node4", "custom", "node5") // No warning
+            .build();
     }
 }
