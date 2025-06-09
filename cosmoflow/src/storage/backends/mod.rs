@@ -6,17 +6,19 @@
 //!
 //! # Available Backends
 //!
-//! - **Memory Storage** (feature: `memory`) - Fast in-memory storage using HashMap
-//! - **File Storage** (feature: `file`) - JSON-based persistent file storage
+//! - **Memory Storage** (feature: `storage-memory`) - Fast in-memory storage using HashMap
+//! - **File Storage** (feature: `storage-file`) - JSON-based persistent file storage  
+//! - **Redis Storage** (feature: `storage-redis`) - High-performance distributed storage using Redis
 //!
 //! # Backend Selection
 //!
 //! Choose the appropriate backend based on your use case:
 //!
-//! | Backend | Use Case | Persistence | Performance | Memory Usage |
-//! |---------|----------|-------------|-------------|--------------|
-//! | Memory  | Development, Testing | None | Fastest | High |
-//! | File    | Small workflows | Full | Fast | Low |
+//! | Backend | Use Case | Persistence | Performance | Memory Usage | Scalability |
+//! |---------|----------|-------------|-------------|--------------|-------------|
+//! | Memory  | Development, Testing | None | Fastest | High | Single Process |
+//! | File    | Small workflows | Full | Fast | Low | Single Process |
+//! | Redis   | Production, Distributed | Full | Very Fast | Low | Multi-Process |
 //!
 //! # Custom Backends
 //!
@@ -430,3 +432,9 @@ pub use memory::{MemoryStorage, MemoryStorageError};
 mod file;
 #[cfg(feature = "storage-file")]
 pub use file::{FileStorage, FileStorageError};
+
+// Redis storage
+#[cfg(feature = "storage-redis")]
+mod redis;
+#[cfg(feature = "storage-redis")]
+pub use redis::{RedisStorage, RedisStorageError};

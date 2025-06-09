@@ -20,6 +20,7 @@ serde_json = { workspace = true }
 thiserror = { workspace = true }
 tokio = { workspace = true }
 uuid = { workspace = true }
+redis = { workspace = true, optional = true }
 
 [dev-dependencies]
 tempfile = { workspace = true }
@@ -30,7 +31,8 @@ default = []
 
 storage-memory = []
 storage-file = []
-storage-full = ["storage-memory", "storage-file"]
+storage-redis = ["redis"]
+storage-full = ["storage-memory", "storage-file", "storage-redis"]
 
 builtin = []
 
