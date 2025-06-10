@@ -1,0 +1,29 @@
+[package]
+name = "cosmoflow-examples"
+version = "0.1.0"
+edition = "2024"
+publish = false
+
+[dependencies]
+cosmoflow = { path = "../cosmoflow" }
+tokio = { version = "1.0", features = ["full"] }
+async-trait = "0.1"
+serde = { version = "1.0", features = ["derive"] }
+serde_json = "1.0"
+rand = "0.8"
+thiserror = "2.0"
+
+[[bin]]
+name = "hello_world"
+path = "hello_world.rs"
+
+[[bin]]
+name = "custom_node"
+path = "custom_node.rs"
+
+[features]
+default = []
+minimal = ["cosmoflow/minimal"]
+basic = ["cosmoflow/basic"]
+standard = ["cosmoflow/standard"]
+full = ["cosmoflow/full"]

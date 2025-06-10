@@ -1,5 +1,5 @@
 [workspace]
-members = ["cosmoflow"]
+members = ["cosmoflow", "examples"]
 default-members = ["cosmoflow"]
 resolver = "2"
 
