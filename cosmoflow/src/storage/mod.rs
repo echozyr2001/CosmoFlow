@@ -19,3 +19,6 @@ pub use backends::{MemoryStorage, MemoryStorageError};
 
 #[cfg(feature = "storage-file")]
 pub use backends::{FileStorage, FileStorageError};
+
+#[cfg(feature = "storage-redis")]
+pub use backends::{RedisStorage, RedisStorageError};
