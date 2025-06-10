@@ -150,7 +150,7 @@ impl NodeBackend<SimpleStorage> for HelloNodeBackend {
         prep_result: Self::PrepResult,
         _context: &ExecutionContext,
     ) -> Result<Self::ExecResult, Self::Error> {
-        let output = format!("🌟 {}", prep_result);
+        let output = format!("🌟 {prep_result}");
         println!("{}", output);
         Ok(output)
     }
@@ -201,7 +201,7 @@ impl NodeBackend<SimpleStorage> for ResponseNodeBackend {
         _context: &ExecutionContext,
     ) -> Result<Self::ExecResult, Self::Error> {
         let response = match prep_result {
-            Some(greeting) => format!("✨ I received: '{}'", greeting),
+            Some(greeting) => format!("✨ I received: '{greeting}'"),
             None => "⚠️ No greeting received".to_string(),
         };
 
@@ -260,7 +260,7 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
 
     // Validate the flow
     if let Err(e) = flow.validate() {
-        eprintln!("❌ Flow validation failed: {}", e);
+        eprintln!("❌ Flow validation failed: {e}");
         return Err(e.into());
     }
     println!("✅ Flow validation passed");
@@ -282,16 +282,16 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
     println!("  Final action: {}", result.final_action);
     println!("  Last node: {}", result.last_node_id);
     println!("  Execution path: {:?}", result.execution_path);
-    println!("  Duration: {:?}", duration);
+    println!("  Duration: {duration:?}");
     println!();
 
     // Show the final state of our custom storage
     println!("📊 Final storage state:");
     if let Ok(Some(greeting)) = store.get::<String>("greeting") {
-        println!("  greeting: {}", greeting);
+        println!("  greeting: {greeting}");
     }
     if let Ok(Some(response)) = store.get::<String>("response") {
-        println!("  response: {}", response);
+        println!("  response: {response}");
     }
 
     println!();

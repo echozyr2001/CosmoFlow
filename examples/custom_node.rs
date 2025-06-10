@@ -151,16 +151,22 @@ impl NodeBackend<SimpleStorage> for CoordinatorNodeBackend {
         _context: &ExecutionContext,
     ) -> Result<Self::PrepResult, Self::Error> {
         // Get current counts from store
-        if let Ok(Some(main_value)) = store.get::<Value>("main_counter_count") {
-            if let Some(count) = main_value.as_u64() {
-                self.main_count = count as usize;
-            }
+        if let Some(count) = store
+            .get::<Value>("main_counter_count")
+            .ok()
+            .flatten()
+            .and_then(|v| v.as_u64())
+        {
+            self.main_count = count as usize;
         }
 
-        if let Ok(Some(secondary_value)) = store.get::<Value>("secondary_counter_count") {
-            if let Some(count) = secondary_value.as_u64() {
-                self.secondary_count = count as usize;
-            }
+        if let Some(count) = store
+            .get::<Value>("secondary_counter_count")
+            .ok()
+            .flatten()
+            .and_then(|v| v.as_u64())
+        {
+            self.secondary_count = count as usize;
         }
 
         Ok((self.main_count, self.secondary_count))
@@ -237,11 +243,14 @@ impl NodeBackend<SimpleStorage> for CounterNodeBackend {
 
         // Check if we have stored count in the shared store
         let store_key = format!("{}_count", self.name);
-        if let Ok(Some(stored_count)) = store.get::<Value>(&store_key) {
-            if let Some(count_value) = stored_count.as_u64() {
-                self.count = count_value as usize;
-                println!("📊 {} restored count from store: {}", self.name, self.count);
-            }
+        if let Some(count_value) = store
+            .get::<Value>(&store_key)
+            .ok()
+            .flatten()
+            .and_then(|v| v.as_u64())
+        {
+            self.count = count_value as usize;
+            println!("📊 {} restored count from store: {}", self.name, self.count);
         }
 
         Ok(previous_count)
@@ -253,6 +262,7 @@ impl NodeBackend<SimpleStorage> for CounterNodeBackend {
         _context: &ExecutionContext,
     ) -> Result<Self::ExecResult, Self::Error> {
         // Check if we've reached the maximum count
+        #[allow(clippy::collapsible_if)]
         if let Some(max) = self.max_count {
             if self.count >= max {
                 return Err(NodeError::ValidationError(format!(
@@ -354,6 +364,7 @@ impl NodeBackend<SimpleStorage> for StatisticsNode {
         let keys = ["main_counter_history", "secondary_counter_history"];
 
         for key in keys {
+            #[allow(clippy::collapsible_if)]
             if let Ok(Some(value)) = store.get::<serde_json::Value>(key) {
                 if let Some(array) = value.as_array() {
                     let history: Vec<usize> = array
@@ -405,16 +416,16 @@ impl NodeBackend<SimpleStorage> for StatisticsNode {
                 0.0
             };
 
-            println!("📊 {} statistics:", counter_name);
-            println!("    Count: {}", count);
-            println!("    Average: {:.2}", average);
-            println!("    Min: {}, Max: {}", min, max);
-            println!("    Growth rate: {:.1}%", growth_rate);
+            println!("📊 {counter_name} statistics:");
+            println!("    Count: {count}");
+            println!("    Average: {average:.2}");
+            println!("    Min: {min}, Max: {max}");
+            println!("    Growth rate: {growth_rate:.1}%");
 
-            statistics.insert(format!("{}_average", counter_name), average);
-            statistics.insert(format!("{}_min", counter_name), min);
-            statistics.insert(format!("{}_max", counter_name), max);
-            statistics.insert(format!("{}_growth_rate", counter_name), growth_rate);
+            statistics.insert(format!("{counter_name}_average"), average);
+            statistics.insert(format!("{counter_name}_min"), min);
+            statistics.insert(format!("{counter_name}_max"), max);
+            statistics.insert(format!("{counter_name}_growth_rate"), growth_rate);
         }
 
         Ok(statistics)
@@ -431,7 +442,7 @@ impl NodeBackend<SimpleStorage> for StatisticsNode {
         for (key, value) in exec_result {
             store
                 .set(
-                    format!("stats_{}", key),
+                    format!("stats_{key}"),
                     Value::Number(
                         serde_json::Number::from_f64(value).unwrap_or(serde_json::Number::from(0)),
                     ),
@@ -472,6 +483,7 @@ impl NodeBackend<SimpleStorage> for ReportNode {
         ];
 
         for key in stat_keys {
+            #[allow(clippy::collapsible_if)]
             if let Ok(Some(value)) = store.get::<serde_json::Value>(key) {
                 if let Some(number) = value.as_f64() {
                     stats.insert(key.to_string(), number);
@@ -512,9 +524,9 @@ impl NodeBackend<SimpleStorage> for ReportNode {
                     .join(" ");
 
                 if key.contains("growth_rate") {
-                    report.push_str(&format!("{}: {:.1}%\n", display_key, value));
+                    report.push_str(&format!("{display_key}: {value:.1}%\n"));
                 } else {
-                    report.push_str(&format!("{}: {:.2}\n", display_key, value));
+                    report.push_str(&format!("{display_key}: {value:.2}\n"));
                 }
             }
         }
@@ -593,7 +605,7 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
 
     // Validate the flow
     if let Err(e) = flow.validate() {
-        eprintln!("❌ Flow validation failed: {}", e);
+        eprintln!("❌ Flow validation failed: {e}");
         return Err(e.into());
     }
     println!("✅ Flow validation passed");
@@ -615,16 +627,16 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
     println!("  Final action: {}", result.final_action);
     println!("  Last node: {}", result.last_node_id);
     println!("  Execution path length: {}", result.execution_path.len());
-    println!("  Duration: {:?}", duration);
+    println!("  Duration: {duration:?}");
     println!();
 
     // Show some final statistics from the store
     println!("🔍 Final store contents:");
     if let Ok(Some(main_count)) = store.get::<Value>("main_counter_count") {
-        println!("  Main counter final value: {}", main_count);
+        println!("  Main counter final value: {main_count}");
     }
     if let Ok(Some(secondary_count)) = store.get::<Value>("secondary_counter_count") {
-        println!("  Secondary counter final value: {}", secondary_count);
+        println!("  Secondary counter final value: {secondary_count}");
     }
 
     println!("\n💡 Key custom node features demonstrated:");
