@@ -102,6 +102,9 @@
 //! }
 //! ```
 
+/// The unified trait module contains the new unified `Node` trait.
+pub mod unified_trait;
+
 /// The errors module contains the error types for the node crate.
 pub mod errors;
 /// The traits module contains the `NodeBackend` trait.
@@ -109,6 +112,7 @@ pub mod traits;
 
 pub use errors::NodeError;
 pub use traits::NodeBackend;
+pub use unified_trait::Node as UnifiedNode;
 
 use std::{collections::HashMap, time::Duration};
 

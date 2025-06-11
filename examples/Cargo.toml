@@ -21,6 +21,14 @@ path = "hello_world.rs"
 name = "custom_node"
 path = "custom_node.rs"
 
+[[bin]]
+name = "unified_hello_world"
+path = "unified_hello_world.rs"
+
+[[bin]]
+name = "unified_counter"
+path = "unified_counter.rs"
+
 [features]
 default = []
 minimal = ["cosmoflow/minimal"]

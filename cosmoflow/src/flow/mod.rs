@@ -80,7 +80,7 @@ use std::collections::HashMap;
 use std::time::Duration;
 
 use crate::action::Action;
-use crate::node::{ExecutionContext, Node, NodeBackend, NodeError};
+use crate::node::{ExecutionContext, Node, NodeBackend, NodeError, UnifiedNode};
 use crate::shared_store::SharedStore;
 use crate::storage::StorageBackend;
 use async_trait::async_trait;
@@ -197,6 +197,34 @@ where
     }
 }
 
+/// Wrapper for UnifiedNode to implement NodeRunner
+pub struct UnifiedNodeWrapper<T, S> {
+    inner: T,
+    _phantom: std::marker::PhantomData<S>,
+}
+
+impl<T, S> UnifiedNodeWrapper<T, S> {
+    /// Create a new wrapper around a UnifiedNode
+    pub fn new(inner: T) -> Self {
+        Self {
+            inner,
+            _phantom: std::marker::PhantomData,
+        }
+    }
+}
+
+/// Implementation of NodeRunner for UnifiedNodeWrapper
+#[async_trait]
+impl<T, S> NodeRunner<S> for UnifiedNodeWrapper<T, S>
+where
+    T: UnifiedNode<S> + Send + Sync,
+    S: StorageBackend + Send + Sync,
+{
+    async fn run(&mut self, store: &mut SharedStore<S>) -> Result<Action, NodeError> {
+        UnifiedNode::run(&mut self.inner, store).await
+    }
+}
+
 /// Trait for implementing flow execution logic
 #[async_trait]
 pub trait FlowBackend<S: StorageBackend> {
@@ -270,7 +298,17 @@ impl<S: StorageBackend + 'static> FlowBuilder<S> {
         self
     }
 
-    /// Add a node to the flow
+    /// Add a unified node to the flow (new API)
+    pub fn unified_node<T>(mut self, id: impl Into<String>, node: T) -> Self
+    where
+        T: UnifiedNode<S> + Send + Sync + 'static,
+    {
+        self.nodes
+            .insert(id.into(), Box::new(UnifiedNodeWrapper::new(node)));
+        self
+    }
+
+    /// Add a node with backend (legacy API - for backward compatibility)
     pub fn node<B>(mut self, id: impl Into<String>, node: Node<B, S>) -> Self
     where
         B: NodeBackend<S> + Send + Sync + 'static,
@@ -278,6 +316,16 @@ impl<S: StorageBackend + 'static> FlowBuilder<S> {
     {
         self.nodes.insert(id.into(), Box::new(node));
         self
+    }
+
+    /// Convenience method: add a unified node and set it as the starting node
+    pub fn start_with<T>(mut self, id: impl Into<String>, node: T) -> Self
+    where
+        T: UnifiedNode<S> + Send + Sync + 'static,
+    {
+        let id = id.into();
+        self.config.start_node_id = id.clone();
+        self.unified_node(id, node)
     }
 
     /// Add a simple route (action -> target node)
