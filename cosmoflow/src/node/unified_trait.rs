@@ -166,7 +166,7 @@ pub trait Node<S: StorageBackend>: Send + Sync {
     /// # use cosmoflow::node::ExecutionContext;
     /// # use cosmoflow::shared_store::SharedStore;
     /// # use cosmoflow::storage::StorageBackend;
-    /// # 
+    /// #
     /// # struct MyPrepData { message: String }
     /// # #[derive(Debug)]
     /// # enum MyError { MissingConfig, InvalidTimeout }
@@ -174,7 +174,7 @@ pub trait Node<S: StorageBackend>: Send + Sync {
     /// #     fn fmt(&self, f: &mut std::fmt::Formatter) -> std::fmt::Result { write!(f, "error") }
     /// # }
     /// # impl std::error::Error for MyError {}
-    /// # 
+    /// #
     /// # struct MyNode;
     /// # impl MyNode {
     /// async fn prep(&mut self, _store: &SharedStore<impl StorageBackend>, _context: &ExecutionContext)
@@ -222,7 +222,7 @@ pub trait Node<S: StorageBackend>: Send + Sync {
     /// ```rust
     /// # use cosmoflow::node::ExecutionContext;
     /// # use std::time::Duration;
-    /// # 
+    /// #
     /// # struct MyPrepData { config: Config }
     /// # struct Config { timeout: u64 }
     /// # #[derive(Debug)]
@@ -231,7 +231,7 @@ pub trait Node<S: StorageBackend>: Send + Sync {
     /// #     fn fmt(&self, f: &mut std::fmt::Formatter) -> std::fmt::Result { write!(f, "error") }
     /// # }
     /// # impl std::error::Error for MyError {}
-    /// # 
+    /// #
     /// # struct HttpClient;
     /// # impl HttpClient {
     /// #     fn new() -> Self { HttpClient }
@@ -247,7 +247,7 @@ pub trait Node<S: StorageBackend>: Send + Sync {
     /// # impl Response {
     /// #     async fn text(self) -> Result<String, MyError> { Ok("result".to_string()) }
     /// # }
-    /// # 
+    /// #
     /// # struct MyNode;
     /// # impl MyNode {
     /// async fn exec(&mut self, prep_result: MyPrepData, _context: &ExecutionContext)
@@ -301,7 +301,7 @@ pub trait Node<S: StorageBackend>: Send + Sync {
     /// # use cosmoflow::shared_store::SharedStore;
     /// # use cosmoflow::storage::StorageBackend;
     /// # use cosmoflow::action::Action;
-    /// # 
+    /// #
     /// # struct MyPrepData;
     /// # #[derive(Debug)]
     /// # enum MyError { StorageError }
@@ -309,7 +309,7 @@ pub trait Node<S: StorageBackend>: Send + Sync {
     /// #     fn fmt(&self, f: &mut std::fmt::Formatter) -> std::fmt::Result { write!(f, "error") }
     /// # }
     /// # impl std::error::Error for MyError {}
-    /// # 
+    /// #
     /// # struct MyNode;
     /// # impl MyNode {
     /// async fn post(&mut self, _store: &mut SharedStore<impl StorageBackend>, _prep_result: MyPrepData,
@@ -442,14 +442,14 @@ pub trait Node<S: StorageBackend>: Send + Sync {
     ///
     /// ```rust
     /// # use cosmoflow::node::ExecutionContext;
-    /// # 
+    /// #
     /// # #[derive(Debug)]
     /// # enum MyError { NetworkError }
     /// # impl std::fmt::Display for MyError {
     /// #     fn fmt(&self, f: &mut std::fmt::Formatter) -> std::fmt::Result { write!(f, "network error") }
     /// # }
     /// # impl std::error::Error for MyError {}
-    /// # 
+    /// #
     /// # struct MyNode;
     /// # impl MyNode {
     /// async fn exec_fallback(&mut self, _prep_result: String,
@@ -512,9 +512,9 @@ pub trait Node<S: StorageBackend>: Send + Sync {
     /// # use cosmoflow::shared_store::SharedStore;
     /// # use cosmoflow::storage::StorageBackend;
     /// # use cosmoflow::action::Action;
-    /// # 
+    /// #
     /// # struct MyCustomNode;
-    /// # 
+    /// #
     /// # async fn example() -> Result<(), NodeError> {
     /// #     let mut my_node = MyCustomNode;
     /// #     let action = Action::simple("complete");
@@ -582,7 +582,7 @@ pub trait Node<S: StorageBackend>: Send + Sync {
     /// ```rust
     /// # use cosmoflow::node::ExecutionContext;
     /// # use std::time::Duration;
-    /// # 
+    /// #
     /// # async fn example() {
     /// // This method is typically called internally by run(), but can be used directly:
     /// let context = ExecutionContext::new(3, Duration::from_millis(500));
