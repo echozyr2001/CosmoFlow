@@ -19,28 +19,28 @@
 //! ## Creating a Simple Log Node
 //!
 //! ```rust
-//! use cosmoflow::builtin::basic::LogNodeBackend;
+//! use cosmoflow::builtin::basic::LogNode;
 //! use cosmoflow::action::Action;
 //!
-//! let log_node = LogNodeBackend::new("Processing started", Action::simple("next"));
+//! let log_node = LogNode::new("Processing started", Action::simple("next"));
 //! ```
 //!
 //! ## Data Manipulation Workflow
 //!
 //! ```rust
-//! use cosmoflow::builtin::basic::{SetValueNodeBackend, GetValueNodeBackend};
+//! use cosmoflow::builtin::basic::{SetValueNode, GetValueNode};
 //! use cosmoflow::action::Action;
 //! use serde_json::json;
 //!
 //! // Set initial data
-//! let set_node = SetValueNodeBackend::new(
+//! let set_node = SetValueNode::new(
 //!     "user_count",
 //!     json!(100),
 //!     Action::simple("increment")
 //! );
 //!
 //! // Transform data
-//! let transform_node = GetValueNodeBackend::new(
+//! let transform_node = GetValueNode::new(
 //!     "user_count",
 //!     "user_count_doubled",
 //!     |value| match value {
@@ -53,8 +53,9 @@
 
 use std::time::Duration;
 
+use crate::Node;
 use crate::action::Action;
-use crate::node::{ExecutionContext, NodeBackend, NodeError};
+use crate::node::{ExecutionContext, NodeError};
 use crate::shared_store::SharedStore;
 use crate::storage::StorageBackend;
 use async_trait::async_trait;
@@ -79,31 +80,31 @@ use serde_json::Value;
 /// ## Basic Usage
 ///
 /// ```rust
-/// use cosmoflow::builtin::basic::LogNodeBackend;
+/// use cosmoflow::builtin::basic::LogNode;
 /// use cosmoflow::action::Action;
 ///
-/// let node = LogNodeBackend::new("Starting data processing", Action::simple("process"));
+/// let node = LogNode::new("Starting data processing", Action::simple("process"));
 /// ```
 ///
 /// ## With Retry Configuration
 ///
 /// ```rust
-/// use cosmoflow::builtin::basic::LogNodeBackend;
+/// use cosmoflow::builtin::basic::LogNode;
 /// use cosmoflow::action::Action;
 /// use std::time::Duration;
 ///
-/// let node = LogNodeBackend::new("Critical checkpoint", Action::simple("continue"))
+/// let node = LogNode::new("Critical checkpoint", Action::simple("continue"))
 ///     .with_retries(3)
 ///     .with_retry_delay(Duration::from_secs(1));
 /// ```
-pub struct LogNodeBackend {
+pub struct LogNode {
     message: String,
     action: Action,
     max_retries: usize,
     retry_delay: Duration,
 }
 
-impl LogNodeBackend {
+impl LogNode {
     /// Create a new log node
     ///
     /// Creates a LogNodeBackend that will output the specified message during
@@ -117,10 +118,10 @@ impl LogNodeBackend {
     /// # Examples
     ///
     /// ```rust
-    /// use cosmoflow::builtin::basic::LogNodeBackend;
+    /// use cosmoflow::builtin::basic::LogNode;
     /// use cosmoflow::action::Action;
     ///
-    /// let node = LogNodeBackend::new("Processing complete", Action::simple("finish"));
+    /// let node = LogNode::new("Processing complete", Action::simple("finish"));
     /// ```
     pub fn new<S: Into<String>>(message: S, action: Action) -> Self {
         Self {
@@ -143,10 +144,10 @@ impl LogNodeBackend {
     /// # Examples
     ///
     /// ```rust
-    /// use cosmoflow::builtin::basic::LogNodeBackend;
+    /// use cosmoflow::builtin::basic::LogNode;
     /// use cosmoflow::action::Action;
     ///
-    /// let node = LogNodeBackend::new("Unreliable operation", Action::simple("next"))
+    /// let node = LogNode::new("Unreliable operation", Action::simple("next"))
     ///     .with_retries(5);
     /// ```
     pub fn with_retries(mut self, max_retries: usize) -> Self {
@@ -166,11 +167,11 @@ impl LogNodeBackend {
     /// # Examples
     ///
     /// ```rust
-    /// use cosmoflow::builtin::basic::LogNodeBackend;
+    /// use cosmoflow::builtin::basic::LogNode;
     /// use cosmoflow::action::Action;
     /// use std::time::Duration;
     ///
-    /// let node = LogNodeBackend::new("Network operation", Action::simple("next"))
+    /// let node = LogNode::new("Network operation", Action::simple("next"))
     ///     .with_retries(3)
     ///     .with_retry_delay(Duration::from_millis(500));
     /// ```
@@ -181,7 +182,7 @@ impl LogNodeBackend {
 }
 
 #[async_trait]
-impl<S: StorageBackend + Send + Sync> NodeBackend<S> for LogNodeBackend {
+impl<S: StorageBackend + Send + Sync> Node<S> for LogNode {
     type PrepResult = String;
     type ExecResult = String;
     type Error = NodeError;
@@ -247,19 +248,19 @@ impl<S: StorageBackend + Send + Sync> NodeBackend<S> for LogNodeBackend {
 /// ## Setting Simple Values
 ///
 /// ```rust
-/// use cosmoflow::builtin::basic::SetValueNodeBackend;
+/// use cosmoflow::builtin::basic::SetValueNode;
 /// use cosmoflow::action::Action;
 /// use serde_json::json;
 ///
 /// // Set a user ID
-/// let set_user = SetValueNodeBackend::new(
+/// let set_user = SetValueNode::new(
 ///     "current_user_id",
 ///     json!(12345),
 ///     Action::simple("load_user_data")
 /// );
 ///
 /// // Set configuration
-/// let set_config = SetValueNodeBackend::new(
+/// let set_config = SetValueNode::new(
 ///     "config",
 ///     json!({
 ///         "max_connections": 100,
@@ -273,24 +274,24 @@ impl<S: StorageBackend + Send + Sync> NodeBackend<S> for LogNodeBackend {
 /// ## With Error Handling
 ///
 /// ```rust
-/// use cosmoflow::builtin::basic::SetValueNodeBackend;
+/// use cosmoflow::builtin::basic::SetValueNode;
 /// use cosmoflow::action::Action;
 /// use serde_json::json;
 ///
-/// let node = SetValueNodeBackend::new(
+/// let node = SetValueNode::new(
 ///     "critical_data",
 ///     json!("important_value"),
 ///     Action::simple("continue")
 /// ).with_retries(3); // Retry up to 3 times if storage fails
 /// ```
-pub struct SetValueNodeBackend {
+pub struct SetValueNode {
     key: String,
     value: Value,
     action: Action,
     max_retries: usize,
 }
 
-impl SetValueNodeBackend {
+impl SetValueNode {
     /// Create a new set value node
     ///
     /// Creates a SetValueNodeBackend that will store the specified key-value
@@ -305,11 +306,11 @@ impl SetValueNodeBackend {
     /// # Examples
     ///
     /// ```rust
-    /// use cosmoflow::builtin::basic::SetValueNodeBackend;
+    /// use cosmoflow::builtin::basic::SetValueNode;
     /// use cosmoflow::action::Action;
     /// use serde_json::json;
     ///
-    /// let node = SetValueNodeBackend::new(
+    /// let node = SetValueNode::new(
     ///     "process_status",
     ///     json!("completed"),
     ///     Action::simple("cleanup")
@@ -332,7 +333,7 @@ impl SetValueNodeBackend {
 }
 
 #[async_trait]
-impl<S: StorageBackend + Send + Sync> NodeBackend<S> for SetValueNodeBackend {
+impl<S: StorageBackend + Send + Sync> Node<S> for SetValueNode {
     type PrepResult = ();
     type ExecResult = ();
     type Error = NodeError;
@@ -400,12 +401,12 @@ impl<S: StorageBackend + Send + Sync> NodeBackend<S> for SetValueNodeBackend {
 /// ## Simple Value Retrieval
 ///
 /// ```rust
-/// use cosmoflow::builtin::basic::GetValueNodeBackend;
+/// use cosmoflow::builtin::basic::GetValueNode;
 /// use cosmoflow::action::Action;
 /// use serde_json::{json, Value};
 ///
 /// // Pass through values unchanged
-/// let pass_through = GetValueNodeBackend::new(
+/// let pass_through = GetValueNode::new(
 ///     "input_data",
 ///     "output_data",
 ///     |value| value.unwrap_or(json!(null)),
@@ -416,12 +417,12 @@ impl<S: StorageBackend + Send + Sync> NodeBackend<S> for SetValueNodeBackend {
 /// ## Data Transformation
 ///
 /// ```rust
-/// use cosmoflow::builtin::basic::GetValueNodeBackend;
+/// use cosmoflow::builtin::basic::GetValueNode;
 /// use cosmoflow::action::Action;
 /// use serde_json::{json, Value};
 ///
 /// // Double numeric values
-/// let doubler = GetValueNodeBackend::new(
+/// let doubler = GetValueNode::new(
 ///     "number",
 ///     "doubled_number",
 ///     |value| match value {
@@ -434,7 +435,7 @@ impl<S: StorageBackend + Send + Sync> NodeBackend<S> for SetValueNodeBackend {
 /// );
 ///
 /// // Convert to uppercase string
-/// let uppercase = GetValueNodeBackend::new(
+/// let uppercase = GetValueNode::new(
 ///     "text",
 ///     "uppercase_text",
 ///     |value| match value {
@@ -450,12 +451,12 @@ impl<S: StorageBackend + Send + Sync> NodeBackend<S> for SetValueNodeBackend {
 /// ## Complex Data Processing
 ///
 /// ```rust
-/// use cosmoflow::builtin::basic::GetValueNodeBackend;
+/// use cosmoflow::builtin::basic::GetValueNode;
 /// use cosmoflow::action::Action;
 /// use serde_json::{json, Value};
 ///
 /// // Extract and process array data
-/// let array_processor = GetValueNodeBackend::new(
+/// let array_processor = GetValueNode::new(
 ///     "user_list",
 ///     "active_users",
 ///     |value| {
@@ -472,7 +473,7 @@ impl<S: StorageBackend + Send + Sync> NodeBackend<S> for SetValueNodeBackend {
 ///     Action::simple("process_users")
 /// );
 /// ```
-pub struct GetValueNodeBackend<F>
+pub struct GetValueNode<F>
 where
     F: Fn(Option<Value>) -> Value + Send + Sync,
 {
@@ -483,7 +484,7 @@ where
     max_retries: usize,
 }
 
-impl<F> GetValueNodeBackend<F>
+impl<F> GetValueNode<F>
 where
     F: Fn(Option<Value>) -> Value + Send + Sync,
 {
@@ -502,12 +503,12 @@ where
     /// # Examples
     ///
     /// ```rust
-    /// use cosmoflow::builtin::basic::GetValueNodeBackend;
+    /// use cosmoflow::builtin::basic::GetValueNode;
     /// use cosmoflow::action::Action;
     /// use serde_json::{json, Value};
     ///
     /// // Create a node that increments a counter
-    /// let increment_node = GetValueNodeBackend::new(
+    /// let increment_node = GetValueNode::new(
     ///     "counter",
     ///     "counter",
     ///     |value| {
@@ -540,7 +541,7 @@ where
 }
 
 #[async_trait]
-impl<S, F> NodeBackend<S> for GetValueNodeBackend<F>
+impl<S, F> Node<S> for GetValueNode<F>
 where
     S: StorageBackend + Send + Sync,
     F: Fn(Option<Value>) -> Value + Send + Sync,
@@ -612,12 +613,12 @@ where
 /// ## Simple Value Checks
 ///
 /// ```rust
-/// use cosmoflow::builtin::basic::ConditionalNodeBackend;
+/// use cosmoflow::builtin::basic::ConditionalNode;
 /// use cosmoflow::action::Action;
 /// use serde_json::json;
 /// use cosmoflow::storage::MemoryStorage;
 ///
-/// let condition_node = ConditionalNodeBackend::<_, MemoryStorage>::new(
+/// let condition_node = ConditionalNode::<_, MemoryStorage>::new(
 ///     |store| {
 ///         store.get("user_authenticated")
 ///             .ok()
@@ -633,12 +634,12 @@ where
 /// ## Complex Conditions
 ///
 /// ```rust
-/// use cosmoflow::builtin::basic::ConditionalNodeBackend;
+/// use cosmoflow::builtin::basic::ConditionalNode;
 /// use cosmoflow::action::Action;
 /// use serde_json::json;
 /// use cosmoflow::storage::MemoryStorage;
 ///
-/// let complex_condition = ConditionalNodeBackend::<_, MemoryStorage>::new(
+/// let complex_condition = ConditionalNode::<_, MemoryStorage>::new(
 ///     |store| {
 ///         let user_count = store.get("active_users")
 ///             .ok()
@@ -658,7 +659,7 @@ where
 ///     Action::simple("maintain")       // Normal operation
 /// );
 /// ```
-pub struct ConditionalNodeBackend<F, S>
+pub struct ConditionalNode<F, S>
 where
     F: Fn(&SharedStore<S>) -> bool + Send + Sync,
     S: StorageBackend,
@@ -670,7 +671,7 @@ where
     _phantom: std::marker::PhantomData<S>,
 }
 
-impl<F, S> ConditionalNodeBackend<F, S>
+impl<F, S> ConditionalNode<F, S>
 where
     F: Fn(&SharedStore<S>) -> bool + Send + Sync,
     S: StorageBackend,
@@ -689,11 +690,11 @@ where
     /// # Examples
     ///
     /// ```rust
-    /// use cosmoflow::builtin::basic::ConditionalNodeBackend;
+    /// use cosmoflow::builtin::basic::ConditionalNode;
     /// use cosmoflow::action::Action;
     /// use cosmoflow::storage::MemoryStorage;
     ///
-    /// let node = ConditionalNodeBackend::<_, MemoryStorage>::new(
+    /// let node = ConditionalNode::<_, MemoryStorage>::new(
     ///     |store| store.get("ready").ok().flatten().and_then(|v: serde_json::Value| v.as_bool()).unwrap_or(false),
     ///     Action::simple("proceed"),
     ///     Action::simple("wait")
@@ -717,7 +718,7 @@ where
 }
 
 #[async_trait]
-impl<S, F> NodeBackend<S> for ConditionalNodeBackend<F, S>
+impl<S, F> Node<S> for ConditionalNode<F, S>
 where
     S: StorageBackend + Send + Sync,
     F: Fn(&SharedStore<S>) -> bool + Send + Sync,
@@ -784,12 +785,12 @@ where
 /// ## Basic Delay
 ///
 /// ```rust
-/// use cosmoflow::builtin::basic::DelayNodeBackend;
+/// use cosmoflow::builtin::basic::DelayNode;
 /// use cosmoflow::action::Action;
 /// use std::time::Duration;
 ///
 /// // Wait 5 seconds before continuing
-/// let delay_node = DelayNodeBackend::new(
+/// let delay_node = DelayNode::new(
 ///     Duration::from_secs(5),
 ///     Action::simple("continue")
 /// );
@@ -798,12 +799,12 @@ where
 /// ## Rate Limiting
 ///
 /// ```rust
-/// use cosmoflow::builtin::basic::DelayNodeBackend;
+/// use cosmoflow::builtin::basic::DelayNode;
 /// use cosmoflow::action::Action;
 /// use std::time::Duration;
 ///
 /// // Rate limit API calls to 1 per second
-/// let rate_limit = DelayNodeBackend::new(
+/// let rate_limit = DelayNode::new(
 ///     Duration::from_secs(1),
 ///     Action::simple("api_call")
 /// ).with_retries(3);
@@ -812,23 +813,23 @@ where
 /// ## Backoff Strategy
 ///
 /// ```rust
-/// use cosmoflow::builtin::basic::DelayNodeBackend;
+/// use cosmoflow::builtin::basic::DelayNode;
 /// use cosmoflow::action::Action;
 /// use std::time::Duration;
 ///
 /// // Exponential backoff delay
-/// let backoff_delay = DelayNodeBackend::new(
+/// let backoff_delay = DelayNode::new(
 ///     Duration::from_millis(500), // Base delay
 ///     Action::simple("retry_operation")
 /// );
 /// ```
-pub struct DelayNodeBackend {
+pub struct DelayNode {
     duration: Duration,
     action: Action,
     max_retries: usize,
 }
 
-impl DelayNodeBackend {
+impl DelayNode {
     /// Create a new delay node
     ///
     /// Creates a DelayNodeBackend that will pause execution for the specified
@@ -842,12 +843,12 @@ impl DelayNodeBackend {
     /// # Examples
     ///
     /// ```rust
-    /// use cosmoflow::builtin::basic::DelayNodeBackend;
+    /// use cosmoflow::builtin::basic::DelayNode;
     /// use cosmoflow::action::Action;
     /// use std::time::Duration;
     ///
     /// // Wait 30 seconds before proceeding
-    /// let node = DelayNodeBackend::new(
+    /// let node = DelayNode::new(
     ///     Duration::from_secs(30),
     ///     Action::simple("timeout_complete")
     /// );
@@ -868,7 +869,7 @@ impl DelayNodeBackend {
 }
 
 #[async_trait]
-impl<S: StorageBackend + Send + Sync> NodeBackend<S> for DelayNodeBackend {
+impl<S: StorageBackend + Send + Sync> Node<S> for DelayNode {
     type PrepResult = ();
     type ExecResult = ();
     type Error = NodeError;
@@ -926,8 +927,8 @@ impl<S: StorageBackend + Send + Sync> NodeBackend<S> for DelayNodeBackend {
 /// let checkpoint = log("Reached checkpoint 1");
 /// let status = log("Processing completed successfully");
 /// ```
-pub fn log<S: Into<String>>(message: S) -> LogNodeBackend {
-    LogNodeBackend::new(message, Action::simple("continue"))
+pub fn log<S: Into<String>>(message: S) -> LogNode {
+    LogNode::new(message, Action::simple("continue"))
 }
 
 /// Helper function to create a simple set value node
@@ -949,8 +950,8 @@ pub fn log<S: Into<String>>(message: S) -> LogNodeBackend {
 /// let set_status = set_value("process_status", json!("started"));
 /// let set_config = set_value("max_retries", json!(3));
 /// ```
-pub fn set_value<S: Into<String>>(key: S, value: Value) -> SetValueNodeBackend {
-    SetValueNodeBackend::new(key, value, Action::simple("continue"))
+pub fn set_value<S: Into<String>>(key: S, value: Value) -> SetValueNode {
+    SetValueNode::new(key, value, Action::simple("continue"))
 }
 
 /// Helper function to create a simple delay node
@@ -971,8 +972,8 @@ pub fn set_value<S: Into<String>>(key: S, value: Value) -> SetValueNodeBackend {
 /// let short_pause = delay(Duration::from_millis(100));
 /// let long_pause = delay(Duration::from_secs(10));
 /// ```
-pub fn delay(duration: Duration) -> DelayNodeBackend {
-    DelayNodeBackend::new(duration, Action::simple("continue"))
+pub fn delay(duration: Duration) -> DelayNode {
+    DelayNode::new(duration, Action::simple("continue"))
 }
 
 /// Helper function to create a get value node with identity transform
@@ -1000,8 +1001,8 @@ pub fn delay(duration: Duration) -> DelayNodeBackend {
 pub fn get_value<S1: Into<String>, S2: Into<String>>(
     key: S1,
     output_key: S2,
-) -> GetValueNodeBackend<impl Fn(Option<Value>) -> Value + Send + Sync> {
-    GetValueNodeBackend::new(
+) -> GetValueNode<impl Fn(Option<Value>) -> Value + Send + Sync> {
+    GetValueNode::new(
         key,
         output_key,
         |value| value.unwrap_or(Value::Null),
@@ -1018,47 +1019,38 @@ mod tests {
 
     #[tokio::test]
     async fn test_optimized_log_node() {
-        let mut node: LogNodeBackend = log("test message");
+        let mut node: LogNode = log("test message");
         let store: SharedStore<MemoryStorage> = SharedStore::with_storage(MemoryStorage::new());
         let context = ExecutionContext::new(1, Duration::ZERO);
 
-        let prep_result =
-            <LogNodeBackend as NodeBackend<MemoryStorage>>::prep(&mut node, &store, &context)
-                .await
-                .unwrap();
+        let prep_result = <LogNode as Node<MemoryStorage>>::prep(&mut node, &store, &context)
+            .await
+            .unwrap();
         assert!(prep_result.contains("test message"));
 
-        let exec_result = <LogNodeBackend as NodeBackend<MemoryStorage>>::exec(
-            &mut node,
-            prep_result.clone(),
-            &context,
-        )
-        .await
-        .unwrap();
+        let exec_result =
+            <LogNode as Node<MemoryStorage>>::exec(&mut node, prep_result.clone(), &context)
+                .await
+                .unwrap();
         assert_eq!(exec_result, prep_result);
     }
 
     #[tokio::test]
     async fn test_optimized_set_value_node() {
-        let mut node: SetValueNodeBackend = set_value("test_key", json!("test_value"));
+        let mut node: SetValueNode = set_value("test_key", json!("test_value"));
         let mut store: SharedStore<MemoryStorage> = SharedStore::with_storage(MemoryStorage::new());
         let context = ExecutionContext::new(1, Duration::ZERO);
 
-        <SetValueNodeBackend as NodeBackend<MemoryStorage>>::prep(&mut node, &store, &context)
+        <SetValueNode as Node<MemoryStorage>>::prep(&mut node, &store, &context)
             .await
             .unwrap();
-        <SetValueNodeBackend as NodeBackend<MemoryStorage>>::exec(&mut node, (), &context)
+        <SetValueNode as Node<MemoryStorage>>::exec(&mut node, (), &context)
             .await
             .unwrap();
-        let action = <SetValueNodeBackend as NodeBackend<MemoryStorage>>::post(
-            &mut node,
-            &mut store,
-            (),
-            (),
-            &context,
-        )
-        .await
-        .unwrap();
+        let action =
+            <SetValueNode as Node<MemoryStorage>>::post(&mut node, &mut store, (), (), &context)
+                .await
+                .unwrap();
 
         assert_eq!(action, Action::simple("continue"));
         assert_eq!(store.get("test_key").unwrap(), Some(json!("test_value")));
@@ -1066,29 +1058,24 @@ mod tests {
 
     #[tokio::test]
     async fn test_optimized_delay_node() {
-        let mut node: DelayNodeBackend = delay(Duration::from_millis(1));
+        let mut node: DelayNode = delay(Duration::from_millis(1));
         let mut store: SharedStore<MemoryStorage> = SharedStore::with_storage(MemoryStorage::new());
         let context = ExecutionContext::new(1, Duration::ZERO);
 
         let start = std::time::Instant::now();
-        <DelayNodeBackend as NodeBackend<MemoryStorage>>::prep(&mut node, &store, &context)
+        <DelayNode as Node<MemoryStorage>>::prep(&mut node, &store, &context)
             .await
             .unwrap();
-        <DelayNodeBackend as NodeBackend<MemoryStorage>>::exec(&mut node, (), &context)
+        <DelayNode as Node<MemoryStorage>>::exec(&mut node, (), &context)
             .await
             .unwrap();
         let elapsed = start.elapsed();
 
         assert!(elapsed >= Duration::from_millis(1));
-        let action = <DelayNodeBackend as NodeBackend<MemoryStorage>>::post(
-            &mut node,
-            &mut store,
-            (),
-            (),
-            &context,
-        )
-        .await
-        .unwrap();
+        let action =
+            <DelayNode as Node<MemoryStorage>>::post(&mut node, &mut store, (), (), &context)
+                .await
+                .unwrap();
         assert_eq!(action, Action::simple("continue"));
     }
 
@@ -1102,23 +1089,19 @@ mod tests {
         let mut node = get_value("input_key", "output_key");
         let context = ExecutionContext::new(1, Duration::ZERO);
 
-        let prep_result = <GetValueNodeBackend<_> as NodeBackend<MemoryStorage>>::prep(
-            &mut node, &store, &context,
-        )
-        .await
-        .unwrap();
+        let prep_result =
+            <GetValueNode<_> as Node<MemoryStorage>>::prep(&mut node, &store, &context)
+                .await
+                .unwrap();
         assert_eq!(prep_result, Some(json!("input_value")));
 
-        let exec_result = <GetValueNodeBackend<_> as NodeBackend<MemoryStorage>>::exec(
-            &mut node,
-            prep_result,
-            &context,
-        )
-        .await
-        .unwrap();
+        let exec_result =
+            <GetValueNode<_> as Node<MemoryStorage>>::exec(&mut node, prep_result, &context)
+                .await
+                .unwrap();
         assert_eq!(exec_result, json!("input_value"));
 
-        let action = <GetValueNodeBackend<_> as NodeBackend<MemoryStorage>>::post(
+        let action = <GetValueNode<_> as Node<MemoryStorage>>::post(
             &mut node,
             &mut store,
             Some(json!("input_value")),

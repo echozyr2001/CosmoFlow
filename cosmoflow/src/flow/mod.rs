@@ -1052,7 +1052,7 @@ where
 mod tests {
     use super::*;
     use crate::action::Action;
-    use crate::node::{ExecutionContext, NodeBackend};
+    use crate::node::ExecutionContext;
     use crate::shared_store::SharedStore;
     use crate::storage::MemoryStorage;
     use async_trait::async_trait;
@@ -1073,7 +1073,7 @@ mod tests {
     }
 
     #[async_trait]
-    impl NodeBackend<MemoryStorage> for TestNode {
+    impl Node<MemoryStorage> for TestNode {
         type PrepResult = ();
         type ExecResult = ();
         type Error = NodeError;
@@ -1112,8 +1112,8 @@ mod tests {
     async fn test_basic_flow_execution() {
         let mut flow = FlowBuilder::new()
             .start_node("start")
-            .node("start", Node::new(TestNode::new(Action::simple("next"))))
-            .node("middle", Node::new(TestNode::new(Action::simple("end"))))
+            .node("start", TestNode::new(Action::simple("next")))
+            .node("middle", TestNode::new(Action::simple("end")))
             .route("start", "next", "middle")
             .route("middle", "end", "end")
             .build();
@@ -1132,8 +1132,8 @@ mod tests {
     async fn test_flow_cycle_detection() {
         let mut flow = FlowBuilder::new()
             .start_node("start")
-            .node("start", Node::new(TestNode::new(Action::simple("next"))))
-            .node("middle", Node::new(TestNode::new(Action::simple("back"))))
+            .node("start", TestNode::new(Action::simple("next")))
+            .node("middle", TestNode::new(Action::simple("back")))
             .route("start", "next", "middle")
             .route("middle", "back", "start") // Creates a cycle
             .build();
@@ -1155,12 +1155,9 @@ mod tests {
         let mut flow = FlowBuilder::new()
             .start_node("start")
             .max_steps(2)
-            .node("start", Node::new(TestNode::new(Action::simple("next"))))
-            .node(
-                "middle",
-                Node::new(TestNode::new(Action::simple("continue"))),
-            )
-            .node("end_node", Node::new(TestNode::new(Action::simple("end"))))
+            .node("start", TestNode::new(Action::simple("next")))
+            .node("middle", TestNode::new(Action::simple("continue")))
+            .node("end_node", TestNode::new(Action::simple("end")))
             .route("start", "next", "middle")
             .route("middle", "continue", "end_node")
             .route("end_node", "end", "final")
@@ -1180,7 +1177,7 @@ mod tests {
     async fn test_flow_node_not_found() {
         let mut flow = FlowBuilder::new()
             .start_node("start")
-            .node("start", Node::new(TestNode::new(Action::simple("next"))))
+            .node("start", TestNode::new(Action::simple("next")))
             .route("start", "next", "nonexistent")
             .build();
 
@@ -1198,7 +1195,7 @@ mod tests {
     async fn test_flow_no_route_found() {
         let mut flow = FlowBuilder::new()
             .start_node("start")
-            .node("start", Node::new(TestNode::new(Action::simple("unknown"))))
+            .node("start", TestNode::new(Action::simple("unknown")))
             .build();
 
         let mut store = SharedStore::with_storage(MemoryStorage::new());
@@ -1218,7 +1215,7 @@ mod tests {
     async fn test_flow_validation() {
         let flow = FlowBuilder::new()
             .start_node("nonexistent")
-            .node("start", Node::new(TestNode::new(Action::simple("next"))))
+            .node("start", TestNode::new(Action::simple("next")))
             .build();
 
         let result = flow.validate();
@@ -1263,9 +1260,9 @@ mod tests {
 
         let mut flow = FlowBuilder::new()
             .start_node("start")
-            .node("start", Node::new(TestNode::new(Action::simple("check"))))
-            .node("success", Node::new(TestNode::new(Action::simple("end"))))
-            .node("failure", Node::new(TestNode::new(Action::simple("end"))))
+            .node("start", TestNode::new(Action::simple("check")))
+            .node("success", TestNode::new(Action::simple("end")))
+            .node("failure", TestNode::new(Action::simple("end")))
             .conditional_route("start", "check", "success", RouteCondition::Always)
             .build();
 

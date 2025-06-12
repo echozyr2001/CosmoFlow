@@ -53,7 +53,6 @@
 
 use std::time::Duration;
 
-use crate::node::Node;
 use serde_json::Value;
 
 use super::basic::*;
@@ -92,8 +91,8 @@ pub mod generic {
     /// let checkpoint = generic::log_node::<MemoryStorage>("Reached checkpoint 1");
     /// let status = generic::log_node::<MemoryStorage>("Processing completed");
     /// ```
-    pub fn log_node<S: StorageBackend>(message: impl Into<String>) -> Node<LogNodeBackend, S> {
-        Node::new(log(message))
+    pub fn log_node<S: StorageBackend>(message: impl Into<String>) -> LogNode {
+        log(message)
     }
 
     /// Create a set value node with a custom storage backend
@@ -125,11 +124,8 @@ pub mod generic {
     ///     "endpoints": ["api1.example.com", "api2.example.com"]
     /// }));
     /// ```
-    pub fn set_value_node<S: StorageBackend>(
-        key: impl Into<String>,
-        value: Value,
-    ) -> Node<SetValueNodeBackend, S> {
-        Node::new(set_value(key, value))
+    pub fn set_value_node<S: StorageBackend>(key: impl Into<String>, value: Value) -> SetValueNode {
+        set_value(key, value)
     }
 
     /// Create a delay node with a custom storage backend
@@ -158,8 +154,8 @@ pub mod generic {
     /// // Custom timing for external system coordination
     /// let sync_delay = generic::delay_node::<MemoryStorage>(Duration::from_secs(30));
     /// ```
-    pub fn delay_node<S: StorageBackend>(duration: Duration) -> Node<DelayNodeBackend, S> {
-        Node::new(delay(duration))
+    pub fn delay_node<S: StorageBackend>(duration: Duration) -> DelayNode {
+        delay(duration)
     }
 
     /// Create a get value node with a custom storage backend
@@ -207,8 +203,8 @@ pub mod generic {
     pub fn get_value_node<S: StorageBackend>(
         key: impl Into<String>,
         output_key: impl Into<String>,
-    ) -> Node<GetValueNodeBackend<impl Fn(Option<Value>) -> Value + Send + Sync>, S> {
-        Node::new(get_value(key, output_key))
+    ) -> GetValueNode<impl Fn(Option<Value>) -> Value + Send + Sync> {
+        get_value(key, output_key)
     }
 
     /// Create a conditional node with a custom storage backend
@@ -288,10 +284,10 @@ pub mod generic {
         condition: F,
         if_true: crate::action::Action,
         if_false: crate::action::Action,
-    ) -> Node<ConditionalNodeBackend<F, S>, S>
+    ) -> ConditionalNode<F, S>
     where
         F: Fn(&crate::shared_store::SharedStore<S>) -> bool + Send + Sync,
     {
-        Node::new(ConditionalNodeBackend::new(condition, if_true, if_false))
+        ConditionalNode::new(condition, if_true, if_false)
     }
 }
