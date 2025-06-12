@@ -25,7 +25,6 @@
 //! - **GetValueNode**: Retrieve and validate stored values
 //! - **ConditionalNode**: Conditional execution based on stored data
 //! - **DelayNode**: Introduce delays for timing control
-//! - **CounterNode**: Maintain and increment counters
 //!
 //! ```rust
 //! use cosmoflow::builtin::basic::*;
@@ -36,7 +35,6 @@
 //! // Create basic nodes
 //! let log_node = LogNode::new("Processing started", Action::simple("continue"));
 //! let set_value_node = SetValueNode::new("counter", serde_json::json!(0u32), Action::simple("continue"));
-//! // Note: ConditionalNodeBackend requires closures, not simple value comparisons
 //! ```
 //!
 //! ## LLM Integration ([`llm`] module)
@@ -48,18 +46,6 @@
 //! - **Prompt Engineering**: Built-in prompt formatting and management
 //! - **Response Processing**: Automatic parsing and validation
 //! - **Rate Limiting**: Built-in request throttling and retry logic
-//!
-//! ```rust
-//! use cosmoflow::builtin::llm::*;
-//!
-//! // Configure OpenAI integration
-//! let config = ApiConfig::new("your-api-key")
-//!     .with_model("gpt-4")
-//!     .with_temperature(0.7)
-//!     .with_max_tokens(1000);
-//!
-//! // Note: OpenAINode is not yet implemented in this example
-//! ```
 //!
 //! ## Convenience Functions ([`nodes`] module)
 //!
@@ -78,26 +64,6 @@
 //!     cosmoflow::action::Action::simple("ready"),
 //!     cosmoflow::action::Action::simple("not_ready")
 //! );
-//! // Note: openai_node is not yet implemented
-//! ```
-//!
-//! # Integration with CosmoFlow
-//!
-//! Built-in nodes implement the [`node::NodeBackend`] trait and can be used directly
-//! in CosmoFlow workflows:
-//!
-//! ```rust
-//! use cosmoflow::builtin::nodes::generic::*;
-//! use serde_json::json;
-//! use cosmoflow::storage::MemoryStorage;
-//!
-//! // Create nodes for workflow
-//! let start_node = log_node::<MemoryStorage>("Starting data processing");
-//! let init_node = set_value_node::<MemoryStorage>("processed_count", json!(0u32));
-//! let get_node = get_value_node::<MemoryStorage>("processed_count", "current_count");
-//!
-//! // Nodes can be used in any flow system
-//! println!("Created {} workflow nodes", 3);
 //! ```
 //!
 //! # Error Handling
@@ -184,7 +150,7 @@
 //! use cosmoflow::builtin::basic::*;
 //! use cosmoflow::action::Action;
 //!
-//! // Basic LogNodeBackend construction
+//! // Basic LogNode construction
 //! let log_node = LogNode::new("Custom log message", Action::simple("continue"))
 //!     .with_retries(3);
 //! // Note: LogLevel and LogFormat are not yet implemented

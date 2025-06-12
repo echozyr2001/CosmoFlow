@@ -7,12 +7,11 @@
 //!
 //! # Available Nodes
 //!
-//! - [`LogNodeBackend`] - Logs messages during workflow execution
-//! - [`SetValueNodeBackend`] - Sets values in the shared store
-//! - [`GetValueNodeBackend`] - Retrieves and transforms values from the shared store
-//! - [`ConditionalNodeBackend`] - Provides conditional routing based on store values
-//! - [`DelayNodeBackend`] - Introduces delays for timing control
-//! - [`DelayNodeBackend`] - Introduces delays for timing control
+//! - [`LogNode`] - Logs messages during workflow execution
+//! - [`SetValueNode`] - Sets values in the shared store
+//! - [`GetValueNode`] - Retrieves and transforms values from the shared store
+//! - [`ConditionalNode`] - Provides conditional routing based on store values
+//! - [`DelayNode`] - Introduces delays for timing control
 //!
 //! # Examples
 //!
@@ -50,6 +49,26 @@
 //!     Action::simple("complete")
 //! );
 //! ```
+//!
+//! ## Conditional Logic
+//!
+//! ```rust
+//! use cosmoflow::builtin::basic::ConditionalNode;
+//! use cosmoflow::action::Action;
+//! use cosmoflow::storage::MemoryStorage;
+//!
+//! let condition_node = ConditionalNode::<_, MemoryStorage>::new(
+//!     |store| {
+//!         store.get("ready")
+//!             .ok()
+//!             .flatten()
+//!             .and_then(|v: serde_json::Value| v.as_bool())
+//!             .unwrap_or(false)
+//!     },
+//!     Action::simple("proceed"),
+//!     Action::simple("wait")
+//! );
+//! ```
 
 use std::time::Duration;
 
@@ -63,10 +82,17 @@ use serde_json::Value;
 
 /// A simple node that logs messages and passes through
 ///
-/// The LogNodeBackend provides basic logging functionality for workflows,
+/// The LogNode provides basic logging functionality for workflows,
 /// allowing you to output messages at specific points in the execution flow.
 /// This is particularly useful for debugging, monitoring, and providing
 /// user feedback during long-running processes.
+///
+/// # Node Implementation
+///
+/// LogNode implements the [`Node`] trait with the following associated types:
+/// - `PrepResult = String` - The formatted log message with execution context
+/// - `ExecResult = String` - The logged message output
+/// - `Error = NodeError` - Standard node error type
 ///
 /// # Features
 ///
@@ -74,6 +100,7 @@ use serde_json::Value;
 /// - Retry support with customizable delays
 /// - Pass-through behavior (doesn't modify data flow)
 /// - Minimal performance overhead
+/// - Automatic execution ID inclusion in log messages
 ///
 /// # Examples
 ///
@@ -107,7 +134,7 @@ pub struct LogNode {
 impl LogNode {
     /// Create a new log node
     ///
-    /// Creates a LogNodeBackend that will output the specified message during
+    /// Creates a LogNode that will output the specified message during
     /// execution and then route to the given action.
     ///
     /// # Arguments
@@ -232,9 +259,19 @@ impl<S: StorageBackend + Send + Sync> Node<S> for LogNode {
 
 /// A node that sets a value in the shared store
 ///
-/// The SetValueNodeBackend allows workflows to store data in the shared store
+/// The SetValueNode allows workflows to store data in the shared store
 /// for use by subsequent nodes. This is essential for passing data between
 /// workflow steps and maintaining state across the execution flow.
+///
+/// # Node Implementation
+///
+/// SetValueNode implements the [`Node`] trait with the following associated types:
+/// - `PrepResult = ()` - No preparation data needed
+/// - `ExecResult = ()` - No execution result produced
+/// - `Error = NodeError` - Standard node error type
+///
+/// The actual value storage occurs during the post-processing phase to ensure
+/// atomicity and proper error handling.
 ///
 /// # Features
 ///
@@ -242,6 +279,7 @@ impl<S: StorageBackend + Send + Sync> Node<S> for LogNode {
 /// - Atomic operations (value is set during post-processing)
 /// - Error handling for storage failures
 /// - Configurable retry behavior
+/// - Type-safe value serialization
 ///
 /// # Examples
 ///
@@ -294,7 +332,7 @@ pub struct SetValueNode {
 impl SetValueNode {
     /// Create a new set value node
     ///
-    /// Creates a SetValueNodeBackend that will store the specified key-value
+    /// Creates a SetValueNode that will store the specified key-value
     /// pair in the shared store during the post-processing phase.
     ///
     /// # Arguments
@@ -378,10 +416,20 @@ impl<S: StorageBackend + Send + Sync> Node<S> for SetValueNode {
 
 /// A node that gets a value from the shared store and optionally transforms it
 ///
-/// The GetValueNodeBackend retrieves data from the shared store and applies
+/// The GetValueNode retrieves data from the shared store and applies
 /// an optional transformation function before storing the result under a new key.
 /// This is useful for data processing, format conversion, and computation steps
 /// within workflows.
+///
+/// # Node Implementation
+///
+/// GetValueNode implements the [`Node`] trait with the following associated types:
+/// - `PrepResult = Option<Value>` - The retrieved value from storage (if any)
+/// - `ExecResult = Value` - The transformed result value
+/// - `Error = NodeError` - Standard node error type
+///
+/// The transformation function is applied during the execution phase, and the
+/// result is stored during post-processing.
 ///
 /// # Type Parameters
 ///
@@ -395,6 +443,7 @@ impl<S: StorageBackend + Send + Sync> Node<S> for SetValueNode {
 /// - Handle missing values gracefully
 /// - Store transformed results under different keys
 /// - Configurable retry behavior
+/// - Type-safe value processing
 ///
 /// # Examples
 ///
@@ -490,7 +539,7 @@ where
 {
     /// Create a new get value node
     ///
-    /// Creates a GetValueNodeBackend that retrieves a value from the shared store,
+    /// Creates a GetValueNode that retrieves a value from the shared store,
     /// applies a transformation function, and stores the result under a new key.
     ///
     /// # Arguments
@@ -592,9 +641,19 @@ where
 
 /// A conditional node that chooses actions based on store content
 ///
-/// The ConditionalNodeBackend evaluates a condition function against the
+/// The ConditionalNode evaluates a condition function against the
 /// shared store and returns different actions based on the result. This
 /// enables dynamic workflow routing based on runtime data.
+///
+/// # Node Implementation
+///
+/// ConditionalNode implements the [`Node`] trait with the following associated types:
+/// - `PrepResult = bool` - The result of the condition evaluation
+/// - `ExecResult = bool` - The confirmed condition result
+/// - `Error = NodeError` - Standard node error type
+///
+/// The condition is evaluated during preparation, confirmed during execution,
+/// and the appropriate action is selected during post-processing.
 ///
 /// # Type Parameters
 ///
@@ -607,6 +666,7 @@ where
 /// - Custom condition functions for maximum flexibility
 /// - Support for complex conditional logic
 /// - Configurable retry behavior
+/// - Type-safe condition evaluation
 ///
 /// # Examples
 ///
@@ -678,7 +738,7 @@ where
 {
     /// Create a new conditional node
     ///
-    /// Creates a ConditionalNodeBackend that evaluates the provided condition
+    /// Creates a ConditionalNode that evaluates the provided condition
     /// function against the shared store and returns the appropriate action.
     ///
     /// # Arguments
@@ -768,9 +828,18 @@ where
 
 /// A delay node that waits for a specified duration
 ///
-/// The DelayNodeBackend introduces a pause in workflow execution for the
+/// The DelayNode introduces a pause in workflow execution for the
 /// specified duration. This is useful for rate limiting, scheduling delays,
 /// waiting for external systems, or implementing backoff strategies.
+///
+/// # Node Implementation
+///
+/// DelayNode implements the [`Node`] trait with the following associated types:
+/// - `PrepResult = ()` - No preparation data needed
+/// - `ExecResult = ()` - No execution result produced
+/// - `Error = NodeError` - Standard node error type
+///
+/// The actual delay occurs during the execution phase using `tokio::time::sleep`.
 ///
 /// # Features
 ///
@@ -779,6 +848,7 @@ where
 /// - Precise timing using tokio::time::sleep
 /// - Configurable retry behavior
 /// - Minimal resource usage during delay
+/// - High-resolution timing support
 ///
 /// # Examples
 ///
@@ -832,7 +902,7 @@ pub struct DelayNode {
 impl DelayNode {
     /// Create a new delay node
     ///
-    /// Creates a DelayNodeBackend that will pause execution for the specified
+    /// Creates a DelayNode that will pause execution for the specified
     /// duration before returning the given action.
     ///
     /// # Arguments
@@ -912,7 +982,7 @@ impl<S: StorageBackend + Send + Sync> Node<S> for DelayNode {
 
 /// Helper function to create a simple log node with default settings
 ///
-/// Creates a LogNodeBackend with default configuration and a "continue" action.
+/// Creates a LogNode with default configuration and a "continue" action.
 /// This is a convenience function for quickly adding logging to workflows.
 ///
 /// # Arguments
@@ -933,7 +1003,7 @@ pub fn log<S: Into<String>>(message: S) -> LogNode {
 
 /// Helper function to create a simple set value node
 ///
-/// Creates a SetValueNodeBackend with default configuration and a "continue" action.
+/// Creates a SetValueNode with default configuration and a "continue" action.
 /// This is a convenience function for quickly setting values in workflows.
 ///
 /// # Arguments
@@ -956,7 +1026,7 @@ pub fn set_value<S: Into<String>>(key: S, value: Value) -> SetValueNode {
 
 /// Helper function to create a simple delay node
 ///
-/// Creates a DelayNodeBackend with default configuration and a "continue" action.
+/// Creates a DelayNode with default configuration and a "continue" action.
 /// This is a convenience function for quickly adding delays to workflows.
 ///
 /// # Arguments
@@ -978,7 +1048,7 @@ pub fn delay(duration: Duration) -> DelayNode {
 
 /// Helper function to create a get value node with identity transform
 ///
-/// Creates a GetValueNodeBackend that copies a value from one key to another
+/// Creates a GetValueNode that copies a value from one key to another
 /// without modification. This is useful for renaming keys or creating backups
 /// of values in the shared store.
 ///

@@ -7,8 +7,9 @@
 //!
 //! ## Key Features
 //!
-//! - **Workflow Orchestration**: Execute complex multi-node workflows
+//! - **Workflow Orchestration**: Execute complex multi-node workflows with different node types
 //! - **Dynamic Routing**: Conditional and parameterized routing between nodes
+//! - **Type Safety**: Compile-time safety with automatic type erasure through NodeRunner
 //! - **Error Handling**: Comprehensive error management and recovery
 //! - **Execution Tracking**: Detailed execution results and performance metrics
 //! - **Retry Logic**: Built-in retry mechanisms for failed operations
@@ -24,14 +25,14 @@
 //!
 //! # async fn example() -> Result<(), Box<dyn std::error::Error>> {
 //! // Create a shared store
-//! let store = SharedStore::with_storage(MemoryStorage::new());
+//! let mut store = SharedStore::with_storage(MemoryStorage::new());
 //!
 //! // Build a flow
 //! let mut flow = FlowBuilder::new()
+//!     .start_node("start")
 //!     .build();
 //!
 //! // Execute the flow
-//! let mut store = SharedStore::with_storage(MemoryStorage::new());
 //! let result = flow.execute(&mut store).await?;
 //! println!("Flow completed with {} steps", result.steps_executed);
 //! # Ok(())
@@ -45,6 +46,7 @@
 //! - [`FlowBuilder`]: Builder pattern for constructing flows
 //! - [`FlowExecutionResult`]: Results and metadata from flow execution
 //! - [`Route`]: Defines routing between nodes in the workflow
+//! - [`NodeRunner`]: Type erasure trait for different node types
 //!
 //! ## Error Handling
 //!
@@ -88,11 +90,19 @@ use async_trait::async_trait;
 use errors::FlowError;
 use route::{Route, RouteCondition};
 
-/// Simplified node runner trait for type erasure
+/// Node runner trait for workflow execution
 ///
-/// This trait provides a clean abstraction for executing nodes with different
-/// associated types in the same flow, while maintaining type safety within
-/// each node implementation.
+/// This trait provides a unified interface for executing nodes with different
+/// associated types in the same flow, allowing the flow system to work with
+/// heterogeneous node collections while maintaining type safety.
+///
+/// ## Purpose
+///
+/// The NodeRunner trait provides a simplified interface that:
+/// - Enables different node types to work together in the same flow
+/// - Maintains a consistent execution interface for the flow system
+/// - Enables storage of different node types in the same collection
+/// - Preserves type safety
 #[async_trait]
 pub trait NodeRunner<S: StorageBackend>: Send + Sync {
     /// Execute the node and return the resulting action
@@ -102,11 +112,9 @@ pub trait NodeRunner<S: StorageBackend>: Send + Sync {
     fn name(&self) -> &str;
 }
 
-/// Automatic implementation of NodeRunner for any Node
+/// Implementation of NodeRunner for any Node
 ///
-/// This blanket implementation means any type that implements Node<S>
-/// automatically implements NodeRunner<S>, eliminating the need for
-/// manual wrapper creation.
+/// Any type that implements Node<S> automatically implements NodeRunner<S>.
 #[async_trait]
 impl<T, S> NodeRunner<S> for T
 where
@@ -609,7 +617,7 @@ where
     /// use cosmoflow::storage::MemoryStorage;
     ///
     /// let mut flow: Flow<MemoryStorage> = Flow::new();
-    /// // In practice, you would create a proper NodeBackend implementation
+    /// // In practice, you would create a proper Node implementation
     /// // flow.add_node("processing_step".to_string(), node).unwrap();
     /// # }
     /// ```
@@ -940,7 +948,7 @@ impl<S: StorageBackend + 'static> Default for Flow<S> {
     }
 }
 
-/// Implementation of NodeBackend for Flow, allowing flows to be nested
+/// Implementation of Node for Flow, allowing flows to be nested
 ///
 /// This implementation enables flows to be used as nodes within other flows,
 /// creating hierarchical workflow structures. Key features:

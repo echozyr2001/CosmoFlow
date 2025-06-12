@@ -18,8 +18,8 @@
 //!
 //! # Available Nodes
 //!
-//! - [`MockLlmNodeBackend`] - Mock LLM responses for testing and development
-//! - [`ApiRequestNodeBackend`] - Production LLM API integration with full features
+//! - [`MockLlmNode`] - Mock LLM responses for testing and development
+//! - [`ApiRequestNode`] - Production LLM API integration with full features
 //!
 //! # Configuration
 //!
@@ -291,10 +291,20 @@ impl ApiConfig {
 
 /// A mock LLM node for testing and examples
 ///
-/// The MockLlmNodeBackend provides a simple simulation of LLM behavior without
+/// The MockLlmNode provides a simple simulation of LLM behavior without
 /// making actual API calls. This is useful for testing workflows, development,
 /// and demonstrations where you don't want to incur API costs or need predictable
 /// responses.
+///
+/// # Node Implementation
+///
+/// MockLlmNode implements the [`Node`] trait with the following associated types:
+/// - `PrepResult = String` - The retrieved prompt from the shared store
+/// - `ExecResult = String` - The generated mock response
+/// - `Error = NodeError` - Standard node error type
+///
+/// The prompt is retrieved during preparation, processed during execution,
+/// and the result is stored during post-processing.
 ///
 /// # Features
 ///
@@ -303,6 +313,8 @@ impl ApiConfig {
 /// - Simulated processing delays
 /// - Error handling and fallback responses
 /// - Retry mechanism support
+/// - Configurable failure rates for testing
+/// - Fallback response generation
 ///
 /// # Examples
 ///
@@ -329,9 +341,27 @@ impl ApiConfig {
 /// let template_node = MockLlmNode::new(
 ///     "analysis_request",
 ///     "analysis_result",
-///     "Analysis complete. The input '${user_input}' has been processed successfully.",
+///     "Analysis complete. The input has been processed successfully.",
 ///     Action::simple("review_analysis")
 /// );
+/// ```
+///
+/// ## Testing with Failures
+///
+/// ```rust
+/// use cosmoflow::builtin::llm::MockLlmNode;
+/// use cosmoflow::action::Action;
+/// use std::time::Duration;
+///
+/// let test_node = MockLlmNode::new(
+///     "test_prompt",
+///     "test_response",
+///     "Mock response",
+///     Action::simple("continue")
+/// )
+/// .with_failure_rate(0.2)  // 20% failure rate
+/// .with_retries(3)
+/// .with_retry_delay(Duration::from_millis(100));
 /// ```
 pub struct MockLlmNode {
     prompt_key: String,
@@ -475,7 +505,7 @@ impl<S: StorageBackend + Send + Sync> Node<S> for MockLlmNode {
 /// It supports various configuration options including retries,
 /// custom endpoints, message history, and error handling.
 ///
-/// The ApiRequestNodeBackend is the primary node for production LLM integration,
+/// The ApiRequestNode is the primary node for production LLM integration,
 /// providing full API compatibility and advanced features like conversation
 /// management, streaming responses, and sophisticated error handling.
 ///

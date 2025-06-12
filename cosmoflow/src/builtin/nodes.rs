@@ -1,17 +1,19 @@
 //! Complete Node constructors for CosmoFlow workflows
 //!
-//! This module provides high-level Node constructors that wrap the basic NodeBackend
-//! implementations with complete execution capabilities including retry logic,
-//! error handling, and execution context management.
+//! This module provides high-level Node constructors that create ready-to-use
+//! Node instances for common workflow operations. These functions wrap the basic
+//! Node implementations with sensible defaults and provide a convenient API
+//! for quick workflow construction.
 //!
 //! # Purpose
 //!
-//! While the [`crate::basic`] module provides NodeBackend implementations that define
-//! the core behavior, this module wraps them in [`Node`] instances that include:
-//! - Automatic retry mechanisms
-//! - Error handling and recovery
-//! - Execution context management
-//! - Integration with the CosmoFlow execution engine
+//! While the [`crate::basic`] module provides Node implementations that define
+//! the core behavior, this module provides convenience functions that create
+//! Node instances with:
+//! - Sensible default configurations
+//! - Common action patterns (typically "continue")
+//! - Type-safe storage backend integration
+//! - Minimal boilerplate for common use cases
 //!
 //! # Generic Functions
 //!
@@ -47,7 +49,7 @@
 //! let set_data = generic::set_value_node::<MemoryStorage>("counter", json!(0));
 //! let get_data = generic::get_value_node::<MemoryStorage>("counter", "current_value");
 //!
-//! // Nodes can be used in any flow system that accepts Node<T>
+//! // Nodes implement Node<MemoryStorage> and can be used in flows
 //! println!("Created {} nodes for workflow", 3);
 //! ```
 
@@ -66,7 +68,7 @@ use super::basic::*;
 /// - Deferring storage backend selection to runtime
 ///
 /// All functions return [`Node`] instances that wrap the corresponding
-/// [`node::NodeBackend`] implementations with full execution capabilities.
+/// node implementations with full execution capabilities.
 pub mod generic {
     use crate::storage::StorageBackend;
 
@@ -198,7 +200,7 @@ pub mod generic {
     /// # Note
     ///
     /// This function creates a simple copy operation. For data transformation,
-    /// validation, or complex processing, create a `GetValueNodeBackend` directly
+    /// validation, or complex processing, create a `GetValueNode` directly
     /// with a custom transformation function.
     pub fn get_value_node<S: StorageBackend>(
         key: impl Into<String>,

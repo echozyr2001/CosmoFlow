@@ -2,16 +2,26 @@
 //! # Node - CosmoFlow Node Execution System
 //!
 //! This crate provides the core execution system for CosmoFlow workflows. It defines the
-//! `Node` trait and execution infrastructure that enables workflows to run individual
+//! unified `Node` trait and execution infrastructure that enables workflows to run individual
 //! processing units with proper error handling, retry logic, and execution context management.
 //!
 //! ## Key Features
 //!
+//! - **Unified Node Trait**: Single trait combining all node functionality
+//! - **Type Safety**: Associated types provide compile-time guarantees
 //! - **Async Execution**: Full async/await support for modern Rust applications
 //! - **Retry Logic**: Built-in retry mechanisms with configurable policies
 //! - **Error Handling**: Comprehensive error types and propagation
 //! - **Execution Context**: Rich context information for node execution
-//! - **Type Safety**: Compile-time guarantees for node implementations
+//! - **Automatic Integration**: Seamless integration with the flow system
+//!
+//! ## Node Trait Design
+//!
+//! The Node trait provides a comprehensive interface that includes:
+//! - Core execution methods (prep/exec/post) with associated types
+//! - Configuration methods with sensible defaults
+//! - Built-in retry logic and error handling
+//! - Seamless integration with the flow system
 //!
 //! ## Quick Start
 //!
@@ -32,7 +42,8 @@
 //! where
 //!     S: cosmoflow::storage::StorageBackend + Send + Sync
 //! {
-//!     type PrepResult = ();
+//!     // Define associated types for type safety
+//!     type PrepResult = String;
 //!     type ExecResult = String;
 //!     type Error = NodeError;
 //!
@@ -41,24 +52,28 @@
 //!         _store: &SharedStore<S>,
 //!         _context: &ExecutionContext,
 //!     ) -> Result<Self::PrepResult, Self::Error> {
-//!         Ok(())
+//!         // Prepare data for execution
+//!         Ok(format!("Preparing: {}", self.name))
 //!     }
 //!
 //!     async fn exec(
 //!         &mut self,
-//!         _prep_result: Self::PrepResult,
+//!         prep_result: Self::PrepResult,
 //!         _context: &ExecutionContext,
 //!     ) -> Result<Self::ExecResult, Self::Error> {
-//!         Ok(format!("Executed node: {}", self.name))
+//!         // Core business logic
+//!         Ok(format!("Executed: {}", prep_result))
 //!     }
 //!
 //!     async fn post(
 //!         &mut self,
 //!         _store: &mut SharedStore<S>,
 //!         _prep_result: Self::PrepResult,
-//!         _exec_result: Self::ExecResult,
+//!         exec_result: Self::ExecResult,
 //!         _context: &ExecutionContext,
 //!     ) -> Result<Action, Self::Error> {
+//!         // Handle results and determine next action
+//!         println!("{}", exec_result);
 //!         Ok(Action::simple("complete"))
 //!     }
 //! }
@@ -74,13 +89,22 @@
 //!
 //! println!("Execution ID: {}", context.execution_id);
 //! println!("Max retries: {}", context.max_retries);
+//! println!("Can retry: {}", context.can_retry());
 //! ```
 //!
 //! ## Core Types
 //!
 //! - [`ExecutionContext`]: Contains execution metadata and retry configuration
-//! - [`Node`]: Unified trait for implementing custom node types
+//! - [`Node`]: Unified trait for implementing custom node types with associated types
 //! - [`NodeError`]: Comprehensive error types for node execution
+//!
+//! ## Three-Phase Execution
+//!
+//! The Node trait implements a three-phase execution model:
+//!
+//! 1. **Prep Phase**: Read and validate inputs (fast, side-effect free)
+//! 2. **Exec Phase**: Perform core computation (idempotent, retryable)
+//! 3. **Post Phase**: Write results and determine next action
 //!
 //! ## Error Handling
 //!
@@ -179,21 +203,27 @@ impl ExecutionContext {
     }
 }
 
-/// Unified Node trait that combines the functionality of the original
-/// NodeBackend and Node wrapper into a single, simplified interface.
+/// Node trait that defines the complete interface for nodes in CosmoFlow workflows.
 ///
-/// This trait defines the complete interface for nodes in CosmoFlow workflows,
-/// incorporating the three-phase execution model with built-in retry logic,
-/// error handling, and configuration methods.
+/// This trait combines all functionality needed for node execution in a single, cohesive
+/// interface. It incorporates the three-phase execution model (prep/exec/post) with
+/// built-in retry logic, error handling, and configuration methods.
 ///
 /// ## Design Philosophy
 ///
-/// The unified Node trait eliminates the complexity of the original two-layer
-/// design (NodeBackend + Node wrapper) by providing a single trait that includes:
-/// - Core execution methods (prep/exec/post)
+/// The Node trait provides a comprehensive interface that includes:
+/// - Core execution methods (prep/exec/post) with configurable associated types
 /// - Configuration methods with sensible defaults
 /// - Built-in retry logic and error handling
-/// - Convenience methods for complete execution flows
+/// - Seamless integration with the flow system
+/// - Type safety through associated types
+///
+/// ## Associated Types
+///
+/// Each node defines three associated types that provide compile-time type safety:
+/// - `PrepResult`: Data type prepared in prep phase and passed to exec/post
+/// - `ExecResult`: Data type returned by exec phase and passed to post
+/// - `Error`: Error type for this node's operations
 ///
 /// ## Three-Phase Execution Model
 ///
@@ -223,12 +253,6 @@ impl ExecutionContext {
 /// ## Type Parameters
 ///
 /// * `S` - Storage backend type that implements `StorageBackend`
-///
-/// ## Associated Types
-///
-/// * `PrepResult` - Data type returned by prep phase and passed to exec/post
-/// * `ExecResult` - Data type returned by exec phase and passed to post
-/// * `Error` - Error type for this node's operations
 #[async_trait]
 pub trait Node<S: StorageBackend>: Send + Sync {
     /// Result type from the preparation phase.
