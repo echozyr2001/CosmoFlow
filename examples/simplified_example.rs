@@ -146,7 +146,6 @@ impl Node<SimpleStorage> for SimpleNode {
 
 #[tokio::main]
 async fn main() -> Result<(), Box<dyn std::error::Error>> {
-    // 创建流程 - 现在非常简单！
     let mut flow = FlowBuilder::new()
         .start_with("hello", SimpleNode::new("Hello, World!"))
         .build();
