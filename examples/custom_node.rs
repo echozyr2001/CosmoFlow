@@ -37,7 +37,7 @@ use cosmoflow::{
     StorageBackend,
     action::Action,
     flow::{FlowBackend, FlowBuilder},
-    node::{ExecutionContext, Node, NodeBackend, NodeError},
+    node::{ExecutionContext, Node, NodeError},
     shared_store::SharedStore,
 };
 use serde::{Serialize, de::DeserializeOwned};
@@ -123,13 +123,13 @@ pub enum SimpleStorageError {
 }
 
 /// A coordinator node that manages the counter workflow
-struct CoordinatorNodeBackend {
+struct CoordinatorNode {
     main_count: usize,
     secondary_count: usize,
     max_iterations: usize,
 }
 
-impl CoordinatorNodeBackend {
+impl CoordinatorNode {
     fn new(max_iterations: usize) -> Self {
         Self {
             main_count: 0,
@@ -140,7 +140,7 @@ impl CoordinatorNodeBackend {
 }
 
 #[async_trait]
-impl NodeBackend<SimpleStorage> for CoordinatorNodeBackend {
+impl Node<SimpleStorage> for CoordinatorNode {
     type PrepResult = (usize, usize); // (main_count, secondary_count)
     type ExecResult = String; // Next action to take
     type Error = NodeError;
@@ -210,14 +210,14 @@ impl NodeBackend<SimpleStorage> for CoordinatorNodeBackend {
 
 /// A counter node that tracks how many times it has been executed
 #[derive(Debug)]
-struct CounterNodeBackend {
+struct CounterNode {
     name: String,
     count: usize,
     increment_by: usize,
     max_count: Option<usize>,
 }
 
-impl CounterNodeBackend {
+impl CounterNode {
     fn new(name: impl Into<String>, increment_by: usize) -> Self {
         Self {
             name: name.into(),
@@ -229,7 +229,7 @@ impl CounterNodeBackend {
 }
 
 #[async_trait]
-impl NodeBackend<SimpleStorage> for CounterNodeBackend {
+impl Node<SimpleStorage> for CounterNode {
     type PrepResult = usize; // Previous count
     type ExecResult = usize; // New count
     type Error = NodeError;
@@ -346,7 +346,7 @@ impl NodeBackend<SimpleStorage> for CounterNodeBackend {
 struct StatisticsNode;
 
 #[async_trait]
-impl NodeBackend<SimpleStorage> for StatisticsNode {
+impl Node<SimpleStorage> for StatisticsNode {
     type PrepResult = HashMap<String, Vec<usize>>;
     type ExecResult = HashMap<String, f64>;
     type Error = NodeError;
@@ -462,7 +462,7 @@ impl NodeBackend<SimpleStorage> for StatisticsNode {
 struct ReportNode;
 
 #[async_trait]
-impl NodeBackend<SimpleStorage> for ReportNode {
+impl Node<SimpleStorage> for ReportNode {
     type PrepResult = HashMap<String, f64>;
     type ExecResult = String;
     type Error = NodeError;
@@ -568,17 +568,14 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
     let mut flow = FlowBuilder::new()
         .start_node("coordinator")
         .max_steps(50)
-        .node("coordinator", Node::new(CoordinatorNodeBackend::new(6))) // 6 total increments
-        .node(
-            "main_counter",
-            Node::new(CounterNodeBackend::new("main_counter", 5)),
-        )
+        .node("coordinator", CoordinatorNode::new(6)) // 6 total increments
+        .node("main_counter", CounterNode::new("main_counter", 5))
         .node(
             "secondary_counter",
-            Node::new(CounterNodeBackend::new("secondary_counter", 3)),
+            CounterNode::new("secondary_counter", 3),
         )
-        .node("statistics", Node::new(StatisticsNode))
-        .node("report", Node::new(ReportNode))
+        .node("statistics", StatisticsNode)
+        .node("report", ReportNode)
         // Coordinator routes to appropriate counter or analysis
         .route("coordinator", "increment_main", "main_counter")
         .route("coordinator", "increment_secondary", "secondary_counter")

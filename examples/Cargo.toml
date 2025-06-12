@@ -29,6 +29,10 @@ path = "unified_hello_world.rs"
 name = "unified_counter"
 path = "unified_counter.rs"
 
+[[bin]]
+name = "simplified_example"
+path = "simplified_example.rs"
+
 [features]
 default = []
 minimal = ["cosmoflow/minimal"]

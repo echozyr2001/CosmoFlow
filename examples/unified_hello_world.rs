@@ -183,7 +183,7 @@ impl HelloNode {
 }
 
 #[async_trait]
-impl UnifiedNode<SimpleStorage> for HelloNode {
+impl Node<SimpleStorage> for HelloNode {
     /// Preparation phase returns unit type (no data needed for execution)
     type PrepResult = ();
     /// Execution phase returns the generated greeting string

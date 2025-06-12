@@ -80,13 +80,47 @@ use std::collections::HashMap;
 use std::time::Duration;
 
 use crate::action::Action;
-use crate::node::{ExecutionContext, Node, NodeBackend, NodeError, UnifiedNode};
+use crate::node::{ExecutionContext, Node, NodeError};
 use crate::shared_store::SharedStore;
 use crate::storage::StorageBackend;
 use async_trait::async_trait;
 
 use errors::FlowError;
 use route::{Route, RouteCondition};
+
+/// Simplified node runner trait for type erasure
+///
+/// This trait provides a clean abstraction for executing nodes with different
+/// associated types in the same flow, while maintaining type safety within
+/// each node implementation.
+#[async_trait]
+pub trait NodeRunner<S: StorageBackend>: Send + Sync {
+    /// Execute the node and return the resulting action
+    async fn run(&mut self, store: &mut SharedStore<S>) -> Result<Action, NodeError>;
+
+    /// Get the node's name for debugging and logging
+    fn name(&self) -> &str;
+}
+
+/// Automatic implementation of NodeRunner for any Node
+///
+/// This blanket implementation means any type that implements Node<S>
+/// automatically implements NodeRunner<S>, eliminating the need for
+/// manual wrapper creation.
+#[async_trait]
+impl<T, S> NodeRunner<S> for T
+where
+    T: Node<S> + Send + Sync,
+    S: StorageBackend + Send + Sync,
+{
+    async fn run(&mut self, store: &mut SharedStore<S>) -> Result<Action, NodeError> {
+        Node::run(self, store).await
+    }
+
+    fn name(&self) -> &str {
+        Node::name(self)
+    }
+}
 
 /// Execution result from a flow run
 ///
@@ -174,57 +208,6 @@ impl Default for FlowConfig {
     }
 }
 
-/// Type-erased node runner for dynamic dispatch
-#[async_trait]
-pub trait NodeRunner<S: StorageBackend>: Send + Sync {
-    /// Run the node and return the resulting action.
-    async fn run(&mut self, store: &mut SharedStore<S>) -> Result<Action, NodeError>;
-}
-
-/// Implementation of NodeRunner for any Node
-#[async_trait]
-impl<B, S> NodeRunner<S> for Node<B, S>
-where
-    B: NodeBackend<S> + Send + Sync,
-    S: StorageBackend + Send + Sync,
-    B::Error: Send + Sync + 'static,
-{
-    async fn run(&mut self, store: &mut SharedStore<S>) -> Result<Action, NodeError> {
-        // Call the node's run method directly instead of recursive call
-        Node::run(self, store)
-            .await
-            .map_err(|err| NodeError::ExecutionError(err.to_string()))
-    }
-}
-
-/// Wrapper for UnifiedNode to implement NodeRunner
-pub struct UnifiedNodeWrapper<T, S> {
-    inner: T,
-    _phantom: std::marker::PhantomData<S>,
-}
-
-impl<T, S> UnifiedNodeWrapper<T, S> {
-    /// Create a new wrapper around a UnifiedNode
-    pub fn new(inner: T) -> Self {
-        Self {
-            inner,
-            _phantom: std::marker::PhantomData,
-        }
-    }
-}
-
-/// Implementation of NodeRunner for UnifiedNodeWrapper
-#[async_trait]
-impl<T, S> NodeRunner<S> for UnifiedNodeWrapper<T, S>
-where
-    T: UnifiedNode<S> + Send + Sync,
-    S: StorageBackend + Send + Sync,
-{
-    async fn run(&mut self, store: &mut SharedStore<S>) -> Result<Action, NodeError> {
-        UnifiedNode::run(&mut self.inner, store).await
-    }
-}
-
 /// Trait for implementing flow execution logic
 #[async_trait]
 pub trait FlowBackend<S: StorageBackend> {
@@ -298,34 +281,23 @@ impl<S: StorageBackend + 'static> FlowBuilder<S> {
         self
     }
 
-    /// Add a unified node to the flow (new API)
-    pub fn unified_node<T>(mut self, id: impl Into<String>, node: T) -> Self
+    /// Add a node to the flow
+    pub fn node<T>(mut self, id: impl Into<String>, node: T) -> Self
     where
-        T: UnifiedNode<S> + Send + Sync + 'static,
-    {
-        self.nodes
-            .insert(id.into(), Box::new(UnifiedNodeWrapper::new(node)));
-        self
-    }
-
-    /// Add a node with backend (legacy API - for backward compatibility)
-    pub fn node<B>(mut self, id: impl Into<String>, node: Node<B, S>) -> Self
-    where
-        B: NodeBackend<S> + Send + Sync + 'static,
-        B::Error: Send + Sync + 'static,
+        T: Node<S> + Send + Sync + 'static,
     {
         self.nodes.insert(id.into(), Box::new(node));
         self
     }
 
-    /// Convenience method: add a unified node and set it as the starting node
+    /// Convenience method: add a node and set it as the starting node
     pub fn start_with<T>(mut self, id: impl Into<String>, node: T) -> Self
     where
-        T: UnifiedNode<S> + Send + Sync + 'static,
+        T: Node<S> + Send + Sync + 'static,
     {
         let id = id.into();
         self.config.start_node_id = id.clone();
-        self.unified_node(id, node)
+        self.node(id, node)
     }
 
     /// Add a simple route (action -> target node)
@@ -813,7 +785,7 @@ where
                 .ok_or_else(|| FlowError::NodeNotFound(current_node_id.clone()))?;
 
             // Execute the node
-            let action = node.run(store).await.map_err(FlowError::from)?;
+            let action = node.run(store).await?;
             steps_executed += 1;
 
             // Find next node
@@ -978,7 +950,7 @@ impl<S: StorageBackend + 'static> Default for Flow<S> {
 /// - Result storage in shared store for parent flow access
 /// - Proper error propagation through the flow hierarchy
 #[async_trait]
-impl<S: StorageBackend + Send + Sync + 'static> NodeBackend<S> for Flow<S>
+impl<S: StorageBackend + Send + Sync + 'static> Node<S> for Flow<S>
 where
     S::Error: Send + Sync + 'static,
 {

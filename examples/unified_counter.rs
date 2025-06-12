@@ -23,8 +23,8 @@ use std::collections::HashMap;
 
 use async_trait::async_trait;
 use cosmoflow::{
-    Action, ExecutionContext, FlowBackend, FlowBuilder, NodeError, SharedStore, StorageBackend,
-    UnifiedNode,
+    Action, ExecutionContext, FlowBackend, FlowBuilder, Node, NodeError, SharedStore,
+    StorageBackend,
 };
 use serde::{Serialize, de::DeserializeOwned};
 
@@ -159,7 +159,7 @@ impl CounterNode {
 }
 
 #[async_trait]
-impl UnifiedNode<SimpleStorage> for CounterNode {
+impl Node<SimpleStorage> for CounterNode {
     /// Preparation phase returns the current counter value
     type PrepResult = i32;
     /// Execution phase returns the new counter value
@@ -294,8 +294,8 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
     // 4. Return "continue" or "complete" based on the final value
     let mut flow = FlowBuilder::new()
         .start_with("counter1", CounterNode::new(3)) // Start: 0 + 3 = 3
-        .unified_node("counter2", CounterNode::new(3)) // Next: 3 + 3 = 6
-        .unified_node("counter3", CounterNode::new(5)) // Final: 6 + 5 = 11
+        .node("counter2", CounterNode::new(3)) // Next: 3 + 3 = 6
+        .node("counter3", CounterNode::new(5)) // Final: 6 + 5 = 11
         .route("hello", "next", "counter1") // Unused route (legacy)
         .route("counter1", "continue", "counter2") // 3 → counter2
         .route("counter2", "continue", "counter3") // 6 → counter3
