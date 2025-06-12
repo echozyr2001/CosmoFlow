@@ -7,8 +7,9 @@
 //!
 //! ## Key Features
 //!
-//! - **Workflow Orchestration**: Execute complex multi-node workflows
+//! - **Workflow Orchestration**: Execute complex multi-node workflows with different node types
 //! - **Dynamic Routing**: Conditional and parameterized routing between nodes
+//! - **Type Safety**: Compile-time safety with automatic type erasure through NodeRunner
 //! - **Error Handling**: Comprehensive error management and recovery
 //! - **Execution Tracking**: Detailed execution results and performance metrics
 //! - **Retry Logic**: Built-in retry mechanisms for failed operations
@@ -24,14 +25,14 @@
 //!
 //! # async fn example() -> Result<(), Box<dyn std::error::Error>> {
 //! // Create a shared store
-//! let store = SharedStore::with_storage(MemoryStorage::new());
+//! let mut store = SharedStore::with_storage(MemoryStorage::new());
 //!
 //! // Build a flow
 //! let mut flow = FlowBuilder::new()
+//!     .start_node("start")
 //!     .build();
 //!
 //! // Execute the flow
-//! let mut store = SharedStore::with_storage(MemoryStorage::new());
 //! let result = flow.execute(&mut store).await?;
 //! println!("Flow completed with {} steps", result.steps_executed);
 //! # Ok(())
@@ -45,6 +46,7 @@
 //! - [`FlowBuilder`]: Builder pattern for constructing flows
 //! - [`FlowExecutionResult`]: Results and metadata from flow execution
 //! - [`Route`]: Defines routing between nodes in the workflow
+//! - [`NodeRunner`]: Type erasure trait for different node types
 //!
 //! ## Error Handling
 //!
@@ -80,13 +82,53 @@ use std::collections::HashMap;
 use std::time::Duration;
 
 use crate::action::Action;
-use crate::node::{ExecutionContext, Node, NodeBackend, NodeError};
+use crate::node::{ExecutionContext, Node, NodeError};
 use crate::shared_store::SharedStore;
 use crate::storage::StorageBackend;
 use async_trait::async_trait;
 
 use errors::FlowError;
 use route::{Route, RouteCondition};
+
+/// Node runner trait for workflow execution
+///
+/// This trait provides a unified interface for executing nodes with different
+/// associated types in the same flow, allowing the flow system to work with
+/// heterogeneous node collections while maintaining type safety.
+///
+/// ## Purpose
+///
+/// The NodeRunner trait provides a simplified interface that:
+/// - Enables different node types to work together in the same flow
+/// - Maintains a consistent execution interface for the flow system
+/// - Enables storage of different node types in the same collection
+/// - Preserves type safety
+#[async_trait]
+pub trait NodeRunner<S: StorageBackend>: Send + Sync {
+    /// Execute the node and return the resulting action
+    async fn run(&mut self, store: &mut SharedStore<S>) -> Result<Action, NodeError>;
+
+    /// Get the node's name for debugging and logging
+    fn name(&self) -> &str;
+}
+
+/// Implementation of NodeRunner for any Node
+///
+/// Any type that implements Node<S> automatically implements NodeRunner<S>.
+#[async_trait]
+impl<T, S> NodeRunner<S> for T
+where
+    T: Node<S> + Send + Sync,
+    S: StorageBackend + Send + Sync,
+{
+    async fn run(&mut self, store: &mut SharedStore<S>) -> Result<Action, NodeError> {
+        Node::run(self, store).await
+    }
+
+    fn name(&self) -> &str {
+        Node::name(self)
+    }
+}
 
 /// Execution result from a flow run
 ///
@@ -174,29 +216,6 @@ impl Default for FlowConfig {
     }
 }
 
-/// Type-erased node runner for dynamic dispatch
-#[async_trait]
-pub trait NodeRunner<S: StorageBackend>: Send + Sync {
-    /// Run the node and return the resulting action.
-    async fn run(&mut self, store: &mut SharedStore<S>) -> Result<Action, NodeError>;
-}
-
-/// Implementation of NodeRunner for any Node
-#[async_trait]
-impl<B, S> NodeRunner<S> for Node<B, S>
-where
-    B: NodeBackend<S> + Send + Sync,
-    S: StorageBackend + Send + Sync,
-    B::Error: Send + Sync + 'static,
-{
-    async fn run(&mut self, store: &mut SharedStore<S>) -> Result<Action, NodeError> {
-        // Call the node's run method directly instead of recursive call
-        Node::run(self, store)
-            .await
-            .map_err(|err| NodeError::ExecutionError(err.to_string()))
-    }
-}
-
 /// Trait for implementing flow execution logic
 #[async_trait]
 pub trait FlowBackend<S: StorageBackend> {
@@ -271,13 +290,22 @@ impl<S: StorageBackend + 'static> FlowBuilder<S> {
     }
 
     /// Add a node to the flow
-    pub fn node<B>(mut self, id: impl Into<String>, node: Node<B, S>) -> Self
+    pub fn node<T>(mut self, id: impl Into<String>, node: T) -> Self
     where
-        B: NodeBackend<S> + Send + Sync + 'static,
-        B::Error: Send + Sync + 'static,
+        T: Node<S> + Send + Sync + 'static,
     {
         self.nodes.insert(id.into(), Box::new(node));
         self
+    }
+
+    /// Convenience method: add a node and set it as the starting node
+    pub fn start_with<T>(mut self, id: impl Into<String>, node: T) -> Self
+    where
+        T: Node<S> + Send + Sync + 'static,
+    {
+        let id = id.into();
+        self.config.start_node_id = id.clone();
+        self.node(id, node)
     }
 
     /// Add a simple route (action -> target node)
@@ -589,7 +617,7 @@ where
     /// use cosmoflow::storage::MemoryStorage;
     ///
     /// let mut flow: Flow<MemoryStorage> = Flow::new();
-    /// // In practice, you would create a proper NodeBackend implementation
+    /// // In practice, you would create a proper Node implementation
     /// // flow.add_node("processing_step".to_string(), node).unwrap();
     /// # }
     /// ```
@@ -765,7 +793,7 @@ where
                 .ok_or_else(|| FlowError::NodeNotFound(current_node_id.clone()))?;
 
             // Execute the node
-            let action = node.run(store).await.map_err(FlowError::from)?;
+            let action = node.run(store).await?;
             steps_executed += 1;
 
             // Find next node
@@ -920,7 +948,7 @@ impl<S: StorageBackend + 'static> Default for Flow<S> {
     }
 }
 
-/// Implementation of NodeBackend for Flow, allowing flows to be nested
+/// Implementation of Node for Flow, allowing flows to be nested
 ///
 /// This implementation enables flows to be used as nodes within other flows,
 /// creating hierarchical workflow structures. Key features:
@@ -930,7 +958,7 @@ impl<S: StorageBackend + 'static> Default for Flow<S> {
 /// - Result storage in shared store for parent flow access
 /// - Proper error propagation through the flow hierarchy
 #[async_trait]
-impl<S: StorageBackend + Send + Sync + 'static> NodeBackend<S> for Flow<S>
+impl<S: StorageBackend + Send + Sync + 'static> Node<S> for Flow<S>
 where
     S::Error: Send + Sync + 'static,
 {
@@ -1032,7 +1060,7 @@ where
 mod tests {
     use super::*;
     use crate::action::Action;
-    use crate::node::{ExecutionContext, NodeBackend};
+    use crate::node::ExecutionContext;
     use crate::shared_store::SharedStore;
     use crate::storage::MemoryStorage;
     use async_trait::async_trait;
@@ -1053,7 +1081,7 @@ mod tests {
     }
 
     #[async_trait]
-    impl NodeBackend<MemoryStorage> for TestNode {
+    impl Node<MemoryStorage> for TestNode {
         type PrepResult = ();
         type ExecResult = ();
         type Error = NodeError;
@@ -1092,8 +1120,8 @@ mod tests {
     async fn test_basic_flow_execution() {
         let mut flow = FlowBuilder::new()
             .start_node("start")
-            .node("start", Node::new(TestNode::new(Action::simple("next"))))
-            .node("middle", Node::new(TestNode::new(Action::simple("end"))))
+            .node("start", TestNode::new(Action::simple("next")))
+            .node("middle", TestNode::new(Action::simple("end")))
             .route("start", "next", "middle")
             .route("middle", "end", "end")
             .build();
@@ -1112,8 +1140,8 @@ mod tests {
     async fn test_flow_cycle_detection() {
         let mut flow = FlowBuilder::new()
             .start_node("start")
-            .node("start", Node::new(TestNode::new(Action::simple("next"))))
-            .node("middle", Node::new(TestNode::new(Action::simple("back"))))
+            .node("start", TestNode::new(Action::simple("next")))
+            .node("middle", TestNode::new(Action::simple("back")))
             .route("start", "next", "middle")
             .route("middle", "back", "start") // Creates a cycle
             .build();
@@ -1135,12 +1163,9 @@ mod tests {
         let mut flow = FlowBuilder::new()
             .start_node("start")
             .max_steps(2)
-            .node("start", Node::new(TestNode::new(Action::simple("next"))))
-            .node(
-                "middle",
-                Node::new(TestNode::new(Action::simple("continue"))),
-            )
-            .node("end_node", Node::new(TestNode::new(Action::simple("end"))))
+            .node("start", TestNode::new(Action::simple("next")))
+            .node("middle", TestNode::new(Action::simple("continue")))
+            .node("end_node", TestNode::new(Action::simple("end")))
             .route("start", "next", "middle")
             .route("middle", "continue", "end_node")
             .route("end_node", "end", "final")
@@ -1160,7 +1185,7 @@ mod tests {
     async fn test_flow_node_not_found() {
         let mut flow = FlowBuilder::new()
             .start_node("start")
-            .node("start", Node::new(TestNode::new(Action::simple("next"))))
+            .node("start", TestNode::new(Action::simple("next")))
             .route("start", "next", "nonexistent")
             .build();
 
@@ -1178,7 +1203,7 @@ mod tests {
     async fn test_flow_no_route_found() {
         let mut flow = FlowBuilder::new()
             .start_node("start")
-            .node("start", Node::new(TestNode::new(Action::simple("unknown"))))
+            .node("start", TestNode::new(Action::simple("unknown")))
             .build();
 
         let mut store = SharedStore::with_storage(MemoryStorage::new());
@@ -1198,7 +1223,7 @@ mod tests {
     async fn test_flow_validation() {
         let flow = FlowBuilder::new()
             .start_node("nonexistent")
-            .node("start", Node::new(TestNode::new(Action::simple("next"))))
+            .node("start", TestNode::new(Action::simple("next")))
             .build();
 
         let result = flow.validate();
@@ -1243,9 +1268,9 @@ mod tests {
 
         let mut flow = FlowBuilder::new()
             .start_node("start")
-            .node("start", Node::new(TestNode::new(Action::simple("check"))))
-            .node("success", Node::new(TestNode::new(Action::simple("end"))))
-            .node("failure", Node::new(TestNode::new(Action::simple("end"))))
+            .node("start", TestNode::new(Action::simple("check")))
+            .node("success", TestNode::new(Action::simple("end")))
+            .node("failure", TestNode::new(Action::simple("end")))
             .conditional_route("start", "check", "success", RouteCondition::Always)
             .build();
 

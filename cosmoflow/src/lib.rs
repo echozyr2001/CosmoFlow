@@ -76,7 +76,7 @@ pub use flow::{
 
 /// Node execution system and traits
 pub mod node;
-pub use node::{ExecutionContext, Node, NodeBackend, NodeError};
+pub use node::{ExecutionContext, Node, NodeError};
 
 /// Storage backend abstractions and implementations
 pub mod storage;
@@ -114,7 +114,7 @@ pub mod prelude {
     // Core types
     pub use crate::{
         Action, ActionCondition, ExecutionContext, Flow, FlowBackend, FlowBuilder, FlowConfig,
-        FlowExecutionResult, Node, NodeBackend, SharedStore, StorageBackend,
+        FlowExecutionResult, Node, NodeError, SharedStore, StorageBackend,
     };
 
     // Feature-gated re-exports

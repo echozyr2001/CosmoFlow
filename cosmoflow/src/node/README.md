@@ -1,5 +1,5 @@
-# CosmoFlow Node
+# CosmoFlow Node - Node Execution System
 
-This module is part of the CosmoFlow project and provides the node execution system for workflows.
+The Node module provides the core execution system for CosmoFlow workflows. It defines the unified `Node` trait and execution infrastructure that enables workflows to run individual processing units with proper error handling, retry logic, and execution context management.
 
-For more information, see the [CosmoFlow documentation](https://docs.rs/cosmoflow).
+For more examples and detailed API documentation, see the [CosmoFlow documentation](https://docs.rs/cosmoflow).

@@ -18,8 +18,8 @@
 //!
 //! # Available Nodes
 //!
-//! - [`MockLlmNodeBackend`] - Mock LLM responses for testing and development
-//! - [`ApiRequestNodeBackend`] - Production LLM API integration with full features
+//! - [`MockLlmNode`] - Mock LLM responses for testing and development
+//! - [`ApiRequestNode`] - Production LLM API integration with full features
 //!
 //! # Configuration
 //!
@@ -34,14 +34,14 @@
 //! ## Basic Text Generation
 //!
 //! ```rust
-//! use cosmoflow::builtin::llm::{MockLlmNodeBackend, ApiConfig};
+//! use cosmoflow::builtin::llm::{MockLlmNode, ApiConfig};
 //! use cosmoflow::action::Action;
 //!
 //! let config = ApiConfig::new("your-api-key")
 //!     .with_model("gpt-4")
 //!     .with_max_tokens(500);
 //!
-//! let prompt_node = MockLlmNodeBackend::new(
+//! let prompt_node = MockLlmNode::new(
 //!     "user_prompt",
 //!     "story_result",
 //!     "Once upon a time, robots learned to paint...",
@@ -52,12 +52,12 @@
 //! ## Template-Based Processing
 //!
 //! ```rust
-//! use cosmoflow::builtin::llm::{MockLlmNodeBackend, ApiConfig};
+//! use cosmoflow::builtin::llm::{MockLlmNode, ApiConfig};
 //! use cosmoflow::action::Action;
 //!
 //! let config = ApiConfig::default();
 //!
-//! let analysis_node = MockLlmNodeBackend::new(
+//! let analysis_node = MockLlmNode::new(
 //!     "user_feedback",
 //!     "sentiment_analysis",
 //!     "Sentiment: Positive",
@@ -68,13 +68,13 @@
 //! ## Conversation Management
 //!
 //! ```rust
-//! use cosmoflow::builtin::llm::{ApiRequestNodeBackend, ApiConfig};
+//! use cosmoflow::builtin::llm::{ApiRequestNode, ApiConfig};
 //! use cosmoflow::action::Action;
 //!
 //! let config = ApiConfig::new("your-api-key")
 //!     .with_temperature(0.8);
 //!
-//! let chat_node = ApiRequestNodeBackend::new(
+//! let chat_node = ApiRequestNode::new(
 //!     "conversation_messages",
 //!     "assistant_response",
 //!     Action::simple("continue_conversation")
@@ -100,8 +100,9 @@
 
 use std::time::Duration;
 
+use crate::Node;
 use crate::action::Action;
-use crate::node::{ExecutionContext, NodeBackend, NodeError};
+use crate::node::{ExecutionContext, NodeError};
 use crate::shared_store::SharedStore;
 use crate::storage::StorageBackend;
 use async_openai::{
@@ -290,10 +291,20 @@ impl ApiConfig {
 
 /// A mock LLM node for testing and examples
 ///
-/// The MockLlmNodeBackend provides a simple simulation of LLM behavior without
+/// The MockLlmNode provides a simple simulation of LLM behavior without
 /// making actual API calls. This is useful for testing workflows, development,
 /// and demonstrations where you don't want to incur API costs or need predictable
 /// responses.
+///
+/// # Node Implementation
+///
+/// MockLlmNode implements the [`Node`] trait with the following associated types:
+/// - `PrepResult = String` - The retrieved prompt from the shared store
+/// - `ExecResult = String` - The generated mock response
+/// - `Error = NodeError` - Standard node error type
+///
+/// The prompt is retrieved during preparation, processed during execution,
+/// and the result is stored during post-processing.
 ///
 /// # Features
 ///
@@ -302,16 +313,18 @@ impl ApiConfig {
 /// - Simulated processing delays
 /// - Error handling and fallback responses
 /// - Retry mechanism support
+/// - Configurable failure rates for testing
+/// - Fallback response generation
 ///
 /// # Examples
 ///
 /// ## Basic Mock Response
 ///
 /// ```rust
-/// use cosmoflow::builtin::llm::MockLlmNodeBackend;
+/// use cosmoflow::builtin::llm::MockLlmNode;
 /// use cosmoflow::action::Action;
 ///
-/// let mock_node = MockLlmNodeBackend::new(
+/// let mock_node = MockLlmNode::new(
 ///     "user_prompt",
 ///     "ai_response",
 ///     "This is a mock AI response for testing purposes.",
@@ -322,17 +335,35 @@ impl ApiConfig {
 /// ## Template Response
 ///
 /// ```rust
-/// use cosmoflow::builtin::llm::MockLlmNodeBackend;
+/// use cosmoflow::builtin::llm::MockLlmNode;
 /// use cosmoflow::action::Action;
 ///
-/// let template_node = MockLlmNodeBackend::new(
+/// let template_node = MockLlmNode::new(
 ///     "analysis_request",
 ///     "analysis_result",
-///     "Analysis complete. The input '${user_input}' has been processed successfully.",
+///     "Analysis complete. The input has been processed successfully.",
 ///     Action::simple("review_analysis")
 /// );
 /// ```
-pub struct MockLlmNodeBackend {
+///
+/// ## Testing with Failures
+///
+/// ```rust
+/// use cosmoflow::builtin::llm::MockLlmNode;
+/// use cosmoflow::action::Action;
+/// use std::time::Duration;
+///
+/// let test_node = MockLlmNode::new(
+///     "test_prompt",
+///     "test_response",
+///     "Mock response",
+///     Action::simple("continue")
+/// )
+/// .with_failure_rate(0.2)  // 20% failure rate
+/// .with_retries(3)
+/// .with_retry_delay(Duration::from_millis(100));
+/// ```
+pub struct MockLlmNode {
     prompt_key: String,
     output_key: String,
     mock_response: String,
@@ -342,7 +373,7 @@ pub struct MockLlmNodeBackend {
     failure_rate: f64,
 }
 
-impl MockLlmNodeBackend {
+impl MockLlmNode {
     /// Create a new mock LLM node
     pub fn new<S1, S2, S3>(
         prompt_key: S1,
@@ -386,7 +417,7 @@ impl MockLlmNodeBackend {
 }
 
 #[async_trait]
-impl<S: StorageBackend + Send + Sync> NodeBackend<S> for MockLlmNodeBackend {
+impl<S: StorageBackend + Send + Sync> Node<S> for MockLlmNode {
     type PrepResult = String;
     type ExecResult = String;
     type Error = NodeError;
@@ -474,7 +505,7 @@ impl<S: StorageBackend + Send + Sync> NodeBackend<S> for MockLlmNodeBackend {
 /// It supports various configuration options including retries,
 /// custom endpoints, message history, and error handling.
 ///
-/// The ApiRequestNodeBackend is the primary node for production LLM integration,
+/// The ApiRequestNode is the primary node for production LLM integration,
 /// providing full API compatibility and advanced features like conversation
 /// management, streaming responses, and sophisticated error handling.
 ///
@@ -501,14 +532,14 @@ impl<S: StorageBackend + Send + Sync> NodeBackend<S> for MockLlmNodeBackend {
 /// ## Simple Text Generation
 ///
 /// ```rust
-/// use cosmoflow::builtin::llm::{ApiRequestNodeBackend, ApiConfig};
+/// use cosmoflow::builtin::llm::{ApiRequestNode, ApiConfig};
 /// use cosmoflow::action::Action;
 ///
 /// let config = ApiConfig::new("your-api-key")
 ///     .with_model("gpt-4")
 ///     .with_max_tokens(500);
 ///
-/// let text_gen = ApiRequestNodeBackend::new(
+/// let text_gen = ApiRequestNode::new(
 ///     "user_prompt",
 ///     "generated_text",
 ///     Action::simple("review_text")
@@ -518,12 +549,12 @@ impl<S: StorageBackend + Send + Sync> NodeBackend<S> for MockLlmNodeBackend {
 /// ## Conversation with System Message
 ///
 /// ```rust
-/// use cosmoflow::builtin::llm::{ApiRequestNodeBackend, ApiConfig};
+/// use cosmoflow::builtin::llm::{ApiRequestNode, ApiConfig};
 /// use cosmoflow::action::Action;
 ///
 /// let config = ApiConfig::default();
 ///
-/// let chat_node = ApiRequestNodeBackend::new(
+/// let chat_node = ApiRequestNode::new(
 ///     "conversation_messages",
 ///     "assistant_response",
 ///     Action::simple("continue_chat")
@@ -536,11 +567,11 @@ impl<S: StorageBackend + Send + Sync> NodeBackend<S> for MockLlmNodeBackend {
 /// ## Error Handling and Fallbacks
 ///
 /// ```rust
-/// use cosmoflow::builtin::llm::{ApiRequestNodeBackend, ApiConfig};
+/// use cosmoflow::builtin::llm::{ApiRequestNode, ApiConfig};
 /// use cosmoflow::action::Action;
 /// use std::time::Duration;
 ///
-/// let robust_node = ApiRequestNodeBackend::new(
+/// let robust_node = ApiRequestNode::new(
 ///     "analysis_request",
 ///     "analysis_result",
 ///     Action::simple("process_analysis")
@@ -550,7 +581,7 @@ impl<S: StorageBackend + Send + Sync> NodeBackend<S> for MockLlmNodeBackend {
 /// .with_retry_delay(Duration::from_secs(2));
 /// ```
 #[derive(Debug, Clone)]
-pub struct ApiRequestNodeBackend {
+pub struct ApiRequestNode {
     /// Configuration for the API
     config: ApiConfig,
     /// Input key for the messages (can be a single prompt or array of messages)
@@ -569,7 +600,7 @@ pub struct ApiRequestNodeBackend {
     client: Option<Client<OpenAIConfig>>,
 }
 
-impl ApiRequestNodeBackend {
+impl ApiRequestNode {
     /// Create a new API request node with default configuration
     pub fn new<S: Into<String>>(input_key: S, output_key: S, action: Action) -> Self {
         Self {
@@ -895,7 +926,7 @@ impl ApiRequestNodeBackend {
 }
 
 #[async_trait]
-impl<S: StorageBackend + Send + Sync> NodeBackend<S> for ApiRequestNodeBackend {
+impl<S: StorageBackend + Send + Sync> Node<S> for ApiRequestNode {
     type PrepResult = Vec<ChatCompletionRequestMessage>; // The messages to send
     type ExecResult = String; // The API response
     type Error = NodeError;

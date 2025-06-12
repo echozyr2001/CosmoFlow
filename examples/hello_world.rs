@@ -33,7 +33,7 @@ use async_trait::async_trait;
 use cosmoflow::{
     action::Action,
     flow::{FlowBackend, FlowBuilder},
-    node::{ExecutionContext, Node, NodeBackend, NodeError},
+    node::{ExecutionContext, Node, NodeError},
     shared_store::SharedStore,
     storage::StorageBackend,
 };
@@ -119,11 +119,11 @@ pub enum SimpleStorageError {
 }
 
 /// A simple greeting node
-struct HelloNodeBackend {
+struct HelloNode {
     message: String,
 }
 
-impl HelloNodeBackend {
+impl HelloNode {
     fn new(message: impl Into<String>) -> Self {
         Self {
             message: message.into(),
@@ -132,7 +132,7 @@ impl HelloNodeBackend {
 }
 
 #[async_trait]
-impl NodeBackend<SimpleStorage> for HelloNodeBackend {
+impl Node<SimpleStorage> for HelloNode {
     type PrepResult = String;
     type ExecResult = String;
     type Error = NodeError;
@@ -176,10 +176,10 @@ impl NodeBackend<SimpleStorage> for HelloNodeBackend {
 }
 
 /// A simple response node
-struct ResponseNodeBackend;
+struct ResponseNode;
 
 #[async_trait]
-impl NodeBackend<SimpleStorage> for ResponseNodeBackend {
+impl Node<SimpleStorage> for ResponseNode {
     type PrepResult = Option<String>;
     type ExecResult = String;
     type Error = NodeError;
@@ -243,11 +243,8 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
     // Build a simple workflow
     let mut flow = FlowBuilder::new()
         .start_node("hello")
-        .node(
-            "hello",
-            Node::new(HelloNodeBackend::new("Hello from CosmoFlow minimal!")),
-        )
-        .node("response", Node::new(ResponseNodeBackend))
+        .node("hello", HelloNode::new("Hello from CosmoFlow minimal!"))
+        .node("response", ResponseNode)
         .route("hello", "next", "response")
         .terminal_action("complete")
         .build();

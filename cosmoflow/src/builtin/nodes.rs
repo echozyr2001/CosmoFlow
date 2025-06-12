@@ -1,17 +1,19 @@
 //! Complete Node constructors for CosmoFlow workflows
 //!
-//! This module provides high-level Node constructors that wrap the basic NodeBackend
-//! implementations with complete execution capabilities including retry logic,
-//! error handling, and execution context management.
+//! This module provides high-level Node constructors that create ready-to-use
+//! Node instances for common workflow operations. These functions wrap the basic
+//! Node implementations with sensible defaults and provide a convenient API
+//! for quick workflow construction.
 //!
 //! # Purpose
 //!
-//! While the [`crate::basic`] module provides NodeBackend implementations that define
-//! the core behavior, this module wraps them in [`Node`] instances that include:
-//! - Automatic retry mechanisms
-//! - Error handling and recovery
-//! - Execution context management
-//! - Integration with the CosmoFlow execution engine
+//! While the [`crate::basic`] module provides Node implementations that define
+//! the core behavior, this module provides convenience functions that create
+//! Node instances with:
+//! - Sensible default configurations
+//! - Common action patterns (typically "continue")
+//! - Type-safe storage backend integration
+//! - Minimal boilerplate for common use cases
 //!
 //! # Generic Functions
 //!
@@ -47,13 +49,12 @@
 //! let set_data = generic::set_value_node::<MemoryStorage>("counter", json!(0));
 //! let get_data = generic::get_value_node::<MemoryStorage>("counter", "current_value");
 //!
-//! // Nodes can be used in any flow system that accepts Node<T>
+//! // Nodes implement Node<MemoryStorage> and can be used in flows
 //! println!("Created {} nodes for workflow", 3);
 //! ```
 
 use std::time::Duration;
 
-use crate::node::Node;
 use serde_json::Value;
 
 use super::basic::*;
@@ -67,7 +68,7 @@ use super::basic::*;
 /// - Deferring storage backend selection to runtime
 ///
 /// All functions return [`Node`] instances that wrap the corresponding
-/// [`node::NodeBackend`] implementations with full execution capabilities.
+/// node implementations with full execution capabilities.
 pub mod generic {
     use crate::storage::StorageBackend;
 
@@ -92,8 +93,8 @@ pub mod generic {
     /// let checkpoint = generic::log_node::<MemoryStorage>("Reached checkpoint 1");
     /// let status = generic::log_node::<MemoryStorage>("Processing completed");
     /// ```
-    pub fn log_node<S: StorageBackend>(message: impl Into<String>) -> Node<LogNodeBackend, S> {
-        Node::new(log(message))
+    pub fn log_node<S: StorageBackend>(message: impl Into<String>) -> LogNode {
+        log(message)
     }
 
     /// Create a set value node with a custom storage backend
@@ -125,11 +126,8 @@ pub mod generic {
     ///     "endpoints": ["api1.example.com", "api2.example.com"]
     /// }));
     /// ```
-    pub fn set_value_node<S: StorageBackend>(
-        key: impl Into<String>,
-        value: Value,
-    ) -> Node<SetValueNodeBackend, S> {
-        Node::new(set_value(key, value))
+    pub fn set_value_node<S: StorageBackend>(key: impl Into<String>, value: Value) -> SetValueNode {
+        set_value(key, value)
     }
 
     /// Create a delay node with a custom storage backend
@@ -158,8 +156,8 @@ pub mod generic {
     /// // Custom timing for external system coordination
     /// let sync_delay = generic::delay_node::<MemoryStorage>(Duration::from_secs(30));
     /// ```
-    pub fn delay_node<S: StorageBackend>(duration: Duration) -> Node<DelayNodeBackend, S> {
-        Node::new(delay(duration))
+    pub fn delay_node<S: StorageBackend>(duration: Duration) -> DelayNode {
+        delay(duration)
     }
 
     /// Create a get value node with a custom storage backend
@@ -202,13 +200,13 @@ pub mod generic {
     /// # Note
     ///
     /// This function creates a simple copy operation. For data transformation,
-    /// validation, or complex processing, create a `GetValueNodeBackend` directly
+    /// validation, or complex processing, create a `GetValueNode` directly
     /// with a custom transformation function.
     pub fn get_value_node<S: StorageBackend>(
         key: impl Into<String>,
         output_key: impl Into<String>,
-    ) -> Node<GetValueNodeBackend<impl Fn(Option<Value>) -> Value + Send + Sync>, S> {
-        Node::new(get_value(key, output_key))
+    ) -> GetValueNode<impl Fn(Option<Value>) -> Value + Send + Sync> {
+        get_value(key, output_key)
     }
 
     /// Create a conditional node with a custom storage backend
@@ -288,10 +286,10 @@ pub mod generic {
         condition: F,
         if_true: crate::action::Action,
         if_false: crate::action::Action,
-    ) -> Node<ConditionalNodeBackend<F, S>, S>
+    ) -> ConditionalNode<F, S>
     where
         F: Fn(&crate::shared_store::SharedStore<S>) -> bool + Send + Sync,
     {
-        Node::new(ConditionalNodeBackend::new(condition, if_true, if_false))
+        ConditionalNode::new(condition, if_true, if_false)
     }
 }
