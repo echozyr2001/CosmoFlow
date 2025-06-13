@@ -48,7 +48,7 @@ use serde::Serialize;
 use serde::de::DeserializeOwned;
 
 /// A simple in-memory storage implementation for the workflow
-/// 
+///
 /// This storage backend provides JSON-based serialization and maintains
 /// all data in memory using a HashMap. It implements the complete
 /// StorageBackend trait required by CosmoFlow.
@@ -135,7 +135,7 @@ pub enum SimpleStorageError {
 }
 
 /// Decision node that evaluates conditions and chooses execution paths
-/// 
+///
 /// This node demonstrates conditional routing by analyzing business logic
 /// and returning different actions based on the evaluation results.
 struct DecisionNode;
@@ -186,7 +186,7 @@ impl<S: cosmoflow::storage::StorageBackend + Send + Sync> cosmoflow::node::Node<
 }
 
 /// Success path node that handles positive outcomes
-/// 
+///
 /// This node processes successful scenarios and continues the workflow
 /// toward the final convergence point.
 struct SuccessNode;
@@ -228,7 +228,7 @@ impl<S: cosmoflow::storage::StorageBackend + Send + Sync> cosmoflow::node::Node<
 }
 
 /// Error path node that handles negative outcomes
-/// 
+///
 /// This node processes error scenarios and provides an alternative
 /// execution path that also leads to the final convergence point.
 struct ErrorNode;
@@ -270,7 +270,7 @@ impl<S: cosmoflow::storage::StorageBackend + Send + Sync> cosmoflow::node::Node<
 }
 
 /// Final convergence node where all execution paths complete
-/// 
+///
 /// This node serves as the endpoint for both success and error paths,
 /// demonstrating how different workflow branches can converge.
 struct FinalNode;
