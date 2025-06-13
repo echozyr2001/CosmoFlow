@@ -30,8 +30,8 @@ name = "unified_counter"
 path = "unified_counter.rs"
 
 [[bin]]
-name = "simplified_example"
-path = "simplified_example.rs"
+name = "flow_macro"
+path = "flow_macro.rs"
 
 [features]
 default = []

@@ -75,6 +75,8 @@
 
 /// The errors module contains the error types for the flow crate.
 pub mod errors;
+/// The macros module contains convenient macros for building workflows.
+pub mod macros;
 /// The route module contains the `Route` struct and `RouteCondition` enum.
 pub mod route;
 

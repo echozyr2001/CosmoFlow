@@ -1,132 +1,129 @@
 # CosmoFlow Examples
 
-This directory contains comprehensive examples demonstrating CosmoFlow's minimal feature set and core workflow capabilities. These examples show how to build workflows using only the core framework without relying on built-in dependencies.
+This directory contains comprehensive examples demonstrating CosmoFlow's capabilities from basic concepts to advanced patterns. These examples are designed to provide a progressive learning path for understanding CosmoFlow workflows.
 
-## ✅ Working Examples
+## ✅ Available Examples
 
 ### 1. Hello World (`hello_world.rs`)
-**Feature Required:** `minimal` (core only)
 
-A simple greeting workflow that demonstrates the fundamental concepts of CosmoFlow with minimal code.
+A simple greeting workflow that introduces fundamental CosmoFlow concepts with minimal code.
 
 ```bash
 cd examples && cargo run --bin hello_world --features minimal
 ```
 
-**Key Features Demonstrated:**
-- Custom `StorageBackend` trait implementation
-- Basic node backend implementation with prep, exec, and post phases
-- Core workflow execution without any built-ins
-- Data communication between nodes via SharedStore
-- Sequential workflow with simple routing
-- Type-safe data storage and retrieval
-
-**Workflow Description:**
-This example implements a basic greeting system:
-1. Hello node generates and displays a greeting message
-2. Greeting is stored in the shared storage
-3. Response node retrieves the greeting from storage
-4. Response node generates and displays a response message
-5. Workflow completes successfully
-
-Perfect for understanding CosmoFlow's core concepts and getting started.
+---
 
 ### 2. Custom Node (`custom_node.rs`)
-**Feature Required:** `minimal` (core only)
 
-Demonstrates an advanced iterative workflow with custom stateful nodes, data analysis, and report generation.
+An sophisticated iterative workflow demonstrating stateful nodes, data analysis, and report generation.
 
 ```bash
 cd examples && cargo run --bin custom_node --features minimal
 ```
 
-**Key Features Demonstrated:**
-- Stateful nodes that maintain internal state across executions
-- Complex business logic with coordinator pattern
-- Iterative workflows with cycle detection disabled
-- Three-phase node execution (prep, exec, post)
-- Data persistence and history tracking
-- Statistical analysis and report generation
-- Custom storage backend implementation
+---
 
-**Workflow Description:**
-This example implements a sophisticated counter analysis system:
-1. A coordinator node manages the workflow iteration logic
-2. Two counter nodes (main: +5, secondary: +3) alternate execution
-3. Counters persist their state and build execution history
-4. After 6 total iterations, the workflow transitions to analysis
-5. Statistics node calculates averages, growth rates, and other metrics
-6. Report node generates a formatted analysis summary
+### 3. Flow Macro (`flow_macro.rs`)
 
-## Overview
-
-CosmoFlow provides several feature tiers to match different use cases:
-
-- **minimal**: Core workflow functionality only
-- **basic**: Includes memory storage backend  
-- **standard**: Adds built-in node types
-- **full**: Complete feature set with all storage backends and built-ins
-
-## Running the Examples
-
-Both examples use only the minimal feature set, demonstrating CosmoFlow's core capabilities:
+Demonstrates the powerful `flow!` macro for declarative workflow construction with custom action routing.
 
 ```bash
-cd examples
-
-# Simple greeting workflow (perfect for beginners)
-cargo run --bin hello_world --features minimal
-
-# Advanced iterative workflow with data analysis
-cargo run --bin custom_node --features minimal
+cd examples && cargo run --bin flow_macro --features basic
 ```
 
-## Best Practices
+**Syntax Example:**
+
+```rust
+let workflow = flow! {
+    storage: SimpleStorage,
+    start: "decision",
+    nodes: {
+        "decision" : DecisionNode,
+        "success_path" : SuccessNode,
+        "error_path" : ErrorNode,
+        "final" : FinalNode,
+    },
+    routes: {
+        "decision" - "default" => "success_path",
+        "decision" - "error" => "error_path",
+        "success_path" - "continue" => "final",
+        "error_path" - "continue" => "final",
+    }
+};
+```
+
+## 🔧 Additional Examples
+
+```bash
+cargo run --bin unified_hello_world --features basic
+cargo run --bin unified_counter --features basic  
+```
+
+## 🏗️ Feature Levels
+
+CosmoFlow provides different feature tiers to match various use cases:
+
+| Feature Level | Description | Storage | Built-ins | Use Case |
+|---------------|-------------|---------|-----------|----------|
+| **minimal** | Core workflow functionality only | Custom only | None | Learning, custom implementations |
+| **basic** | Adds memory storage backend | Custom + Memory | None | Development, testing |
+| **standard** | Adds built-in node types | Custom + Memory | Basic nodes | Common workflows |
+| **full** | Complete feature set | All backends | All nodes | Production applications |
+
+## 📋 Best Practices
 
 ### Node Implementation
 
-1. **Separation of Concerns**:
-   - `prep()`: Read and validate inputs
-   - `exec()`: Perform core logic (stateless, idempotent)
-   - `post()`: Write outputs and determine next action
+1. **Three-Phase Pattern**:
+   - `prep()`: Read and validate inputs, prepare resources
+   - `exec()`: Perform core logic (keep stateless and idempotent when possible)
+   - `post()`: Write outputs, update state, and determine next action
 
 2. **Error Handling**:
-   - Use appropriate error types for different phases
+   - Use appropriate error types for different failure modes
    - Implement retry logic for transient failures
-   - Provide fallback behavior when possible
+   - Provide meaningful error messages and fallback behavior
 
 3. **State Management**:
-   - Use SharedStore for data sharing between nodes
-   - Keep node state minimal and recoverable
-   - Consider persistence for long-running workflows
+   - Use SharedStore for inter-node data communication
+   - Keep node internal state minimal and recoverable
+   - Consider persistence strategies for long-running workflows
 
 ### Flow Design
 
-1. **Validation**:
+1. **Workflow Structure**:
    - Always validate flows before execution
-   - Use meaningful node and action names
-   - Test all possible execution paths
+   - Use meaningful and consistent node/action naming
+   - Design and test all possible execution paths
 
-2. **Performance**:
-   - Set appropriate max_steps limits
-   - Consider cycle detection overhead
-   - Monitor execution metrics
+2. **Performance Considerations**:
+   - Set appropriate `max_steps` limits to prevent infinite loops
+   - Consider cycle detection overhead for iterative workflows
+   - Monitor execution metrics and optimize bottlenecks
 
 3. **Maintainability**:
-   - Document complex routing logic
-   - Use consistent naming conventions
-   - Provide clear error messages
+   - Document complex routing logic and business rules
+   - Use consistent naming conventions across the project
+   - Provide clear error messages and logging
 
-## Next Steps
+## 🎯 Next Steps
 
-After exploring these examples, you might want to:
+After working through these examples, consider:
 
-1. **Try Basic Features**: Use built-in storage backends and node types
-2. **Explore Standard Features**: Leverage pre-built nodes for common tasks  
-3. **Build Complex Workflows**: Combine multiple patterns for real applications
-4. **Custom Storage**: Implement custom storage backends for your use case
+1. **Explore Built-in Features**: Try the `standard` and `full` feature sets
+2. **Build Custom Workflows**: Combine patterns from multiple examples
+3. **Production Deployment**: Implement proper error handling and monitoring
+4. **Advanced Storage**: Explore Redis, file-based, or custom storage backends
 
-For more advanced examples and documentation, see:
-- `/docs/` - Architectural documentation
-- `/cosmoflow/src/builtin/` - Built-in node implementations
-- `/cosmoflow/src/storage/` - Storage backend examples
+## 📚 Additional Resources
+
+- **Architecture**: `/docs/architecture.md` - System design and concepts
+- **Features**: `/docs/features.md` - Complete feature documentation
+- **Getting Started**: `/docs/getting-started.md` - Detailed setup guide
+- **Built-in Nodes**: `/cosmoflow/src/builtin/` - Pre-built node implementations
+- **Storage Backends**: `/cosmoflow/src/storage/` - Storage implementation examples
+
+## 🤝 Contributing
+
+Found an issue or want to improve an example? Check out the main project repository for contribution guidelines.
