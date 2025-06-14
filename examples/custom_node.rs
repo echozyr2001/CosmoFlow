@@ -34,11 +34,10 @@
 
 use async_trait::async_trait;
 use cosmoflow::{
-    StorageBackend,
+    SharedStore,
     action::Action,
     flow::{FlowBackend, FlowBuilder},
     node::{ExecutionContext, Node, NodeError},
-    shared_store::SharedStore,
 };
 use serde::{Serialize, de::DeserializeOwned};
 use serde_json::Value;
@@ -64,7 +63,7 @@ impl Default for SimpleStorage {
     }
 }
 
-impl StorageBackend for SimpleStorage {
+impl SharedStore for SimpleStorage {
     type Error = SimpleStorageError;
 
     fn get<T: DeserializeOwned>(&self, key: &str) -> Result<Option<T>, Self::Error> {
@@ -140,14 +139,14 @@ impl CoordinatorNode {
 }
 
 #[async_trait]
-impl Node<SimpleStorage> for CoordinatorNode {
+impl<S: SharedStore + Send + Sync> Node<S> for CoordinatorNode {
     type PrepResult = (usize, usize); // (main_count, secondary_count)
     type ExecResult = String; // Next action to take
     type Error = NodeError;
 
     async fn prep(
         &mut self,
-        store: &SharedStore<SimpleStorage>,
+        store: &S,
         _context: &ExecutionContext,
     ) -> Result<Self::PrepResult, Self::Error> {
         // Get current counts from store
@@ -195,7 +194,7 @@ impl Node<SimpleStorage> for CoordinatorNode {
 
     async fn post(
         &mut self,
-        _store: &mut SharedStore<SimpleStorage>,
+        _store: &mut S,
         _prep_result: Self::PrepResult,
         exec_result: Self::ExecResult,
         _context: &ExecutionContext,
@@ -229,14 +228,14 @@ impl CounterNode {
 }
 
 #[async_trait]
-impl Node<SimpleStorage> for CounterNode {
+impl<S: SharedStore + Send + Sync> Node<S> for CounterNode {
     type PrepResult = usize; // Previous count
     type ExecResult = usize; // New count
     type Error = NodeError;
 
     async fn prep(
         &mut self,
-        store: &SharedStore<SimpleStorage>,
+        store: &S,
         _context: &ExecutionContext,
     ) -> Result<Self::PrepResult, Self::Error> {
         let previous_count = self.count;
@@ -285,7 +284,7 @@ impl Node<SimpleStorage> for CounterNode {
 
     async fn post(
         &mut self,
-        store: &mut SharedStore<SimpleStorage>,
+        store: &mut S,
         _prep_result: Self::PrepResult,
         exec_result: Self::ExecResult,
         _context: &ExecutionContext,
@@ -346,14 +345,14 @@ impl Node<SimpleStorage> for CounterNode {
 struct StatisticsNode;
 
 #[async_trait]
-impl Node<SimpleStorage> for StatisticsNode {
+impl<S: SharedStore + Send + Sync> Node<S> for StatisticsNode {
     type PrepResult = HashMap<String, Vec<usize>>;
     type ExecResult = HashMap<String, f64>;
     type Error = NodeError;
 
     async fn prep(
         &mut self,
-        store: &SharedStore<SimpleStorage>,
+        store: &S,
         _context: &ExecutionContext,
     ) -> Result<Self::PrepResult, Self::Error> {
         println!("📈 Gathering statistics from all counters...");
@@ -433,7 +432,7 @@ impl Node<SimpleStorage> for StatisticsNode {
 
     async fn post(
         &mut self,
-        store: &mut SharedStore<SimpleStorage>,
+        store: &mut S,
         _prep_result: Self::PrepResult,
         exec_result: Self::ExecResult,
         _context: &ExecutionContext,
@@ -462,14 +461,14 @@ impl Node<SimpleStorage> for StatisticsNode {
 struct ReportNode;
 
 #[async_trait]
-impl Node<SimpleStorage> for ReportNode {
+impl<S: SharedStore + Send + Sync> Node<S> for ReportNode {
     type PrepResult = HashMap<String, f64>;
     type ExecResult = String;
     type Error = NodeError;
 
     async fn prep(
         &mut self,
-        store: &SharedStore<SimpleStorage>,
+        store: &S,
         _context: &ExecutionContext,
     ) -> Result<Self::PrepResult, Self::Error> {
         let mut stats = HashMap::new();
@@ -539,7 +538,7 @@ impl Node<SimpleStorage> for ReportNode {
 
     async fn post(
         &mut self,
-        store: &mut SharedStore<SimpleStorage>,
+        store: &mut S,
         _prep_result: Self::PrepResult,
         exec_result: Self::ExecResult,
         _context: &ExecutionContext,
@@ -562,7 +561,7 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
     println!("================================");
 
     // Create a shared store
-    let mut store = SharedStore::with_storage(SimpleStorage::new());
+    let mut store = SimpleStorage::new();
 
     // Build a workflow that allows cycles for iterative behavior
     let mut flow = FlowBuilder::new()

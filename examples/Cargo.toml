@@ -33,6 +33,10 @@ path = "unified_counter.rs"
 name = "flow_macro"
 path = "flow_macro.rs"
 
+[[bin]]
+name = "unified_shared_store"
+path = "unified_shared_store.rs"
+
 [features]
 default = []
 minimal = ["cosmoflow/minimal"]

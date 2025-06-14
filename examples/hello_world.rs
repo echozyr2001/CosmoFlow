@@ -34,8 +34,7 @@ use cosmoflow::{
     action::Action,
     flow::{FlowBackend, FlowBuilder},
     node::{ExecutionContext, Node, NodeError},
-    shared_store::SharedStore,
-    storage::StorageBackend,
+    shared_store::new_design::SharedStore,
 };
 use serde::{Serialize, de::DeserializeOwned};
 use std::collections::HashMap;
@@ -60,7 +59,7 @@ impl Default for SimpleStorage {
     }
 }
 
-impl StorageBackend for SimpleStorage {
+impl SharedStore for SimpleStorage {
     type Error = SimpleStorageError;
 
     fn get<T: DeserializeOwned>(&self, key: &str) -> Result<Option<T>, Self::Error> {
@@ -139,7 +138,7 @@ impl Node<SimpleStorage> for HelloNode {
 
     async fn prep(
         &mut self,
-        _store: &SharedStore<SimpleStorage>,
+        _store: &SimpleStorage,
         _context: &ExecutionContext,
     ) -> Result<Self::PrepResult, Self::Error> {
         Ok(self.message.clone())
@@ -157,7 +156,7 @@ impl Node<SimpleStorage> for HelloNode {
 
     async fn post(
         &mut self,
-        store: &mut SharedStore<SimpleStorage>,
+        store: &mut SimpleStorage,
         _prep_result: Self::PrepResult,
         exec_result: Self::ExecResult,
         _context: &ExecutionContext,
@@ -186,7 +185,7 @@ impl Node<SimpleStorage> for ResponseNode {
 
     async fn prep(
         &mut self,
-        store: &SharedStore<SimpleStorage>,
+        store: &SimpleStorage,
         _context: &ExecutionContext,
     ) -> Result<Self::PrepResult, Self::Error> {
         match store.get("greeting") {
@@ -211,7 +210,7 @@ impl Node<SimpleStorage> for ResponseNode {
 
     async fn post(
         &mut self,
-        store: &mut SharedStore<SimpleStorage>,
+        store: &mut SimpleStorage,
         _prep_result: Self::PrepResult,
         exec_result: Self::ExecResult,
         _context: &ExecutionContext,
@@ -237,8 +236,7 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
     println!();
 
     // Create our custom storage
-    let storage = SimpleStorage::new();
-    let mut store = SharedStore::with_storage(storage);
+    let mut storage = SimpleStorage::new();
 
     // Build a simple workflow
     let mut flow = FlowBuilder::new()
@@ -268,7 +266,7 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
     println!("------------------------");
 
     let start_time = std::time::Instant::now();
-    let result = flow.execute(&mut store).await?;
+    let result = flow.execute(&mut storage).await?;
     let duration = start_time.elapsed();
 
     println!();
@@ -284,10 +282,10 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
 
     // Show the final state of our custom storage
     println!("📊 Final storage state:");
-    if let Ok(Some(greeting)) = store.get::<String>("greeting") {
+    if let Ok(Some(greeting)) = storage.get::<String>("greeting") {
         println!("  greeting: {greeting}");
     }
-    if let Ok(Some(response)) = store.get::<String>("response") {
+    if let Ok(Some(response)) = storage.get::<String>("response") {
         println!("  response: {response}");
     }
 
