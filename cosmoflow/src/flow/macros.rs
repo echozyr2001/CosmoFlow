@@ -206,21 +206,21 @@ mod tests {
     use crate::action::Action;
     use crate::flow::FlowBackend;
     use crate::node::Node;
-    use crate::shared_store::SharedStore;
+    use crate::shared_store::new_design::SharedStore;
     use crate::storage::backends::MemoryStorage;
 
     // Test node implementations
     struct TestStartNode;
 
     #[async_trait::async_trait]
-    impl<S: crate::storage::StorageBackend + Send + Sync> Node<S> for TestStartNode {
+    impl<S: SharedStore + Send + Sync> Node<S> for TestStartNode {
         type PrepResult = ();
         type ExecResult = ();
         type Error = crate::node::NodeError;
 
         async fn prep(
             &mut self,
-            _: &crate::shared_store::SharedStore<S>,
+            _: &S,
             _: &crate::node::ExecutionContext,
         ) -> Result<(), Self::Error> {
             Ok(())
@@ -236,7 +236,7 @@ mod tests {
 
         async fn post(
             &mut self,
-            _: &mut crate::shared_store::SharedStore<S>,
+            _: &mut S,
             _: (),
             _: (),
             _: &crate::node::ExecutionContext,
@@ -248,14 +248,14 @@ mod tests {
     struct TestProcessNode;
 
     #[async_trait::async_trait]
-    impl<S: crate::storage::StorageBackend + Send + Sync> Node<S> for TestProcessNode {
+    impl<S: SharedStore + Send + Sync> Node<S> for TestProcessNode {
         type PrepResult = ();
         type ExecResult = ();
         type Error = crate::node::NodeError;
 
         async fn prep(
             &mut self,
-            _: &crate::shared_store::SharedStore<S>,
+            _: &S,
             _: &crate::node::ExecutionContext,
         ) -> Result<(), Self::Error> {
             Ok(())
@@ -271,7 +271,7 @@ mod tests {
 
         async fn post(
             &mut self,
-            _: &mut crate::shared_store::SharedStore<S>,
+            _: &mut S,
             _: (),
             _: (),
             _: &crate::node::ExecutionContext,
@@ -283,14 +283,14 @@ mod tests {
     struct TestEndNode;
 
     #[async_trait::async_trait]
-    impl<S: crate::storage::StorageBackend + Send + Sync> Node<S> for TestEndNode {
+    impl<S: SharedStore + Send + Sync> Node<S> for TestEndNode {
         type PrepResult = ();
         type ExecResult = ();
         type Error = crate::node::NodeError;
 
         async fn prep(
             &mut self,
-            _: &crate::shared_store::SharedStore<S>,
+            _: &S,
             _: &crate::node::ExecutionContext,
         ) -> Result<(), Self::Error> {
             Ok(())
@@ -306,7 +306,7 @@ mod tests {
 
         async fn post(
             &mut self,
-            _: &mut crate::shared_store::SharedStore<S>,
+            _: &mut S,
             _: (),
             _: (),
             _: &crate::node::ExecutionContext,
@@ -328,14 +328,14 @@ mod tests {
     }
 
     #[async_trait::async_trait]
-    impl<S: crate::storage::StorageBackend + Send + Sync> Node<S> for TestCustomNode {
+    impl<S: SharedStore + Send + Sync> Node<S> for TestCustomNode {
         type PrepResult = ();
         type ExecResult = ();
         type Error = crate::node::NodeError;
 
         async fn prep(
             &mut self,
-            _: &crate::shared_store::SharedStore<S>,
+            _: &S,
             _: &crate::node::ExecutionContext,
         ) -> Result<(), Self::Error> {
             Ok(())
@@ -351,7 +351,7 @@ mod tests {
 
         async fn post(
             &mut self,
-            _: &mut crate::shared_store::SharedStore<S>,
+            _: &mut S,
             _: (),
             _: (),
             _: &crate::node::ExecutionContext,
@@ -398,7 +398,7 @@ mod tests {
             }
         };
 
-        let mut store = SharedStore::with_storage(MemoryStorage::new());
+        let mut store = MemoryStorage::new();
         let result = workflow.execute(&mut store).await;
 
         assert!(result.is_ok());

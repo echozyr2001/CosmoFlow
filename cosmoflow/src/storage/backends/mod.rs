@@ -64,11 +64,18 @@
 use serde::{Serialize, de::DeserializeOwned};
 use std::error::Error;
 
+// Re-export the new unified SharedStore trait
+pub use crate::shared_store::new_design::SharedStore;
+
 // ============================================================================
-// STORAGE TRAITS
+// LEGACY STORAGE TRAITS (DEPRECATED)
 // ============================================================================
 
 /// Trait defining the interface for storage backends used by SharedStore
+///
+/// **DEPRECATED**: This trait is deprecated in favor of the unified `SharedStore` trait.
+/// Please use `SharedStore` directly instead of implementing this trait and wrapping
+/// with `SharedStore<T>`. See the migration guide for details.
 ///
 /// The `StorageBackend` trait provides a consistent interface for all storage
 /// implementations in CosmoFlow. It handles serialization/deserialization
@@ -232,6 +239,7 @@ use std::error::Error;
 /// The trait requires `Send + Sync`, but individual implementations may not be thread-safe
 /// for mutations. The CosmoFlow execution model uses single-threaded workflows, avoiding
 /// concurrency issues while allowing multiple workflows to run in parallel.
+#[deprecated(since = "0.3.0", note = "Use the unified `SharedStore` trait instead")]
 pub trait StorageBackend: Send + Sync {
     /// Error type returned by storage operations
     ///

@@ -54,6 +54,7 @@
 //! ```rust
 //! use cosmoflow::builtin::nodes::generic::*;
 //! use cosmoflow::storage::MemoryStorage;
+//! use cosmoflow::SharedStore;
 //! use serde_json::json;
 //!
 //! // Quick node creation
@@ -98,6 +99,7 @@
 //! use cosmoflow::builtin::basic::*;
 //! use cosmoflow::action::Action;
 //! use cosmoflow::storage::MemoryStorage;
+//! use cosmoflow::SharedStore;
 //!
 //! // Conditional nodes use closures for conditions
 //! let conditional = ConditionalNode::<_, MemoryStorage>::new(
@@ -204,8 +206,7 @@
 //!
 //! ```rust
 //! use cosmoflow::node::{Node, ExecutionContext};
-//! use cosmoflow::shared_store::SharedStore;
-//! use cosmoflow::storage::StorageBackend;
+//! use cosmoflow::SharedStore;
 //! use cosmoflow::action::Action;
 //! use async_trait::async_trait;
 //! use serde::{Serialize, Deserialize};
@@ -217,14 +218,14 @@
 //! }
 //!
 //! #[async_trait]
-//! impl<S: StorageBackend> Node<S> for CustomProcessingNode {
+//! impl<S: SharedStore> Node<S> for CustomProcessingNode {
 //!     type PrepResult = Vec<f64>;
 //!     type ExecResult = Vec<f64>; // Changed to avoid undefined ProcessingResult
 //!     type Error = cosmoflow::node::NodeError; // Use existing NodeError
 //!
 //!     async fn prep(
 //!         &mut self,
-//!         store: &SharedStore<S>,
+//!         store: &S,
 //!         _context: &ExecutionContext,
 //!     ) -> Result<Self::PrepResult, Self::Error> {
 //!         let input_data: Vec<f64> = store.get("input_data")
@@ -245,7 +246,7 @@
 //!
 //!     async fn post(
 //!         &mut self,
-//!         store: &mut SharedStore<S>,
+//!         store: &mut S,
 //!         _prep_result: Self::PrepResult,
 //!         exec_result: Self::ExecResult,
 //!         _context: &ExecutionContext,

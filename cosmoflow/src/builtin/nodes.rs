@@ -70,7 +70,7 @@ use super::basic::*;
 /// All functions return [`Node`] instances that wrap the corresponding
 /// node implementations with full execution capabilities.
 pub mod generic {
-    use crate::storage::StorageBackend;
+    use crate::shared_store::new_design::SharedStore;
 
     use super::*;
 
@@ -93,7 +93,7 @@ pub mod generic {
     /// let checkpoint = generic::log_node::<MemoryStorage>("Reached checkpoint 1");
     /// let status = generic::log_node::<MemoryStorage>("Processing completed");
     /// ```
-    pub fn log_node<S: StorageBackend>(message: impl Into<String>) -> LogNode {
+    pub fn log_node<S: SharedStore>(message: impl Into<String>) -> LogNode {
         log(message)
     }
 
@@ -126,7 +126,7 @@ pub mod generic {
     ///     "endpoints": ["api1.example.com", "api2.example.com"]
     /// }));
     /// ```
-    pub fn set_value_node<S: StorageBackend>(key: impl Into<String>, value: Value) -> SetValueNode {
+    pub fn set_value_node<S: SharedStore>(key: impl Into<String>, value: Value) -> SetValueNode {
         set_value(key, value)
     }
 
@@ -156,7 +156,7 @@ pub mod generic {
     /// // Custom timing for external system coordination
     /// let sync_delay = generic::delay_node::<MemoryStorage>(Duration::from_secs(30));
     /// ```
-    pub fn delay_node<S: StorageBackend>(duration: Duration) -> DelayNode {
+    pub fn delay_node<S: SharedStore>(duration: Duration) -> DelayNode {
         delay(duration)
     }
 
@@ -202,7 +202,7 @@ pub mod generic {
     /// This function creates a simple copy operation. For data transformation,
     /// validation, or complex processing, create a `GetValueNode` directly
     /// with a custom transformation function.
-    pub fn get_value_node<S: StorageBackend>(
+    pub fn get_value_node<S: SharedStore>(
         key: impl Into<String>,
         output_key: impl Into<String>,
     ) -> GetValueNode<impl Fn(Option<Value>) -> Value + Send + Sync> {
@@ -227,6 +227,7 @@ pub mod generic {
     /// use cosmoflow::builtin::nodes::generic;
     /// use cosmoflow::storage::MemoryStorage;
     /// use cosmoflow::action::Action;
+    /// use cosmoflow::SharedStore;
     ///
     /// // Simple value comparison
     /// let score_check = generic::conditional_node::<_, MemoryStorage>(
@@ -282,13 +283,13 @@ pub mod generic {
     ///
     /// * `F` - The condition function type, must be `Fn(&SharedStore<S>) -> bool + Send + Sync`
     /// * `S` - The storage backend type
-    pub fn conditional_node<F, S: StorageBackend>(
+    pub fn conditional_node<F, S: SharedStore>(
         condition: F,
         if_true: crate::action::Action,
         if_false: crate::action::Action,
     ) -> ConditionalNode<F, S>
     where
-        F: Fn(&crate::shared_store::SharedStore<S>) -> bool + Send + Sync,
+        F: Fn(&S) -> bool + Send + Sync,
     {
         ConditionalNode::new(condition, if_true, if_false)
     }

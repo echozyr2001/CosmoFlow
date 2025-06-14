@@ -25,7 +25,7 @@
 //!
 //! # async fn example() -> Result<(), Box<dyn std::error::Error>> {
 //! // Create a shared store
-//! let mut store = SharedStore::with_storage(MemoryStorage::new());
+//! let mut store = MemoryStorage::new();
 //!
 //! // Build a flow
 //! let mut flow = FlowBuilder::new()
@@ -59,7 +59,7 @@
 //!
 //! # async fn example() -> Result<(), FlowError> {
 //! # let mut flow = Flow::new();
-//! # let mut store = cosmoflow::shared_store::SharedStore::with_storage(cosmoflow::storage::MemoryStorage::new());
+//! # let mut store = cosmoflow::storage::MemoryStorage::new();
 //! match flow.execute(&mut store).await {
 //!     Ok(result) => println!("Success: {:?}", result),
 //!     Err(FlowError::NodeNotFound(id)) => eprintln!("Node '{}' not found", id),
@@ -85,8 +85,7 @@ use std::time::Duration;
 
 use crate::action::Action;
 use crate::node::{ExecutionContext, Node, NodeError};
-use crate::shared_store::SharedStore;
-use crate::storage::StorageBackend;
+use crate::shared_store::new_design::SharedStore;
 use async_trait::async_trait;
 
 use errors::FlowError;
@@ -106,9 +105,9 @@ use route::{Route, RouteCondition};
 /// - Enables storage of different node types in the same collection
 /// - Preserves type safety
 #[async_trait]
-pub trait NodeRunner<S: StorageBackend>: Send + Sync {
+pub trait NodeRunner<S: SharedStore>: Send + Sync {
     /// Execute the node and return the resulting action
-    async fn run(&mut self, store: &mut SharedStore<S>) -> Result<Action, NodeError>;
+    async fn run(&mut self, store: &mut S) -> Result<Action, NodeError>;
 
     /// Get the node's name for debugging and logging
     fn name(&self) -> &str;
@@ -121,9 +120,9 @@ pub trait NodeRunner<S: StorageBackend>: Send + Sync {
 impl<T, S> NodeRunner<S> for T
 where
     T: Node<S> + Send + Sync,
-    S: StorageBackend + Send + Sync,
+    S: SharedStore + Send + Sync,
 {
-    async fn run(&mut self, store: &mut SharedStore<S>) -> Result<Action, NodeError> {
+    async fn run(&mut self, store: &mut S) -> Result<Action, NodeError> {
         Node::run(self, store).await
     }
 
@@ -147,7 +146,7 @@ where
 ///
 /// # async fn example() -> Result<(), Box<dyn std::error::Error>> {
 /// # let mut flow = Flow::new();
-/// # let mut store = cosmoflow::shared_store::SharedStore::with_storage(cosmoflow::storage::MemoryStorage::new());
+/// # let mut store = cosmoflow::storage::MemoryStorage::new();
 /// let result: FlowExecutionResult = flow.execute(&mut store).await?;
 ///
 /// if result.success {
@@ -220,7 +219,7 @@ impl Default for FlowConfig {
 
 /// Trait for implementing flow execution logic
 #[async_trait]
-pub trait FlowBackend<S: StorageBackend> {
+pub trait FlowBackend<S: SharedStore> {
     /// Add a node to the flow
     fn add_node(&mut self, id: String, node: Box<dyn NodeRunner<S>>) -> Result<(), FlowError>;
 
@@ -228,15 +227,12 @@ pub trait FlowBackend<S: StorageBackend> {
     fn add_route(&mut self, from_node_id: String, route: Route) -> Result<(), FlowError>;
 
     /// Execute the flow starting from the configured start node
-    async fn execute(
-        &mut self,
-        store: &mut SharedStore<S>,
-    ) -> Result<FlowExecutionResult, FlowError>;
+    async fn execute(&mut self, store: &mut S) -> Result<FlowExecutionResult, FlowError>;
 
     /// Execute the flow starting from a specific node
     async fn execute_from(
         &mut self,
-        store: &mut SharedStore<S>,
+        store: &mut S,
         start_node_id: String,
     ) -> Result<FlowExecutionResult, FlowError>;
 
@@ -251,19 +247,19 @@ pub trait FlowBackend<S: StorageBackend> {
 }
 
 /// Builder for creating flows easily
-pub struct FlowBuilder<S: StorageBackend> {
+pub struct FlowBuilder<S: SharedStore> {
     nodes: HashMap<String, Box<dyn NodeRunner<S>>>,
     routes: HashMap<String, Vec<Route>>,
     config: FlowConfig,
 }
 
-impl<S: StorageBackend + 'static> Default for FlowBuilder<S> {
+impl<S: SharedStore + 'static> Default for FlowBuilder<S> {
     fn default() -> Self {
         Self::new()
     }
 }
 
-impl<S: StorageBackend + 'static> FlowBuilder<S> {
+impl<S: SharedStore + 'static> FlowBuilder<S> {
     /// Create a new flow builder
     pub fn new() -> Self {
         Self {
@@ -424,13 +420,13 @@ impl<S: StorageBackend + 'static> FlowBuilder<S> {
 /// The `Flow` struct is designed to be used in single-threaded contexts within
 /// CosmoFlow's execution model. For concurrent execution of multiple workflows,
 /// create separate `Flow` instances for each workflow.
-pub struct Flow<S: StorageBackend> {
+pub struct Flow<S: SharedStore> {
     nodes: HashMap<String, Box<dyn NodeRunner<S>>>,
     routes: HashMap<String, Vec<Route>>,
     config: FlowConfig,
 }
 
-impl<S: StorageBackend> Flow<S> {
+impl<S: SharedStore> Flow<S> {
     /// Create a new basic flow with default configuration
     ///
     /// Creates an empty flow with no nodes or routes. Use [`FlowBuilder`] for
@@ -517,7 +513,7 @@ impl<S: StorageBackend> Flow<S> {
         &self,
         current_node_id: &str,
         action: &Action,
-        store: &SharedStore<S>,
+        store: &S,
     ) -> Result<Option<String>, FlowError> {
         let action_str = action.to_string();
 
@@ -591,7 +587,7 @@ impl<S: StorageBackend> Flow<S> {
 }
 
 #[async_trait]
-impl<S: StorageBackend + Send + Sync> FlowBackend<S> for Flow<S>
+impl<S: SharedStore + Send + Sync> FlowBackend<S> for Flow<S>
 where
     S::Error: Send + Sync + 'static,
 {
@@ -699,7 +695,7 @@ where
     ///
     /// # async {
     /// let mut flow: Flow<MemoryStorage> = Flow::new();
-    /// let mut store = SharedStore::with_storage(MemoryStorage::new());
+    /// let mut store = MemoryStorage::new();
     ///
     /// // Add nodes and routes to flow...
     ///
@@ -710,10 +706,7 @@ where
     /// println!("Execution completed in {} steps", result.steps_executed);
     /// # };
     /// ```
-    async fn execute(
-        &mut self,
-        store: &mut SharedStore<S>,
-    ) -> Result<FlowExecutionResult, FlowError> {
+    async fn execute(&mut self, store: &mut S) -> Result<FlowExecutionResult, FlowError> {
         let start_node_id = self.config.start_node_id.clone();
         self.execute_from(store, start_node_id).await
     }
@@ -759,7 +752,7 @@ where
     ///
     /// # async {
     /// let mut flow: Flow<MemoryStorage> = Flow::new();
-    /// let mut store = SharedStore::with_storage(MemoryStorage::new());
+    /// let mut store = MemoryStorage::new();
     ///
     /// // Execute from a specific node (useful for testing)
     /// let result = flow.execute_from(&mut store, "validation_step".to_string()).await.unwrap();
@@ -769,7 +762,7 @@ where
     /// ```
     async fn execute_from(
         &mut self,
-        store: &mut SharedStore<S>,
+        store: &mut S,
         start_node_id: String,
     ) -> Result<FlowExecutionResult, FlowError> {
         let mut current_node_id = start_node_id;
@@ -944,7 +937,7 @@ where
     }
 }
 
-impl<S: StorageBackend + 'static> Default for Flow<S> {
+impl<S: SharedStore + 'static> Default for Flow<S> {
     fn default() -> Self {
         Self::new()
     }
@@ -960,7 +953,7 @@ impl<S: StorageBackend + 'static> Default for Flow<S> {
 /// - Result storage in shared store for parent flow access
 /// - Proper error propagation through the flow hierarchy
 #[async_trait]
-impl<S: StorageBackend + Send + Sync + 'static> Node<S> for Flow<S>
+impl<S: SharedStore + Send + Sync + 'static> Node<S> for Flow<S>
 where
     S::Error: Send + Sync + 'static,
 {
@@ -970,7 +963,7 @@ where
 
     async fn prep(
         &mut self,
-        _store: &SharedStore<S>,
+        _store: &S,
         context: &ExecutionContext,
     ) -> Result<Self::PrepResult, Self::Error> {
         // Check nesting depth to prevent infinite recursion
@@ -1008,7 +1001,7 @@ where
 
     async fn post(
         &mut self,
-        store: &mut SharedStore<S>,
+        store: &mut S,
         _prep_result: Self::PrepResult,
         _exec_result: Self::ExecResult,
         context: &ExecutionContext,
@@ -1063,7 +1056,6 @@ mod tests {
     use super::*;
     use crate::action::Action;
     use crate::node::ExecutionContext;
-    use crate::shared_store::SharedStore;
     use crate::storage::MemoryStorage;
     use async_trait::async_trait;
 
@@ -1090,7 +1082,7 @@ mod tests {
 
         async fn prep(
             &mut self,
-            _store: &SharedStore<MemoryStorage>,
+            _store: &MemoryStorage,
             _context: &ExecutionContext,
         ) -> Result<Self::PrepResult, Self::Error> {
             if self.should_fail {
@@ -1109,7 +1101,7 @@ mod tests {
 
         async fn post(
             &mut self,
-            _store: &mut SharedStore<MemoryStorage>,
+            _store: &mut MemoryStorage,
             _prep_result: Self::PrepResult,
             _exec_result: Self::ExecResult,
             _context: &ExecutionContext,
@@ -1128,7 +1120,7 @@ mod tests {
             .route("middle", "end", "end")
             .build();
 
-        let mut store = SharedStore::with_storage(MemoryStorage::new());
+        let mut store = MemoryStorage::new();
         let result = flow.execute(&mut store).await;
 
         assert!(result.is_ok());
@@ -1148,7 +1140,7 @@ mod tests {
             .route("middle", "back", "start") // Creates a cycle
             .build();
 
-        let mut store = SharedStore::with_storage(MemoryStorage::new());
+        let mut store = MemoryStorage::new();
         let result = flow.execute(&mut store).await;
 
         assert!(result.is_err());
@@ -1173,7 +1165,7 @@ mod tests {
             .route("end_node", "end", "final")
             .build();
 
-        let mut store = SharedStore::with_storage(MemoryStorage::new());
+        let mut store = MemoryStorage::new();
         let result = flow.execute(&mut store).await;
 
         assert!(result.is_err());
@@ -1191,7 +1183,7 @@ mod tests {
             .route("start", "next", "nonexistent")
             .build();
 
-        let mut store = SharedStore::with_storage(MemoryStorage::new());
+        let mut store = MemoryStorage::new();
         let result = flow.execute(&mut store).await;
 
         assert!(result.is_err());
@@ -1208,7 +1200,7 @@ mod tests {
             .node("start", TestNode::new(Action::simple("unknown")))
             .build();
 
-        let mut store = SharedStore::with_storage(MemoryStorage::new());
+        let mut store = MemoryStorage::new();
         let result = flow.execute(&mut store).await;
 
         assert!(result.is_err());
@@ -1276,7 +1268,7 @@ mod tests {
             .conditional_route("start", "check", "success", RouteCondition::Always)
             .build();
 
-        let mut store = SharedStore::with_storage(MemoryStorage::new());
+        let mut store = MemoryStorage::new();
         let result = flow.execute(&mut store).await;
 
         assert!(result.is_ok());

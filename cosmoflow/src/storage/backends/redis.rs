@@ -15,7 +15,7 @@
 //! # Usage
 //!
 //! ```rust,no_run
-//! use crate::cosmoflow::StorageBackend;
+//! use crate::cosmoflow::SharedStore;
 //! use cosmoflow::storage::backends::RedisStorage;
 //! use serde_json::json;
 //! use serde_json::Value;
@@ -44,7 +44,7 @@
 //! - Network connectivity to Redis instance
 //! - Appropriate Redis credentials/permissions
 
-use super::StorageBackend;
+use crate::shared_store::new_design::SharedStore;
 use redis::{Client, Commands, Connection};
 use serde::{Serialize, de::DeserializeOwned};
 use std::sync::{Arc, Mutex};
@@ -285,7 +285,7 @@ impl RedisStorage {
     }
 }
 
-impl StorageBackend for RedisStorage {
+impl SharedStore for RedisStorage {
     type Error = RedisStorageError;
 
     /// Stores a value in Redis with the specified key.

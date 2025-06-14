@@ -12,7 +12,8 @@
 
 pub mod backends;
 
-pub use backends::StorageBackend;
+// Re-export the new unified SharedStore trait
+pub use crate::shared_store::new_design::SharedStore;
 
 #[cfg(feature = "storage-memory")]
 pub use backends::{MemoryStorage, MemoryStorageError};

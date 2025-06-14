@@ -25,7 +25,7 @@
 //! use std::time::Duration;
 //!
 //! // Create a shared store with memory backend
-//! let mut store = SharedStore::with_storage(MemoryStorage::new());
+//! let mut store = MemoryStorage::new();
 //!
 //! // Create a flow
 //! let mut flow = Flow::new();
@@ -61,7 +61,7 @@
 
 /// Shared store for data communication between workflow nodes
 pub mod shared_store;
-pub use shared_store::SharedStore;
+pub use shared_store::new_design::SharedStore;
 
 /// Action definition and condition evaluation
 pub mod action;
@@ -80,8 +80,6 @@ pub use node::{ExecutionContext, Node, NodeError};
 
 /// Storage backend abstractions and implementations
 pub mod storage;
-// Re-export storage types for convenience
-pub use storage::StorageBackend;
 
 // ============================================================================
 // FEATURE-GATED EXPORTS
@@ -114,7 +112,7 @@ pub mod prelude {
     // Core types
     pub use crate::{
         Action, ActionCondition, ExecutionContext, Flow, FlowBackend, FlowBuilder, FlowConfig,
-        FlowExecutionResult, Node, NodeError, SharedStore, StorageBackend,
+        FlowExecutionResult, Node, NodeError, SharedStore,
     };
 
     // Feature-gated re-exports

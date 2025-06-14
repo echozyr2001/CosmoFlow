@@ -1,4 +1,4 @@
-use super::StorageBackend;
+use crate::shared_store::new_design::SharedStore;
 use serde::{Serialize, de::DeserializeOwned};
 use serde_json::Value;
 use std::collections::HashMap;
@@ -30,7 +30,7 @@ use thiserror::Error;
 /// ## Development and Testing
 /// ```rust
 /// use cosmoflow::storage::MemoryStorage;
-/// use cosmoflow::storage::StorageBackend;
+/// use cosmoflow::SharedStore;
 ///
 /// let mut storage = MemoryStorage::new();
 /// storage.set("test_key".to_string(), "test_value").unwrap();
@@ -41,7 +41,8 @@ use thiserror::Error;
 ///
 /// ## High-Performance Workflows
 /// ```rust
-/// use cosmoflow::storage::{MemoryStorage, StorageBackend};
+/// use cosmoflow::storage::MemoryStorage;
+/// use cosmoflow::SharedStore;
 /// use serde_json::json;
 ///
 /// // Pre-allocate for better performance
@@ -57,7 +58,7 @@ use thiserror::Error;
 ///
 /// ## Temporary Data Processing
 /// ```rust
-/// use cosmoflow::storage::{MemoryStorage, StorageBackend};
+/// use cosmoflow::storage::{MemoryStorage, SharedStore};
 /// use serde::{Serialize, Deserialize};
 ///
 /// #[derive(Serialize, Deserialize)]
@@ -119,7 +120,7 @@ pub struct MemoryStorage {
 ///
 /// ## Handling Serialization Errors
 /// ```rust
-/// use cosmoflow::storage::{MemoryStorage, MemoryStorageError, StorageBackend};
+/// use cosmoflow::storage::{MemoryStorage, MemoryStorageError, SharedStore};
 /// use serde::Serialize;
 ///
 /// #[derive(Serialize)]
@@ -142,7 +143,7 @@ pub struct MemoryStorage {
 ///
 /// ## Handling Deserialization Errors
 /// ```rust
-/// use cosmoflow::storage::{MemoryStorage, MemoryStorageError, StorageBackend};
+/// use cosmoflow::storage::{MemoryStorage, MemoryStorageError, SharedStore};
 /// use serde::{Serialize, Deserialize};
 ///
 /// #[derive(Serialize, Deserialize, Debug)]
@@ -242,7 +243,7 @@ impl MemoryStorage {
     }
 }
 
-impl StorageBackend for MemoryStorage {
+impl SharedStore for MemoryStorage {
     type Error = MemoryStorageError;
 
     fn set<T: Serialize>(&mut self, key: String, value: T) -> Result<(), Self::Error> {

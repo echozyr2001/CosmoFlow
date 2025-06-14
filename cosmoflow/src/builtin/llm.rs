@@ -103,8 +103,8 @@ use std::time::Duration;
 use crate::Node;
 use crate::action::Action;
 use crate::node::{ExecutionContext, NodeError};
-use crate::shared_store::SharedStore;
-use crate::storage::StorageBackend;
+use crate::shared_store::new_design::SharedStore;
+
 use async_openai::{
     Client,
     config::OpenAIConfig,
@@ -417,14 +417,14 @@ impl MockLlmNode {
 }
 
 #[async_trait]
-impl<S: StorageBackend + Send + Sync> Node<S> for MockLlmNode {
+impl<S: SharedStore + Send + Sync> Node<S> for MockLlmNode {
     type PrepResult = String;
     type ExecResult = String;
     type Error = NodeError;
 
     async fn prep(
         &mut self,
-        store: &SharedStore<S>,
+        store: &S,
         _context: &ExecutionContext,
     ) -> Result<Self::PrepResult, Self::Error> {
         let value = match store.get(&self.prompt_key) {
@@ -463,7 +463,7 @@ impl<S: StorageBackend + Send + Sync> Node<S> for MockLlmNode {
 
     async fn post(
         &mut self,
-        store: &mut SharedStore<S>,
+        store: &mut S,
         _prep_result: Self::PrepResult,
         exec_result: Self::ExecResult,
         _context: &ExecutionContext,
@@ -926,14 +926,14 @@ impl ApiRequestNode {
 }
 
 #[async_trait]
-impl<S: StorageBackend + Send + Sync> Node<S> for ApiRequestNode {
+impl<S: SharedStore + Send + Sync> Node<S> for ApiRequestNode {
     type PrepResult = Vec<ChatCompletionRequestMessage>; // The messages to send
     type ExecResult = String; // The API response
     type Error = NodeError;
 
     async fn prep(
         &mut self,
-        store: &SharedStore<S>,
+        store: &S,
         _context: &ExecutionContext,
     ) -> Result<Self::PrepResult, Self::Error> {
         match store.get(&self.input_key) {
@@ -966,7 +966,7 @@ impl<S: StorageBackend + Send + Sync> Node<S> for ApiRequestNode {
 
     async fn post(
         &mut self,
-        store: &mut SharedStore<S>,
+        store: &mut S,
         _prep_result: Self::PrepResult,
         exec_result: Self::ExecResult,
         _context: &ExecutionContext,
