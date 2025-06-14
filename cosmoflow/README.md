@@ -51,7 +51,7 @@ Make sure you activated the full features of the cosmoflow crate on Cargo.toml:
 
 ```toml
 [dependencies]
-cosmoflow = { version = "0.1.0", features = ["full"] }
+cosmoflow = { version = "0.2.0", features = ["full"] }
 ```
 
 Then, on your main.rs:
@@ -71,7 +71,6 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
         .build()?;
 
     // Execute the workflow
-    let context = ExecutionContext::new(3, Duration::from_secs(30));
     let result = flow.execute(&mut store).await?;
     
     println!("Workflow completed: {:?}", result);
