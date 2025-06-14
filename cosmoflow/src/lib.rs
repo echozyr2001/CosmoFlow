@@ -61,7 +61,7 @@
 
 /// Shared store for data communication between workflow nodes
 pub mod shared_store;
-pub use shared_store::new_design::SharedStore;
+pub use shared_store::SharedStore;
 
 /// Action definition and condition evaluation
 pub mod action;

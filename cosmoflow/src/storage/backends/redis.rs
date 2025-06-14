@@ -44,13 +44,13 @@
 //! - Network connectivity to Redis instance
 //! - Appropriate Redis credentials/permissions
 
-use crate::shared_store::new_design::SharedStore;
+use crate::SharedStore;
 use redis::{Client, Commands, Connection};
 use serde::{Serialize, de::DeserializeOwned};
 use std::sync::{Arc, Mutex};
 use thiserror::Error;
 
-/// Redis-based storage backend that implements the StorageBackend trait.
+/// Redis-based storage backend that implements the SharedStore trait.
 ///
 /// This storage backend provides persistent, distributed storage using Redis as the
 /// underlying data store. All values are automatically serialized to JSON before

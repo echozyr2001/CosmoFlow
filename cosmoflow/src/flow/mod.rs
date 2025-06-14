@@ -85,7 +85,7 @@ use std::time::Duration;
 
 use crate::action::Action;
 use crate::node::{ExecutionContext, Node, NodeError};
-use crate::shared_store::new_design::SharedStore;
+use crate::shared_store::SharedStore;
 use async_trait::async_trait;
 
 use errors::FlowError;
@@ -385,7 +385,7 @@ impl<S: SharedStore + 'static> FlowBuilder<S> {
 ///
 /// # Type Parameters
 ///
-/// * `S` - The storage backend type that implements [`StorageBackend`]
+/// * `S` - The storage backend type that implements [`SharedStore`]
 ///
 /// # Fields
 ///

@@ -20,7 +20,7 @@
 
 use async_trait::async_trait;
 use cosmoflow::prelude::*;
-use cosmoflow::shared_store::new_design::SharedStore;
+use cosmoflow::shared_store::SharedStore;
 use serde::{Serialize, de::DeserializeOwned};
 use std::{collections::HashMap, time::Duration};
 

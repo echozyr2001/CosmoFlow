@@ -76,7 +76,7 @@ use std::time::Duration;
 use crate::Node;
 use crate::action::Action;
 use crate::node::{ExecutionContext, NodeError};
-use crate::shared_store::new_design::SharedStore;
+use crate::shared_store::SharedStore;
 
 use async_trait::async_trait;
 use serde_json::Value;

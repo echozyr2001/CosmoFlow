@@ -29,7 +29,7 @@
 //!
 //! ```rust
 //! use cosmoflow::node::{Node, ExecutionContext, NodeError};
-//! use cosmoflow::shared_store::new_design::SharedStore;
+//! use cosmoflow::shared_store::SharedStore;
 //! use cosmoflow::action::Action;
 //! use async_trait::async_trait;
 //!
@@ -134,7 +134,7 @@ pub use errors::NodeError;
 use std::{collections::HashMap, time::Duration};
 
 use crate::action::Action;
-use crate::shared_store::new_design::SharedStore;
+use crate::shared_store::SharedStore;
 use serde_json::Value;
 use uuid::Uuid;
 
@@ -304,7 +304,6 @@ pub trait Node<S: SharedStore>: Send + Sync {
     /// ```rust
     /// # use cosmoflow::node::ExecutionContext;
     /// # use cosmoflow::shared_store::SharedStore;
-    /// # use cosmoflow::storage::backends::StorageBackend;
     /// #
     /// # struct MyPrepData { message: String }
     /// # #[derive(Debug)]
@@ -316,7 +315,7 @@ pub trait Node<S: SharedStore>: Send + Sync {
     /// #
     /// # struct MyNode;
     /// # impl MyNode {
-    /// async fn prep(&mut self, _store: &SharedStore<impl StorageBackend>, _context: &ExecutionContext)
+    /// async fn prep<S: SharedStore>(&mut self, _store: &S, _context: &ExecutionContext)
     ///     -> Result<MyPrepData, MyError> {
     ///     // Read configuration from storage
     ///     // Validate inputs
@@ -438,7 +437,6 @@ pub trait Node<S: SharedStore>: Send + Sync {
     /// ```rust
     /// # use cosmoflow::node::ExecutionContext;
     /// # use cosmoflow::shared_store::SharedStore;
-    /// # use cosmoflow::storage::backends::StorageBackend;
     /// # use cosmoflow::action::Action;
     /// #
     /// # struct MyPrepData;
@@ -451,7 +449,7 @@ pub trait Node<S: SharedStore>: Send + Sync {
     /// #
     /// # struct MyNode;
     /// # impl MyNode {
-    /// async fn post(&mut self, _store: &mut SharedStore<impl StorageBackend>, _prep_result: MyPrepData,
+    /// async fn post<S: SharedStore>(&mut self, _store: &mut S, _prep_result: MyPrepData,
     ///               exec_result: String, _context: &ExecutionContext)
     ///     -> Result<Action, MyError> {
     ///     // Store results and determine next action
@@ -648,8 +646,7 @@ pub trait Node<S: SharedStore>: Send + Sync {
     ///
     /// ```rust
     /// # use cosmoflow::node::{ExecutionContext, NodeError};
-    /// # use cosmoflow::shared_store::SharedStore;
-    /// # use cosmoflow::storage::backends::StorageBackend;
+    /// # use cosmoflow::SharedStore;
     /// # use cosmoflow::action::Action;
     /// #
     /// # struct MyCustomNode;

@@ -1,4 +1,4 @@
-use crate::shared_store::new_design::SharedStore;
+use crate::SharedStore;
 use serde::{Serialize, de::DeserializeOwned};
 use serde_json::Value;
 use std::collections::HashMap;
@@ -47,7 +47,7 @@ use thiserror::Error;
 ///
 /// ```rust
 /// use cosmoflow::storage::backends::FileStorage;
-/// use cosmoflow::storage::SharedStore;
+/// use cosmoflow::SharedStore;
 /// use serde::{Serialize, Deserialize};
 ///
 /// #[derive(Serialize, Deserialize, Debug, PartialEq)]
@@ -75,7 +75,7 @@ use thiserror::Error;
 ///
 /// ```rust
 /// use cosmoflow::storage::backends::FileStorage;
-/// use cosmoflow::storage::SharedStore;
+/// use cosmoflow::SharedStore;
 /// use serde_json::{Value, json};
 ///
 /// // Initialize persistent workflow storage
@@ -151,7 +151,7 @@ pub struct FileStorage {
 ///
 /// ```rust
 /// use cosmoflow::storage::backends::{FileStorage, FileStorageError};
-/// use cosmoflow::storage::SharedStore;
+/// use cosmoflow::SharedStore;
 /// use std::io::ErrorKind;
 ///
 /// fn handle_storage_operation() -> Result<(), Box<dyn std::error::Error>> {
@@ -289,7 +289,7 @@ impl FileStorage {
     ///
     /// ```rust
     /// use cosmoflow::storage::backends::FileStorage;
-    /// use cosmoflow::storage::SharedStore;
+    /// use cosmoflow::SharedStore;
     ///
     /// // Create storage (file created on first write)
     /// let storage = FileStorage::new("app_data.json")?;
@@ -300,7 +300,7 @@ impl FileStorage {
     ///
     /// ```rust
     /// use cosmoflow::storage::backends::FileStorage;
-    /// use cosmoflow::storage::SharedStore;
+    /// use cosmoflow::SharedStore;
     /// use std::fs;
     ///
     /// // Ensure parent directory exists
@@ -313,7 +313,7 @@ impl FileStorage {
     ///
     /// ```rust
     /// use cosmoflow::storage::backends::FileStorage;
-    /// use cosmoflow::storage::SharedStore;
+    /// use cosmoflow::SharedStore;
     ///
     /// // First run - creates storage and adds data
     /// {
@@ -335,7 +335,7 @@ impl FileStorage {
     ///
     /// ```rust
     /// use cosmoflow::storage::backends::{FileStorage, FileStorageError};
-    /// use cosmoflow::storage::SharedStore;
+    /// use cosmoflow::SharedStore;
     ///
     /// match FileStorage::new("config.json") {
     ///     Ok(storage) => {
@@ -447,7 +447,7 @@ impl SharedStore for FileStorage {
     ///
     /// ```rust
     /// use cosmoflow::storage::backends::FileStorage;
-    /// use cosmoflow::storage::SharedStore;
+    /// use cosmoflow::SharedStore;
     /// use serde::{Serialize, Deserialize};
     ///
     /// #[derive(Serialize, Deserialize, Debug, PartialEq)]
@@ -508,7 +508,7 @@ impl SharedStore for FileStorage {
     ///
     /// ```rust
     /// use cosmoflow::storage::backends::FileStorage;
-    /// use cosmoflow::storage::SharedStore;
+    /// use cosmoflow::SharedStore;
     /// use serde::{Serialize, Deserialize};
     /// use serde_json::{Value, json};
     ///
@@ -556,7 +556,7 @@ impl SharedStore for FileStorage {
     ///
     /// ```rust
     /// # use cosmoflow::storage::backends::{FileStorage, FileStorageError};
-    /// # use cosmoflow::storage::SharedStore;
+    /// # use cosmoflow::SharedStore;
     /// # use serde_json::json;
     /// # let mut storage = FileStorage::new("type_test.json")?;
     /// // Store a string value
@@ -608,7 +608,7 @@ impl SharedStore for FileStorage {
     ///
     /// ```rust
     /// use cosmoflow::storage::backends::FileStorage;
-    /// use cosmoflow::storage::SharedStore;
+    /// use cosmoflow::SharedStore;
     /// use serde::{Serialize, Deserialize};
     ///
     /// #[derive(Serialize, Deserialize, Debug, PartialEq)]
@@ -655,7 +655,7 @@ impl SharedStore for FileStorage {
     ///
     /// ```rust
     /// # use cosmoflow::storage::backends::FileStorage;
-    /// # use cosmoflow::storage::SharedStore;
+    /// # use cosmoflow::SharedStore;
     /// # let mut storage = FileStorage::new("cleanup.json")?;
     /// // Store temporary data
     /// storage.set("temp_1".to_string(), "temporary data")?;
@@ -701,7 +701,7 @@ impl SharedStore for FileStorage {
     ///
     /// ```rust
     /// use cosmoflow::storage::backends::FileStorage;
-    /// use cosmoflow::storage::SharedStore;
+    /// use cosmoflow::SharedStore;
     ///
     /// let mut storage = FileStorage::new("existence_check.json")?;
     ///
@@ -737,7 +737,7 @@ impl SharedStore for FileStorage {
     ///
     /// ```rust
     /// use cosmoflow::storage::backends::FileStorage;
-    /// use cosmoflow::storage::SharedStore;
+    /// use cosmoflow::SharedStore;
     ///
     /// let mut storage = FileStorage::new("keys_demo.json")?;
     ///
@@ -784,7 +784,7 @@ impl SharedStore for FileStorage {
     ///
     /// ```rust
     /// use cosmoflow::storage::backends::FileStorage;
-    /// use cosmoflow::storage::SharedStore;
+    /// use cosmoflow::SharedStore;
     ///
     /// let mut storage = FileStorage::new("clear_demo.json")?;
     ///
@@ -810,7 +810,7 @@ impl SharedStore for FileStorage {
     ///
     /// ```rust
     /// # use cosmoflow::storage::backends::FileStorage;
-    /// # use cosmoflow::storage::SharedStore;
+    /// # use cosmoflow::SharedStore;
     /// # let mut storage = FileStorage::new("bulk_reset.json")?;
     /// // Populate with configuration data
     /// storage.set("api_key".to_string(), "secret_key_123")?;
@@ -840,7 +840,7 @@ impl SharedStore for FileStorage {
     ///
     /// ```rust
     /// use cosmoflow::storage::backends::FileStorage;
-    /// use cosmoflow::storage::SharedStore;
+    /// use cosmoflow::SharedStore;
     ///
     /// let mut storage = FileStorage::new("count_demo.json")?;
     /// assert_eq!(storage.len()?, 0);

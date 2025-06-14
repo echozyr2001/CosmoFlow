@@ -1,6 +1,6 @@
 use std::collections::HashMap;
 
-use cosmoflow::shared_store::new_design::SharedStore;
+use cosmoflow::shared_store::SharedStore;
 use serde::{Deserialize, Serialize, de::DeserializeOwned};
 
 /// A simple in-memory storage implementation

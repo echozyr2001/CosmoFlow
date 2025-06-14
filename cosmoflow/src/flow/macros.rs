@@ -206,7 +206,7 @@ mod tests {
     use crate::action::Action;
     use crate::flow::FlowBackend;
     use crate::node::Node;
-    use crate::shared_store::new_design::SharedStore;
+    use crate::shared_store::SharedStore;
     use crate::storage::backends::MemoryStorage;
 
     // Test node implementations

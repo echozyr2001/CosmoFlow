@@ -34,7 +34,7 @@ use cosmoflow::{
     action::Action,
     flow::{FlowBackend, FlowBuilder},
     node::{ExecutionContext, Node, NodeError},
-    shared_store::new_design::SharedStore,
+    shared_store::SharedStore,
 };
 use serde::{Serialize, de::DeserializeOwned};
 use std::collections::HashMap;

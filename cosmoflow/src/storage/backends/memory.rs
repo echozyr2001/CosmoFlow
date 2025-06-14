@@ -1,4 +1,4 @@
-use crate::shared_store::new_design::SharedStore;
+use crate::SharedStore;
 use serde::{Serialize, de::DeserializeOwned};
 use serde_json::Value;
 use std::collections::HashMap;
@@ -58,7 +58,7 @@ use thiserror::Error;
 ///
 /// ## Temporary Data Processing
 /// ```rust
-/// use cosmoflow::storage::{MemoryStorage, SharedStore};
+/// use cosmoflow::{SharedStore, storage::MemoryStorage};
 /// use serde::{Serialize, Deserialize};
 ///
 /// #[derive(Serialize, Deserialize)]
@@ -120,7 +120,7 @@ pub struct MemoryStorage {
 ///
 /// ## Handling Serialization Errors
 /// ```rust
-/// use cosmoflow::storage::{MemoryStorage, MemoryStorageError, SharedStore};
+/// use cosmoflow::{SharedStore, storage::{MemoryStorage, MemoryStorageError}};
 /// use serde::Serialize;
 ///
 /// #[derive(Serialize)]
@@ -143,7 +143,7 @@ pub struct MemoryStorage {
 ///
 /// ## Handling Deserialization Errors
 /// ```rust
-/// use cosmoflow::storage::{MemoryStorage, MemoryStorageError, SharedStore};
+/// use cosmoflow::{SharedStore, storage::{MemoryStorage, MemoryStorageError}};
 /// use serde::{Serialize, Deserialize};
 ///
 /// #[derive(Serialize, Deserialize, Debug)]

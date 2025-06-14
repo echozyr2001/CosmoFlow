@@ -62,7 +62,7 @@ use super::basic::*;
 /// Generic node creation functions for custom storage backends
 ///
 /// This module provides node constructors that work with any storage backend
-/// implementing the [`storage::StorageBackend`] trait. These functions are useful when:
+/// implementing the [`storage::SharedStore`] trait. These functions are useful when:
 /// - Working with custom storage implementations
 /// - Building reusable workflow components
 /// - Deferring storage backend selection to runtime
@@ -70,7 +70,7 @@ use super::basic::*;
 /// All functions return [`Node`] instances that wrap the corresponding
 /// node implementations with full execution capabilities.
 pub mod generic {
-    use crate::shared_store::new_design::SharedStore;
+    use crate::shared_store::SharedStore;
 
     use super::*;
 

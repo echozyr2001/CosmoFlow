@@ -1,4 +1,4 @@
-use crate::shared_store::new_design::SharedStore;
+use crate::shared_store::SharedStore;
 use serde_json::Value;
 
 /// Represents a route from one node to another based on an action
