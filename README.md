@@ -71,7 +71,6 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
         .build()?;
 
     // Execute the workflow
-    let context = ExecutionContext::new(3, Duration::from_secs(30));
     let result = flow.execute(&mut store).await?;
     
     println!("Workflow completed: {:?}", result);
