@@ -687,7 +687,7 @@ where
     /// let mut flow: Flow<MemoryStorage> = Flow::new();
     /// let route = Route {
     ///     action: "next_step".to_string(),
-    ///     target_node_id: "target_node".to_string(),
+    ///     target_node_id: Some("target_node".to_string()),
     ///     condition: None,
     /// };
     /// flow.add_route("source_node".to_string(), route).unwrap();
@@ -963,13 +963,14 @@ where
 
             for route in routes {
                 // Only validate target node existence if it's not a terminal route
-                if let Some(target_node_id) = &route.target_node_id {
-                    if !self.nodes.contains_key(target_node_id) {
-                        return Err(FlowError::InvalidConfiguration(format!(
-                            "Target node '{}' in route not found",
-                            target_node_id
-                        )));
-                    }
+                let Some(target_node_id) = &route.target_node_id else {
+                    continue;
+                };
+
+                if !self.nodes.contains_key(target_node_id) {
+                    return Err(FlowError::InvalidConfiguration(format!(
+                        "Target node '{target_node_id}' in route not found"
+                    )));
                 }
             }
         }
@@ -1159,12 +1160,15 @@ mod tests {
             .node("start", TestNode::new(Action::simple("next")))
             .node("middle", TestNode::new(Action::simple("end")))
             .route("start", "next", "middle")
-            .route("middle", "end", "end")
+            .terminal_route("middle", "end")
             .build();
 
         let mut store = SharedStore::with_storage(MemoryStorage::new());
         let result = flow.execute(&mut store).await;
 
+        if let Err(e) = &result {
+            eprintln!("Flow execution failed: {:?}", e);
+        }
         assert!(result.is_ok());
         let result = result.unwrap();
         assert!(result.success);
@@ -1301,11 +1305,16 @@ mod tests {
             .node("success", TestNode::new(Action::simple("end")))
             .node("failure", TestNode::new(Action::simple("end")))
             .conditional_route("start", "check", "success", RouteCondition::Always)
+            .terminal_route("success", "end")
+            .terminal_route("failure", "end")
             .build();
 
         let mut store = SharedStore::with_storage(MemoryStorage::new());
         let result = flow.execute(&mut store).await;
 
+        if let Err(e) = &result {
+            eprintln!("Conditional route test failed: {:?}", e);
+        }
         assert!(result.is_ok());
         let result = result.unwrap();
         assert_eq!(result.execution_path, vec!["start", "success"]);

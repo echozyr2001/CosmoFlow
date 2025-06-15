@@ -587,7 +587,7 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
         .route("secondary_counter", "max_reached", "coordinator")
         // Analysis flow
         .route("statistics", "report", "report")
-        .terminal_route("report", "complete")  // Explicit termination
+        .terminal_route("report", "complete") // Explicit termination
         .build();
 
     // Disable cycle detection to allow iterative workflows

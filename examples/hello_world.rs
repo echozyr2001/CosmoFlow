@@ -246,7 +246,7 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
         .node("hello", HelloNode::new("Hello from CosmoFlow minimal!"))
         .node("response", ResponseNode)
         .route("hello", "next", "response")
-        .terminal_route("response", "complete")  // Explicit termination
+        .terminal_route("response", "complete") // Explicit termination
         .build();
 
     println!("📋 Flow configuration:");
