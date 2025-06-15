@@ -29,7 +29,7 @@
 //! ```rust
 //! use cosmoflow::builtin::basic::*;
 //! use cosmoflow::shared_store::SharedStore;
-//! use cosmoflow::storage::MemoryStorage;
+//! use cosmoflow::shared_store::backends::MemoryStorage;
 //! use cosmoflow::action::Action;
 //!
 //! // Create basic nodes
@@ -53,7 +53,7 @@
 //!
 //! ```rust
 //! use cosmoflow::builtin::nodes::generic::*;
-//! use cosmoflow::storage::MemoryStorage;
+//! use cosmoflow::shared_store::backends::MemoryStorage;
 //! use cosmoflow::SharedStore;
 //! use serde_json::json;
 //!
@@ -98,7 +98,7 @@
 //! ```rust
 //! use cosmoflow::builtin::basic::*;
 //! use cosmoflow::action::Action;
-//! use cosmoflow::storage::MemoryStorage;
+//! use cosmoflow::shared_store::backends::MemoryStorage;
 //! use cosmoflow::SharedStore;
 //!
 //! // Conditional nodes use closures for conditions

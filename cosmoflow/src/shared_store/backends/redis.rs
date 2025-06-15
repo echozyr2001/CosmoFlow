@@ -16,7 +16,7 @@
 //!
 //! ```rust,no_run
 //! use crate::cosmoflow::SharedStore;
-//! use cosmoflow::storage::backends::RedisStorage;
+//! use cosmoflow::shared_store::backends::RedisStorage;
 //! use serde_json::json;
 //! use serde_json::Value;
 //!
@@ -126,7 +126,7 @@ impl RedisStorage {
     /// # Examples
     ///
     /// ```rust,no_run
-    /// use cosmoflow::storage::backends::RedisStorage;
+    /// use cosmoflow::shared_store::backends::RedisStorage;
     ///
     /// let storage = RedisStorage::new("redis://localhost:6379/")?;
     /// # Ok::<(), Box<dyn std::error::Error>>(())
@@ -157,7 +157,7 @@ impl RedisStorage {
     /// # Examples
     ///
     /// ```rust,no_run
-    /// use cosmoflow::storage::backends::RedisStorage;
+    /// use cosmoflow::shared_store::backends::RedisStorage;
     ///
     /// // Use different prefixes for different environments
     /// let prod_storage = RedisStorage::new_with_prefix(

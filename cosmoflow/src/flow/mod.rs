@@ -21,7 +21,7 @@
 //! # {
 //! use cosmoflow::flow::{Flow, FlowBuilder, FlowBackend};
 //! use cosmoflow::shared_store::SharedStore;
-//! use cosmoflow::storage::backends::MemoryStorage;
+//! use cosmoflow::shared_store::backends::MemoryStorage;
 //!
 //! # async fn example() -> Result<(), Box<dyn std::error::Error>> {
 //! // Create a shared store
@@ -59,7 +59,7 @@
 //!
 //! # async fn example() -> Result<(), FlowError> {
 //! # let mut flow = Flow::new();
-//! # let mut store = cosmoflow::storage::MemoryStorage::new();
+//! # let mut store = cosmoflow::shared_store::backends::MemoryStorage::new();
 //! match flow.execute(&mut store).await {
 //!     Ok(result) => println!("Success: {:?}", result),
 //!     Err(FlowError::NodeNotFound(id)) => eprintln!("Node '{}' not found", id),
@@ -146,7 +146,7 @@ where
 ///
 /// # async fn example() -> Result<(), Box<dyn std::error::Error>> {
 /// # let mut flow = Flow::new();
-/// # let mut store = cosmoflow::storage::MemoryStorage::new();
+/// # let mut store = cosmoflow::shared_store::backends::MemoryStorage::new();
 /// let result: FlowExecutionResult = flow.execute(&mut store).await?;
 ///
 /// if result.success {
@@ -348,7 +348,7 @@ impl<S: SharedStore + 'static> FlowBuilder<S> {
     /// # #[cfg(feature = "storage-memory")]
     /// # {
     /// use cosmoflow::flow::FlowBuilder;
-    /// use cosmoflow::storage::MemoryStorage;
+    /// use cosmoflow::shared_store::backends::MemoryStorage;
     ///
     /// let flow = FlowBuilder::<MemoryStorage>::new()
     ///     .route("node1", "continue", "node2")
@@ -380,7 +380,7 @@ impl<S: SharedStore + 'static> FlowBuilder<S> {
     /// # #[cfg(feature = "storage-memory")]
     /// # {
     /// use cosmoflow::flow::{FlowBuilder, route::RouteCondition};
-    /// use cosmoflow::storage::MemoryStorage;
+    /// use cosmoflow::shared_store::backends::MemoryStorage;
     ///
     /// let flow = FlowBuilder::<MemoryStorage>::new()
     ///     .conditional_terminal_route("node1", "finish", RouteCondition::KeyExists("success".to_string()))
@@ -438,7 +438,7 @@ impl<S: SharedStore + 'static> FlowBuilder<S> {
 /// # #[cfg(feature = "storage-memory")]
 /// # {
 /// use cosmoflow::flow::{Flow, FlowConfig};
-/// use cosmoflow::storage::MemoryStorage;
+/// use cosmoflow::shared_store::backends::MemoryStorage;
 ///
 /// // Create a flow with default configuration
 /// let flow: Flow<MemoryStorage> = Flow::new();
@@ -476,7 +476,7 @@ impl<S: SharedStore> Flow<S> {
     /// # #[cfg(feature = "storage-memory")]
     /// # {
     /// use cosmoflow::flow::Flow;
-    /// use cosmoflow::storage::MemoryStorage;
+    /// use cosmoflow::shared_store::backends::MemoryStorage;
     ///
     /// let flow: Flow<MemoryStorage> = Flow::new();
     /// # }
@@ -504,7 +504,7 @@ impl<S: SharedStore> Flow<S> {
     /// # #[cfg(feature = "storage-memory")]
     /// # {
     /// use cosmoflow::flow::{Flow, FlowConfig};
-    /// use cosmoflow::storage::MemoryStorage;
+    /// use cosmoflow::shared_store::backends::MemoryStorage;
     ///
     /// let config = FlowConfig {
     ///     max_steps: 1000,
@@ -644,7 +644,7 @@ where
     /// # #[cfg(feature = "storage-memory")]
     /// # {
     /// use cosmoflow::flow::{Flow, FlowBackend};
-    /// use cosmoflow::storage::MemoryStorage;
+    /// use cosmoflow::shared_store::backends::MemoryStorage;
     ///
     /// let mut flow: Flow<MemoryStorage> = Flow::new();
     /// // In practice, you would create a proper Node implementation
@@ -678,7 +678,7 @@ where
     /// # {
     /// use cosmoflow::flow::{Flow, FlowBackend};
     /// use cosmoflow::flow::route::Route;
-    /// use cosmoflow::storage::MemoryStorage;
+    /// use cosmoflow::shared_store::backends::MemoryStorage;
     ///
     /// let mut flow: Flow<MemoryStorage> = Flow::new();
     /// let route = Route {
@@ -723,7 +723,7 @@ where
     /// # {
     /// use cosmoflow::flow::{Flow, FlowBackend, FlowConfig};
     /// use cosmoflow::shared_store::SharedStore;
-    /// use cosmoflow::storage::MemoryStorage;
+    /// use cosmoflow::shared_store::backends::MemoryStorage;
     ///
     /// # async {
     /// let mut flow: Flow<MemoryStorage> = Flow::new();
@@ -780,7 +780,7 @@ where
     /// # {
     /// use cosmoflow::flow::{Flow, FlowBackend};
     /// use cosmoflow::shared_store::SharedStore;
-    /// use cosmoflow::storage::MemoryStorage;
+    /// use cosmoflow::shared_store::backends::MemoryStorage;
     ///
     /// # async {
     /// let mut flow: Flow<MemoryStorage> = Flow::new();
@@ -857,7 +857,7 @@ where
     /// # #[cfg(feature = "storage-memory")]
     /// # {
     /// use cosmoflow::flow::{Flow, FlowBackend};
-    /// use cosmoflow::storage::MemoryStorage;
+    /// use cosmoflow::shared_store::backends::MemoryStorage;
     ///
     /// let flow: Flow<MemoryStorage> = Flow::new();
     /// let config = flow.config();
@@ -883,7 +883,7 @@ where
     /// # #[cfg(feature = "storage-memory")]
     /// # {
     /// use cosmoflow::flow::{Flow, FlowConfig, FlowBackend};
-    /// use cosmoflow::storage::MemoryStorage;
+    /// use cosmoflow::shared_store::backends::MemoryStorage;
     ///
     /// let mut flow: Flow<MemoryStorage> = Flow::new();
     /// let new_config = FlowConfig {
@@ -922,7 +922,7 @@ where
     /// # #[cfg(feature = "storage-memory")]
     /// # {
     /// use cosmoflow::flow::{Flow, FlowBackend};
-    /// use cosmoflow::storage::MemoryStorage;
+    /// use cosmoflow::shared_store::backends::MemoryStorage;
     ///
     /// let flow: Flow<MemoryStorage> = Flow::new();
     /// match flow.validate() {
@@ -1091,7 +1091,7 @@ mod tests {
     use super::*;
     use crate::action::Action;
     use crate::node::ExecutionContext;
-    use crate::storage::MemoryStorage;
+    use crate::shared_store::backends::MemoryStorage;
     use async_trait::async_trait;
 
     // Test helper node

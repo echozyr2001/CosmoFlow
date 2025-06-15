@@ -21,6 +21,13 @@
 //! between nodes.
 //!
 
+#[cfg(any(
+    feature = "storage-memory",
+    feature = "storage-file",
+    feature = "storage-redis"
+))]
+pub mod backends;
+
 use serde::{Serialize, de::DeserializeOwned};
 use std::error::Error;
 

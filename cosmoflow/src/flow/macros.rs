@@ -14,7 +14,7 @@
 //!
 //! ```rust,ignore
 //! use cosmoflow::flow::macros::*;
-//! use cosmoflow::storage::backends::MemoryStorage;
+//! use cosmoflow::shared_store::backends::MemoryStorage;
 //!
 //! // Build a workflow with explicit termination
 //! let workflow = flow! {
@@ -102,7 +102,7 @@
 /// ## Structured Workflow with Explicit Terminal Routes
 /// ```rust,ignore
 /// use cosmoflow::flow::macros::flow;
-/// use cosmoflow::storage::backends::MemoryStorage;
+/// use cosmoflow::shared_store::backends::MemoryStorage;
 /// use cosmoflow::action::Action;
 /// use cosmoflow::node::Node;
 ///
@@ -135,7 +135,7 @@
 /// ## Workflow with Error Handling and Multiple Terminal Routes
 /// ```rust,ignore
 /// use cosmoflow::flow::macros::flow;
-/// use cosmoflow::storage::backends::MemoryStorage;
+/// use cosmoflow::shared_store::backends::MemoryStorage;
 /// use cosmoflow::action::Action;
 /// use cosmoflow::node::Node;
 ///
@@ -168,7 +168,7 @@
 /// ## Simple Linear Workflow
 /// ```rust,ignore
 /// use cosmoflow::flow::macros::flow;
-/// use cosmoflow::storage::backends::MemoryStorage;
+/// use cosmoflow::shared_store::backends::MemoryStorage;
 /// use cosmoflow::action::Action;
 /// use cosmoflow::node::Node;
 ///
@@ -277,7 +277,7 @@ mod tests {
     use crate::flow::{FlowBackend, FlowBuilder};
     use crate::node::Node;
     use crate::shared_store::SharedStore;
-    use crate::storage::backends::MemoryStorage;
+    use crate::shared_store::backends::MemoryStorage;
 
     // Test node implementations
     struct TestStartNode;

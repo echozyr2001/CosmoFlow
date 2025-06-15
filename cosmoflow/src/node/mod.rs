@@ -754,7 +754,7 @@ pub trait Node<S: SharedStore>: Send + Sync {
 #[cfg(all(test, feature = "storage-memory"))]
 mod tests {
     use super::*;
-    use crate::storage::MemoryStorage;
+    use crate::shared_store::backends::MemoryStorage;
     use async_trait::async_trait;
     use std::sync::{Arc, Mutex};
 

@@ -78,9 +78,6 @@ pub use flow::{
 pub mod node;
 pub use node::{ExecutionContext, Node, NodeError};
 
-/// Storage backend abstractions and implementations
-pub mod storage;
-
 // ============================================================================
 // FEATURE-GATED EXPORTS
 // ============================================================================
@@ -120,8 +117,11 @@ pub mod prelude {
     pub use crate::builtin::*;
 
     #[cfg(feature = "storage-memory")]
-    pub use crate::storage::MemoryStorage;
+    pub use crate::shared_store::backends::MemoryStorage;
 
     #[cfg(feature = "storage-file")]
-    pub use crate::storage::FileStorage;
+    pub use crate::shared_store::backends::FileStorage;
+
+    #[cfg(feature = "storage-redis")]
+    pub use crate::shared_store::backends::RedisStorage;
 }

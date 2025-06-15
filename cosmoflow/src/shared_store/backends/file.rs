@@ -46,7 +46,7 @@ use thiserror::Error;
 /// ## Basic Usage
 ///
 /// ```rust
-/// use cosmoflow::storage::backends::FileStorage;
+/// use cosmoflow::shared_store::backends::FileStorage;
 /// use cosmoflow::SharedStore;
 /// use serde::{Serialize, Deserialize};
 ///
@@ -74,7 +74,7 @@ use thiserror::Error;
 /// ## Workflow Integration
 ///
 /// ```rust
-/// use cosmoflow::storage::backends::FileStorage;
+/// use cosmoflow::shared_store::backends::FileStorage;
 /// use cosmoflow::SharedStore;
 /// use serde_json::{Value, json};
 ///
@@ -104,7 +104,7 @@ use thiserror::Error;
 /// ## Error Handling
 ///
 /// ```rust
-/// use cosmoflow::storage::backends::{FileStorage, FileStorageError};
+/// use cosmoflow::shared_store::backends::{FileStorage, FileStorageError};
 ///
 /// match FileStorage::new("/invalid/path/storage.json") {
 ///     Ok(storage) => {
@@ -150,7 +150,7 @@ pub struct FileStorage {
 /// ## Error Handling Patterns
 ///
 /// ```rust
-/// use cosmoflow::storage::backends::{FileStorage, FileStorageError};
+/// use cosmoflow::shared_store::backends::{FileStorage, FileStorageError};
 /// use cosmoflow::SharedStore;
 /// use std::io::ErrorKind;
 ///
@@ -198,7 +198,7 @@ pub struct FileStorage {
 /// ## Recovery Strategies
 ///
 /// ```rust
-/// use cosmoflow::storage::backends::{FileStorage, FileStorageError};
+/// use cosmoflow::shared_store::backends::{FileStorage, FileStorageError};
 ///
 /// fn robust_storage_access(file_path: &str) -> Result<FileStorage, FileStorageError> {
 ///     match FileStorage::new(file_path) {
@@ -227,7 +227,7 @@ pub struct FileStorage {
 /// ## Testing Error Conditions
 ///
 /// ```rust
-/// # use cosmoflow::storage::backends::{FileStorage, FileStorageError};
+/// # use cosmoflow::shared_store::backends::{FileStorage, FileStorageError};
 /// # fn example() -> Result<(), Box<dyn std::error::Error>> {
 /// // Test I/O error handling
 /// match FileStorage::new("/root/forbidden.json") {
@@ -288,7 +288,7 @@ impl FileStorage {
     /// ### Basic Usage
     ///
     /// ```rust
-    /// use cosmoflow::storage::backends::FileStorage;
+    /// use cosmoflow::shared_store::backends::FileStorage;
     /// use cosmoflow::SharedStore;
     ///
     /// // Create storage (file created on first write)
@@ -299,7 +299,7 @@ impl FileStorage {
     /// ### With Directory Creation
     ///
     /// ```rust
-    /// use cosmoflow::storage::backends::FileStorage;
+    /// use cosmoflow::shared_store::backends::FileStorage;
     /// use cosmoflow::SharedStore;
     /// use std::fs;
     ///
@@ -312,7 +312,7 @@ impl FileStorage {
     /// ### Loading Existing Data
     ///
     /// ```rust
-    /// use cosmoflow::storage::backends::FileStorage;
+    /// use cosmoflow::shared_store::backends::FileStorage;
     /// use cosmoflow::SharedStore;
     ///
     /// // First run - creates storage and adds data
@@ -334,7 +334,7 @@ impl FileStorage {
     /// ### Error Handling
     ///
     /// ```rust
-    /// use cosmoflow::storage::backends::{FileStorage, FileStorageError};
+    /// use cosmoflow::shared_store::backends::{FileStorage, FileStorageError};
     /// use cosmoflow::SharedStore;
     ///
     /// match FileStorage::new("config.json") {
@@ -356,7 +356,7 @@ impl FileStorage {
     /// ### Robust Initialization
     ///
     /// ```rust
-    /// use cosmoflow::storage::backends::{FileStorage, FileStorageError};
+    /// use cosmoflow::shared_store::backends::{FileStorage, FileStorageError};
     /// use std::path::Path;
     ///
     /// fn create_robust_storage(path: &str) -> Result<FileStorage, FileStorageError> {
@@ -446,7 +446,7 @@ impl SharedStore for FileStorage {
     /// ## Examples
     ///
     /// ```rust
-    /// use cosmoflow::storage::backends::FileStorage;
+    /// use cosmoflow::shared_store::backends::FileStorage;
     /// use cosmoflow::SharedStore;
     /// use serde::{Serialize, Deserialize};
     ///
@@ -507,7 +507,7 @@ impl SharedStore for FileStorage {
     /// ## Examples
     ///
     /// ```rust
-    /// use cosmoflow::storage::backends::FileStorage;
+    /// use cosmoflow::shared_store::backends::FileStorage;
     /// use cosmoflow::SharedStore;
     /// use serde::{Serialize, Deserialize};
     /// use serde_json::{Value, json};
@@ -555,7 +555,7 @@ impl SharedStore for FileStorage {
     /// ## Error Handling
     ///
     /// ```rust
-    /// # use cosmoflow::storage::backends::{FileStorage, FileStorageError};
+    /// # use cosmoflow::shared_store::backends::{FileStorage, FileStorageError};
     /// # use cosmoflow::SharedStore;
     /// # use serde_json::json;
     /// # let mut storage = FileStorage::new("type_test.json")?;
@@ -607,7 +607,7 @@ impl SharedStore for FileStorage {
     /// ## Examples
     ///
     /// ```rust
-    /// use cosmoflow::storage::backends::FileStorage;
+    /// use cosmoflow::shared_store::backends::FileStorage;
     /// use cosmoflow::SharedStore;
     /// use serde::{Serialize, Deserialize};
     ///
@@ -654,7 +654,7 @@ impl SharedStore for FileStorage {
     /// ## Cleanup Operations
     ///
     /// ```rust
-    /// # use cosmoflow::storage::backends::FileStorage;
+    /// # use cosmoflow::shared_store::backends::FileStorage;
     /// # use cosmoflow::SharedStore;
     /// # let mut storage = FileStorage::new("cleanup.json")?;
     /// // Store temporary data
@@ -700,7 +700,7 @@ impl SharedStore for FileStorage {
     /// ## Examples
     ///
     /// ```rust
-    /// use cosmoflow::storage::backends::FileStorage;
+    /// use cosmoflow::shared_store::backends::FileStorage;
     /// use cosmoflow::SharedStore;
     ///
     /// let mut storage = FileStorage::new("existence_check.json")?;
@@ -736,7 +736,7 @@ impl SharedStore for FileStorage {
     /// ## Examples
     ///
     /// ```rust
-    /// use cosmoflow::storage::backends::FileStorage;
+    /// use cosmoflow::shared_store::backends::FileStorage;
     /// use cosmoflow::SharedStore;
     ///
     /// let mut storage = FileStorage::new("keys_demo.json")?;
@@ -783,7 +783,7 @@ impl SharedStore for FileStorage {
     /// ## Examples
     ///
     /// ```rust
-    /// use cosmoflow::storage::backends::FileStorage;
+    /// use cosmoflow::shared_store::backends::FileStorage;
     /// use cosmoflow::SharedStore;
     ///
     /// let mut storage = FileStorage::new("clear_demo.json")?;
@@ -809,7 +809,7 @@ impl SharedStore for FileStorage {
     /// ## Bulk Reset Operations
     ///
     /// ```rust
-    /// # use cosmoflow::storage::backends::FileStorage;
+    /// # use cosmoflow::shared_store::backends::FileStorage;
     /// # use cosmoflow::SharedStore;
     /// # let mut storage = FileStorage::new("bulk_reset.json")?;
     /// // Populate with configuration data
@@ -839,7 +839,7 @@ impl SharedStore for FileStorage {
     /// ## Examples
     ///
     /// ```rust
-    /// use cosmoflow::storage::backends::FileStorage;
+    /// use cosmoflow::shared_store::backends::FileStorage;
     /// use cosmoflow::SharedStore;
     ///
     /// let mut storage = FileStorage::new("count_demo.json")?;

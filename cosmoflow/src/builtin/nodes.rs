@@ -27,7 +27,7 @@
 //!
 //! ```rust
 //! use cosmoflow::builtin::nodes::generic;
-//! use cosmoflow::storage::MemoryStorage;
+//! use cosmoflow::shared_store::backends::MemoryStorage;
 //! use std::time::Duration;
 //! use serde_json::json;
 //!
@@ -42,7 +42,7 @@
 //! ```rust
 //! use cosmoflow::builtin::nodes::generic;
 //! use serde_json::json;
-//! use cosmoflow::storage::MemoryStorage;
+//! use cosmoflow::shared_store::backends::MemoryStorage;
 //!
 //! // Create nodes for workflow
 //! let start_node = generic::log_node::<MemoryStorage>("Workflow started");
@@ -62,7 +62,7 @@ use super::basic::*;
 /// Generic node creation functions for custom storage backends
 ///
 /// This module provides node constructors that work with any storage backend
-/// implementing the [`storage::SharedStore`] trait. These functions are useful when:
+/// implementing the [`shared_store::backends::SharedStore`] trait. These functions are useful when:
 /// - Working with custom storage implementations
 /// - Building reusable workflow components
 /// - Deferring storage backend selection to runtime
@@ -88,7 +88,7 @@ pub mod generic {
     ///
     /// ```rust
     /// use cosmoflow::builtin::nodes::generic;
-    /// use cosmoflow::storage::MemoryStorage;
+    /// use cosmoflow::shared_store::backends::MemoryStorage;
     ///
     /// let checkpoint = generic::log_node::<MemoryStorage>("Reached checkpoint 1");
     /// let status = generic::log_node::<MemoryStorage>("Processing completed");
@@ -112,7 +112,7 @@ pub mod generic {
     ///
     /// ```rust
     /// use cosmoflow::builtin::nodes::generic;
-    /// use cosmoflow::storage::MemoryStorage;
+    /// use cosmoflow::shared_store::backends::MemoryStorage;
     /// use serde_json::json;
     ///
     /// // Store simple values
@@ -144,7 +144,7 @@ pub mod generic {
     ///
     /// ```rust
     /// use cosmoflow::builtin::nodes::generic;
-    /// use cosmoflow::storage::MemoryStorage;
+    /// use cosmoflow::shared_store::backends::MemoryStorage;
     /// use std::time::Duration;
     ///
     /// // Short delays for rate limiting
@@ -176,7 +176,7 @@ pub mod generic {
     ///
     /// ```rust
     /// use cosmoflow::builtin::nodes::generic;
-    /// use cosmoflow::storage::MemoryStorage;
+    /// use cosmoflow::shared_store::backends::MemoryStorage;
     ///
     /// // Copy values between keys
     /// let copy_user_data = generic::get_value_node::<MemoryStorage>(
@@ -225,7 +225,7 @@ pub mod generic {
     ///
     /// ```rust
     /// use cosmoflow::builtin::nodes::generic;
-    /// use cosmoflow::storage::MemoryStorage;
+    /// use cosmoflow::shared_store::backends::MemoryStorage;
     /// use cosmoflow::action::Action;
     /// use cosmoflow::SharedStore;
     ///

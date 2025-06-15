@@ -55,7 +55,7 @@
 //! ```rust
 //! use cosmoflow::builtin::basic::ConditionalNode;
 //! use cosmoflow::action::Action;
-//! use cosmoflow::storage::MemoryStorage;
+//! use cosmoflow::shared_store::backends::MemoryStorage;
 //! use cosmoflow::SharedStore;
 //!
 //! let condition_node = ConditionalNode::<_, MemoryStorage>::new(
@@ -677,7 +677,7 @@ where
 /// use cosmoflow::builtin::basic::ConditionalNode;
 /// use cosmoflow::action::Action;
 /// use serde_json::json;
-/// use cosmoflow::storage::MemoryStorage;
+/// use cosmoflow::shared_store::backends::MemoryStorage;
 /// use cosmoflow::SharedStore;
 ///
 /// let condition_node = ConditionalNode::<_, MemoryStorage>::new(
@@ -699,7 +699,7 @@ where
 /// use cosmoflow::builtin::basic::ConditionalNode;
 /// use cosmoflow::action::Action;
 /// use serde_json::json;
-/// use cosmoflow::storage::MemoryStorage;
+/// use cosmoflow::shared_store::backends::MemoryStorage;
 /// use cosmoflow::SharedStore;
 ///
 /// let complex_condition = ConditionalNode::<_, MemoryStorage>::new(
@@ -755,7 +755,7 @@ where
     /// ```rust
     /// use cosmoflow::builtin::basic::ConditionalNode;
     /// use cosmoflow::action::Action;
-    /// use cosmoflow::storage::MemoryStorage;
+    /// use cosmoflow::shared_store::backends::MemoryStorage;
     /// use cosmoflow::SharedStore;
     ///
     /// let node = ConditionalNode::<_, MemoryStorage>::new(
@@ -1087,7 +1087,7 @@ pub fn get_value<S1: Into<String>, S2: Into<String>>(
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::storage::MemoryStorage;
+    use crate::shared_store::backends::MemoryStorage;
     use serde_json::json;
 
     #[tokio::test]
