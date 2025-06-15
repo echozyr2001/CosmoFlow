@@ -311,12 +311,10 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
 
     // Build the workflow using the new unified API
     // - start_with() creates the starting node and sets it as the entry point
-    // - route() defines transitions between nodes (unused here since we terminate)
-    // - terminal_action() marks "complete" as a workflow-ending action
+    // - terminal_route() defines explicit workflow termination
     let mut flow = FlowBuilder::new()
         .start_with("hello", HelloNode::new("CosmoFlow with Unified Node!"))
-        .route("hello", "complete", "") // Route to nowhere (terminal action)
-        .terminal_action("complete") // Mark "complete" as terminal
+        .terminal_route("hello", "complete") // Explicit termination
         .build();
 
     println!("\n📋 Executing workflow...");
