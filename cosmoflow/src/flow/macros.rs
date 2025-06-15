@@ -7,6 +7,8 @@
 //! ## Key Features
 //!
 //! - **flow!**: Declarative workflow construction with automatic routing
+//! - **Explicit Terminal Routes**: Support for the new terminal route system
+//! - **Type-Safe Workflow Termination**: No hidden terminal actions
 //!
 //! ## Quick Start
 //!
@@ -14,22 +16,32 @@
 //! use cosmoflow::flow::macros::*;
 //! use cosmoflow::storage::backends::MemoryStorage;
 //!
-//! // Build a workflow
+//! // Build a workflow with explicit termination
 //! let workflow = flow! {
 //!     storage: MemoryStorage,
-//!     "start" => StartNode,
-//!     "end" => EndNode,
+//!     start: "start",
+//!     nodes: {
+//!         "start": StartNode,
+//!         "end": EndNode,
+//!     },
+//!     routes: {
+//!         "start" - "next" => "end",
+//!     },
+//!     terminals: {
+//!         "end" - "complete",
+//!     }
 //! };
 //! ```
 
-/// Declarative workflow construction with automatic routing and type inference.
+/// Declarative workflow construction with explicit terminal routes and type inference.
 ///
 /// This macro provides a clean, declarative syntax for building CosmoFlow workflows.
-/// It automatically handles node registration, routing setup, and storage configuration.
+/// It automatically handles node registration, routing setup, and explicit terminal route
+/// configuration with the new type-safe termination system.
 ///
 /// # Syntax
 ///
-/// ## Structured syntax with custom action routing:
+/// ## Structured syntax with explicit terminal routes:
 /// ```rust,ignore
 /// flow! {
 ///     storage: StorageType,
@@ -37,15 +49,20 @@
 ///     nodes: {
 ///         "node_id" : NodeBackend,
 ///         "other_id" : OtherBackend,
+///         "final_id" : FinalBackend,
 ///     },
 ///     routes: {
 ///         "node_id" - "custom_action" => "other_id",
 ///         "other_id" - "next" => "final_id",
+///     },
+///     terminals: {
+///         "final_id" - "complete",
+///         "other_id" - "error",
 ///     }
 /// }
 /// ```
 ///
-/// ## Structured syntax with default "next" action routing:
+/// ## Structured syntax with conditional terminal routes:
 /// ```rust,ignore
 /// flow! {
 ///     storage: StorageType,
@@ -56,17 +73,10 @@
 ///     },
 ///     routes: {
 ///         "node_id" - "next" => "other_id",
+///     },
+///     terminals: {
+///         "other_id" - "complete",
 ///     }
-/// }
-/// ```
-///
-/// ## Simplified syntax for linear workflows:
-/// ```rust,ignore
-/// flow! {
-///     storage: StorageType,
-///     "start" => StartBackend,
-///     "process" => ProcessBackend,
-///     "end" => EndBackend,
 /// }
 /// ```
 ///
@@ -76,10 +86,12 @@
 /// * `start` - The ID of the starting node (for structured syntax)
 /// * `nodes` - Node definitions in the format: `"id" : Backend`
 /// * `routes` - Route definitions in the format: `"from" - "action" => "to"`
+/// * `terminals` - Terminal route definitions in the format: `"from" - "action"`
 ///
 /// # Features
 ///
-/// - **Flexible Syntax**: Supports both structured and simplified syntax
+/// - **Explicit Terminal Routes**: Full support for the new terminal route system
+/// - **Type-Safe Termination**: No hidden terminal actions; all termination is explicit
 /// - **Custom Actions**: Supports custom action names for routing (e.g., "default", "error", "success")
 /// - **Type Safety**: Compile-time storage type checking
 /// - **Clean Syntax**: Declarative workflow definition
@@ -87,7 +99,7 @@
 ///
 /// # Examples
 ///
-/// ## Simplified Linear Workflow
+/// ## Structured Workflow with Explicit Terminal Routes
 /// ```rust,ignore
 /// use cosmoflow::flow::macros::flow;
 /// use cosmoflow::storage::backends::MemoryStorage;
@@ -96,19 +108,31 @@
 ///
 /// // Define some nodes (using standard Node implementations)
 /// struct StartNode;
+/// struct ProcessNode;
 /// struct EndNode;
 ///
 /// // Node implementations would be defined here...
 ///
-/// // Build the workflow - nodes will be auto-routed in sequence using "next" action
+/// // Build the workflow with explicit termination
 /// let workflow = flow! {
 ///     storage: MemoryStorage,
-///     "start" => StartNode,
-///     "end" => EndNode,
+///     start: "start",
+///     nodes: {
+///         "start": StartNode,
+///         "process": ProcessNode,
+///         "end": EndNode,
+///     },
+///     routes: {
+///         "start" - "next" => "process",
+///         "process" - "next" => "end",
+///     },
+///     terminals: {
+///         "end" - "complete",
+///     }
 /// };
 /// ```
 ///
-/// ## Structured Workflow with Custom Action Routing
+/// ## Workflow with Error Handling and Multiple Terminal Routes
 /// ```rust,ignore
 /// use cosmoflow::flow::macros::flow;
 /// use cosmoflow::storage::backends::MemoryStorage;
@@ -126,46 +150,92 @@
 ///     storage: MemoryStorage,
 ///     start: "input",
 ///     nodes: {
-///         "input" : DataProcessor,
-///         "error" : ErrorHandler,
-///         "success" : SuccessHandler,
+///         "input": DataProcessor,
+///         "error": ErrorHandler,
+///         "success": SuccessHandler,
 ///     },
 ///     routes: {
-///         "input" - "default" => "success",
+///         "input" - "success" => "success",
 ///         "input" - "error" => "error",
+///     },
+///     terminals: {
+///         "success" - "complete",
+///         "error" - "failed",
 ///     }
 /// };
 /// ```
 ///
-/// ## Structured Workflow with Default "next" Action Routing
+/// ## Simple Linear Workflow
 /// ```rust,ignore
 /// use cosmoflow::flow::macros::flow;
 /// use cosmoflow::storage::backends::MemoryStorage;
 /// use cosmoflow::action::Action;
 /// use cosmoflow::node::Node;
 ///
-/// // Custom node with complex logic
-/// struct DataProcessor;
-/// struct EndNode;
+/// // Simple workflow with linear progression
+/// struct ProcessingNode;
+/// struct FinalNode;
 ///
 /// // Node implementations would be defined here...
 ///
 /// let workflow = flow! {
 ///     storage: MemoryStorage,
-///     start: "input",
+///     start: "process",
 ///     nodes: {
-///         "input" : DataProcessor,
-///         "output" : EndNode,
+///         "process": ProcessingNode,
+///         "final": FinalNode,
 ///     },
 ///     routes: {
-///         "input" - "next" => "output",
+///         "process" - "next" => "final",
+///     },
+///     terminals: {
+///         "final" - "complete",
 ///     }
 /// };
 /// ```
 #[macro_export]
 macro_rules! flow {
-    // Structured syntax with explicit start, nodes, and routes using custom actions
-    // Syntax: "from" : "action" => "to" (using literal tokens)
+    // Structured syntax with explicit start, nodes, routes, and terminal routes
+    (
+        storage: $storage:ty,
+        start: $start:expr,
+        nodes: {
+            $(
+                $id:literal : $backend:expr
+            ),* $(,)?
+        },
+        routes: {
+            $(
+                $from:literal - $action:literal => $to:literal
+            ),* $(,)?
+        },
+        terminals: {
+            $(
+                $term_from:literal - $term_action:literal
+            ),* $(,)?
+        } $(,)?
+    ) => {
+        {
+            let mut builder = $crate::flow::FlowBuilder::<$storage>::new()
+                .start_node($start);
+
+            $(
+                builder = builder.node($id, $backend);
+            )*
+
+            $(
+                builder = builder.route($from, $action, $to);
+            )*
+
+            $(
+                builder = builder.terminal_route($term_from, $term_action);
+            )*
+
+            builder.build()
+        }
+    };
+
+    // Structured syntax with only routes (no terminal routes - for backward compatibility)
     (
         storage: $storage:ty,
         start: $start:expr,
@@ -204,7 +274,7 @@ pub use flow;
 mod tests {
     use super::*;
     use crate::action::Action;
-    use crate::flow::FlowBackend;
+    use crate::flow::{FlowBackend, FlowBuilder};
     use crate::node::Node;
     use crate::shared_store::SharedStore;
     use crate::storage::backends::MemoryStorage;
@@ -360,17 +430,42 @@ mod tests {
         }
     }
 
-    // Test 8b: Structured syntax with colon syntax for action routing (literal version)
+    // Test: Structured syntax with explicit terminal routes
     #[test]
-    fn test_flow_macro_colon_action_routing() {
+    fn test_flow_macro_with_terminal_routes() {
         let _workflow = flow! {
             storage: MemoryStorage,
             start: "entry",
             nodes: {
-                "entry" : TestCustomNode::new("default"),
-                "process" : TestCustomNode::new("success"),
-                "error" : TestEndNode,
-                "success" : TestEndNode,
+                "entry": TestCustomNode::new("default"),
+                "process": TestCustomNode::new("success"),
+                "error": TestEndNode,
+                "success": TestEndNode,
+            },
+            routes: {
+                "entry" - "default" => "process",
+                "process" - "success" => "success",
+                "entry" - "error" => "error",
+            },
+            terminals: {
+                "success" - "complete",
+                "error" - "failed",
+            }
+        };
+        // Test new terminal routes syntax
+    }
+
+    // Test: Legacy syntax without terminal routes (backward compatibility)
+    #[test]
+    fn test_flow_macro_legacy_syntax() {
+        let _workflow = flow! {
+            storage: MemoryStorage,
+            start: "entry",
+            nodes: {
+                "entry": TestCustomNode::new("default"),
+                "process": TestCustomNode::new("success"),
+                "error": TestEndNode,
+                "success": TestEndNode,
             },
             routes: {
                 "entry" - "default" => "process",
@@ -378,36 +473,101 @@ mod tests {
                 "entry" - "error" => "error",
             }
         };
-        // Test colon syntax with literal tokens
+        // Test legacy syntax for backward compatibility
     }
 
-    // Test 13a: Colon syntax execution test
+    // Test: New macro with terminal routes execution
     #[tokio::test]
-    async fn test_flow_macro_colon_syntax_execution() {
+    async fn test_flow_macro_with_terminal_routes_execution() {
         let mut workflow = flow! {
             storage: MemoryStorage,
             start: "entry",
             nodes: {
-                "entry" : TestCustomNode::new("default"),
-                "process" : TestCustomNode::new("continue"),
-                "end" : TestEndNode,
+                "entry": TestCustomNode::new("default"),
+                "process": TestCustomNode::new("continue"),
+                "end": TestEndNode,
             },
             routes: {
                 "entry" - "default" => "process",
                 "process" - "continue" => "end",
+            },
+            terminals: {
+                "end" - "complete",
             }
         };
 
         let mut store = SharedStore::with_storage(MemoryStorage::new());
         let result = workflow.execute(&mut store).await;
 
-        assert!(result.is_ok());
+        assert!(result.is_ok(), "Flow macro execution should succeed");
         let execution_result = result.unwrap();
         assert!(execution_result.success);
         assert_eq!(execution_result.steps_executed, 3);
         assert_eq!(
             execution_result.execution_path,
             vec!["entry", "process", "end"]
+        );
+    }
+
+    // Test: Legacy execution test (updated to use explicit terminal routes)
+    #[tokio::test]
+    async fn test_flow_macro_legacy_execution() {
+        let mut workflow = FlowBuilder::new()
+            .start_node("entry")
+            .node("entry", TestCustomNode::new("default"))
+            .node("process", TestCustomNode::new("continue"))
+            .node("end", TestEndNode)
+            .route("entry", "default", "process")
+            .route("process", "continue", "end")
+            .terminal_route("end", "complete")
+            .build();
+
+        let mut store = SharedStore::with_storage(MemoryStorage::new());
+        let result = workflow.execute(&mut store).await;
+
+        assert!(result.is_ok(), "Legacy flow execution should succeed");
+        let execution_result = result.unwrap();
+        assert!(execution_result.success);
+        assert_eq!(execution_result.steps_executed, 3);
+        assert_eq!(
+            execution_result.execution_path,
+            vec!["entry", "process", "end"]
+        );
+    }
+
+    // Test: Multiple terminal routes
+    #[tokio::test]
+    async fn test_flow_macro_multiple_terminal_routes() {
+        let mut success_workflow = flow! {
+            storage: MemoryStorage,
+            start: "check",
+            nodes: {
+                "check": TestCustomNode::new("success"),
+                "success_handler": TestEndNode,
+                "error_handler": TestEndNode,
+            },
+            routes: {
+                "check" - "success" => "success_handler",
+                "check" - "error" => "error_handler",
+            },
+            terminals: {
+                "success_handler" - "complete",
+                "error_handler" - "failed",
+            }
+        };
+
+        let mut store = SharedStore::with_storage(MemoryStorage::new());
+        let result = success_workflow.execute(&mut store).await;
+
+        assert!(
+            result.is_ok(),
+            "Multiple terminal routes workflow should succeed"
+        );
+        let execution_result = result.unwrap();
+        assert!(execution_result.success);
+        assert_eq!(
+            execution_result.execution_path,
+            vec!["check", "success_handler"]
         );
     }
 }

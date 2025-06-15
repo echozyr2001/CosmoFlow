@@ -199,8 +199,6 @@ pub struct FlowConfig {
     pub detect_cycles: bool,
     /// Starting node ID
     pub start_node_id: String,
-    /// Actions that terminate the flow
-    pub terminal_actions: Vec<String>,
 }
 
 impl Default for FlowConfig {
@@ -209,11 +207,6 @@ impl Default for FlowConfig {
             max_steps: 1000,
             detect_cycles: true,
             start_node_id: "start".to_string(),
-            terminal_actions: vec![
-                "end".to_string(),
-                "complete".to_string(),
-                "finish".to_string(),
-            ],
         }
     }
 }
@@ -285,12 +278,6 @@ impl<S: StorageBackend + 'static> FlowBuilder<S> {
         self
     }
 
-    /// Add a terminal action
-    pub fn terminal_action(mut self, action: impl Into<String>) -> Self {
-        self.config.terminal_actions.push(action.into());
-        self
-    }
-
     /// Add a node to the flow
     pub fn node<T>(mut self, id: impl Into<String>, node: T) -> Self
     where
@@ -321,18 +308,9 @@ impl<S: StorageBackend + 'static> FlowBuilder<S> {
         let action_str = action.into();
         let to_id = to.into();
 
-        // Check if the action is a terminal action and warn the user
-        if self.config.terminal_actions.contains(&action_str) {
-            eprintln!(
-                "⚠️  WARNING: Route from '{from_id}' uses terminal action '{action_str}' which will terminate the workflow immediately.\n\
-                 💡 The target node '{to_id}' will never be reached because '{action_str}' is configured as a terminal action.\n\
-                 🔧 Consider using a different action name to avoid this issue."
-            );
-        }
-
         let route = Route {
             action: action_str,
-            target_node_id: to_id,
+            target_node_id: Some(to_id),
             condition: None,
         };
 
@@ -352,18 +330,79 @@ impl<S: StorageBackend + 'static> FlowBuilder<S> {
         let action_str = action.into();
         let to_id = to.into();
 
-        // Check if the action is a terminal action and warn the user
-        if self.config.terminal_actions.contains(&action_str) {
-            eprintln!(
-                "⚠️  WARNING: Conditional route from '{from_id}' uses terminal action '{action_str}' which will terminate the workflow immediately.\n\
-                 💡 The target node '{to_id}' will never be reached because '{action_str}' is configured as a terminal action.\n\
-                 🔧 Consider using a different action name to avoid this issue."
-            );
-        }
+        let route = Route {
+            action: action_str,
+            target_node_id: Some(to_id),
+            condition: Some(condition),
+        };
+
+        self.routes.entry(from_id).or_default().push(route);
+        self
+    }
+
+    /// Add an explicit terminal route that does not target any node
+    ///
+    /// This is a convenience method for routes that should terminate the workflow
+    /// without routing to another node. It's semantically clearer than using a
+    /// regular route with a terminal action.
+    ///
+    /// # Examples
+    ///
+    /// ```rust
+    /// # #[cfg(feature = "storage-memory")]
+    /// # {
+    /// use cosmoflow::flow::FlowBuilder;
+    /// use cosmoflow::storage::MemoryStorage;
+    ///
+    /// let flow = FlowBuilder::<MemoryStorage>::new()
+    ///     .route("node1", "continue", "node2")
+    ///     .terminal_route("node2", "complete")  // Explicit termination
+    ///     .build();
+    /// # }
+    /// ```
+    pub fn terminal_route(mut self, from: impl Into<String>, action: impl Into<String>) -> Self {
+        let from_id = from.into();
+        let action_str = action.into();
 
         let route = Route {
             action: action_str,
-            target_node_id: to_id,
+            target_node_id: None, // None indicates termination
+            condition: None,
+        };
+
+        self.routes.entry(from_id).or_default().push(route);
+        self
+    }
+
+    /// Add an explicit conditional terminal route
+    ///
+    /// Like `terminal_route`, but only triggers termination if the condition is met.
+    ///
+    /// # Examples
+    ///
+    /// ```rust
+    /// # #[cfg(feature = "storage-memory")]
+    /// # {
+    /// use cosmoflow::flow::{FlowBuilder, route::RouteCondition};
+    /// use cosmoflow::storage::MemoryStorage;
+    ///
+    /// let flow = FlowBuilder::<MemoryStorage>::new()
+    ///     .conditional_terminal_route("node1", "finish", RouteCondition::KeyExists("success".to_string()))
+    ///     .build();
+    /// # }
+    /// ```
+    pub fn conditional_terminal_route(
+        mut self,
+        from: impl Into<String>,
+        action: impl Into<String>,
+        condition: RouteCondition,
+    ) -> Self {
+        let from_id = from.into();
+        let action_str = action.into();
+
+        let route = Route {
+            action: action_str,
+            target_node_id: None, // None indicates termination
             condition: Some(condition),
         };
 
@@ -413,7 +452,6 @@ impl<S: StorageBackend + 'static> FlowBuilder<S> {
 ///     max_steps: 500,
 ///     detect_cycles: true,
 ///     start_node_id: "start".to_string(),
-///     terminal_actions: vec!["complete".to_string(), "error".to_string()],
 /// };
 /// let flow: Flow<MemoryStorage> = Flow::with_config(config);
 /// # }
@@ -476,7 +514,6 @@ impl<S: StorageBackend> Flow<S> {
     ///     max_steps: 1000,
     ///     detect_cycles: true,
     ///     start_node_id: "start".to_string(),
-    ///     terminal_actions: vec!["complete".to_string(), "abort".to_string()],
     /// };
     ///
     /// let flow: Flow<MemoryStorage> = Flow::with_config(config);
@@ -521,11 +558,6 @@ impl<S: StorageBackend> Flow<S> {
     ) -> Result<Option<String>, FlowError> {
         let action_str = action.to_string();
 
-        // Check if this is a terminal action
-        if self.config.terminal_actions.contains(&action_str) {
-            return Ok(None);
-        }
-
         // Get routes for the current node
         let routes = self.routes.get(current_node_id).ok_or_else(|| {
             FlowError::NoRouteFound(current_node_id.to_string(), action_str.clone())
@@ -538,7 +570,7 @@ impl<S: StorageBackend> Flow<S> {
                 if route.condition.as_ref().is_some_and(|c| !c.evaluate(store)) {
                     continue;
                 }
-                return Ok(Some(route.target_node_id.clone()));
+                return Ok(route.target_node_id.clone());
             }
         }
 
@@ -655,7 +687,7 @@ where
     /// let mut flow: Flow<MemoryStorage> = Flow::new();
     /// let route = Route {
     ///     action: "next_step".to_string(),
-    ///     target_node_id: "target_node".to_string(),
+    ///     target_node_id: Some("target_node".to_string()),
     ///     condition: None,
     /// };
     /// flow.add_route("source_node".to_string(), route).unwrap();
@@ -865,7 +897,6 @@ where
     ///     max_steps: 1000,
     ///     detect_cycles: true,
     ///     start_node_id: "entry_point".to_string(),
-    ///     terminal_actions: vec!["complete".to_string()],
     /// };
     /// flow.set_config(new_config);
     /// # }
@@ -931,10 +962,14 @@ where
             }
 
             for route in routes {
-                if !self.nodes.contains_key(&route.target_node_id) {
+                // Only validate target node existence if it's not a terminal route
+                let Some(target_node_id) = &route.target_node_id else {
+                    continue;
+                };
+
+                if !self.nodes.contains_key(target_node_id) {
                     return Err(FlowError::InvalidConfiguration(format!(
-                        "Target node '{}' in route not found",
-                        route.target_node_id
+                        "Target node '{target_node_id}' in route not found"
                     )));
                 }
             }
@@ -1125,12 +1160,15 @@ mod tests {
             .node("start", TestNode::new(Action::simple("next")))
             .node("middle", TestNode::new(Action::simple("end")))
             .route("start", "next", "middle")
-            .route("middle", "end", "end")
+            .terminal_route("middle", "end")
             .build();
 
         let mut store = SharedStore::with_storage(MemoryStorage::new());
         let result = flow.execute(&mut store).await;
 
+        if let Err(e) = &result {
+            eprintln!("Flow execution failed: {:?}", e);
+        }
         assert!(result.is_ok());
         let result = result.unwrap();
         assert!(result.success);
@@ -1243,16 +1281,10 @@ mod tests {
         let flow: Flow<MemoryStorage> = FlowBuilder::new()
             .start_node("custom_start")
             .max_steps(500)
-            .terminal_action("custom_end")
             .build();
 
         assert_eq!(flow.config().start_node_id, "custom_start");
         assert_eq!(flow.config().max_steps, 500);
-        assert!(
-            flow.config()
-                .terminal_actions
-                .contains(&"custom_end".to_string())
-        );
     }
 
     #[test]
@@ -1261,7 +1293,6 @@ mod tests {
         assert_eq!(config.start_node_id, "start");
         assert_eq!(config.max_steps, 1000);
         assert!(config.detect_cycles);
-        assert!(config.terminal_actions.contains(&"end".to_string()));
     }
 
     #[tokio::test]
@@ -1274,11 +1305,16 @@ mod tests {
             .node("success", TestNode::new(Action::simple("end")))
             .node("failure", TestNode::new(Action::simple("end")))
             .conditional_route("start", "check", "success", RouteCondition::Always)
+            .terminal_route("success", "end")
+            .terminal_route("failure", "end")
             .build();
 
         let mut store = SharedStore::with_storage(MemoryStorage::new());
         let result = flow.execute(&mut store).await;
 
+        if let Err(e) = &result {
+            eprintln!("Conditional route test failed: {:?}", e);
+        }
         assert!(result.is_ok());
         let result = result.unwrap();
         assert_eq!(result.execution_path, vec!["start", "success"]);
@@ -1310,16 +1346,6 @@ mod tests {
         // This should not trigger any warning
         let _flow = FlowBuilder::<MemoryStorage>::new()
             .route("node1", "custom_action", "node2")
-            .build();
-    }
-
-    #[test]
-    fn test_multiple_terminal_actions_warnings() {
-        let _flow = FlowBuilder::<MemoryStorage>::new()
-            .route("node1", "complete", "node2") // Warning 1
-            .route("node2", "finish", "node3") // Warning 2
-            .route("node3", "end", "node4") // Warning 3
-            .route("node4", "custom", "node5") // No warning
             .build();
     }
 }

@@ -246,13 +246,12 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
         .node("hello", HelloNode::new("Hello from CosmoFlow minimal!"))
         .node("response", ResponseNode)
         .route("hello", "next", "response")
-        .terminal_action("complete")
+        .terminal_route("response", "complete") // Explicit termination
         .build();
 
     println!("📋 Flow configuration:");
     println!("  Start node: {}", flow.config().start_node_id);
     println!("  Max steps: {}", flow.config().max_steps);
-    println!("  Terminal actions: {:?}", flow.config().terminal_actions);
     println!();
 
     // Validate the flow

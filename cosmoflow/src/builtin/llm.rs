@@ -949,17 +949,8 @@ impl<S: StorageBackend + Send + Sync> Node<S> for ApiRequestNode {
     async fn exec(
         &mut self,
         prep_result: Self::PrepResult,
-        context: &ExecutionContext,
+        _context: &ExecutionContext,
     ) -> Result<Self::ExecResult, Self::Error> {
-        // Check if this is a retry and log it
-        if context.current_retry > 0 {
-            eprintln!(
-                "ApiRequestNode retry attempt {} for {} messages",
-                context.current_retry,
-                prep_result.len()
-            );
-        }
-
         // Make the actual API request
         self.make_api_request(prep_result).await
     }
