@@ -40,7 +40,7 @@
 //! #[async_trait]
 //! impl<S> Node<S> for MyCustomNode
 //! where
-//!     S: cosmoflow::storage::StorageBackend + Send + Sync
+//!     S: SharedStore + Send + Sync
 //! {
 //!     // Define associated types for type safety
 //!     type PrepResult = String;
@@ -49,7 +49,7 @@
 //!
 //!     async fn prep(
 //!         &mut self,
-//!         _store: &SharedStore<S>,
+//!         _store: &S,
 //!         _context: &ExecutionContext,
 //!     ) -> Result<Self::PrepResult, Self::Error> {
 //!         // Prepare data for execution
@@ -67,7 +67,7 @@
 //!
 //!     async fn post(
 //!         &mut self,
-//!         _store: &mut SharedStore<S>,
+//!         _store: &mut S,
 //!         _prep_result: Self::PrepResult,
 //!         exec_result: Self::ExecResult,
 //!         _context: &ExecutionContext,
@@ -135,7 +135,6 @@ use std::{collections::HashMap, time::Duration};
 
 use crate::action::Action;
 use crate::shared_store::SharedStore;
-use crate::storage::StorageBackend;
 use serde_json::Value;
 use uuid::Uuid;
 
@@ -252,9 +251,9 @@ impl ExecutionContext {
 ///
 /// ## Type Parameters
 ///
-/// * `S` - Storage backend type that implements `StorageBackend`
+/// * `S` - Storage backend type that implements `SharedStore`
 #[async_trait]
-pub trait Node<S: StorageBackend>: Send + Sync {
+pub trait Node<S: SharedStore>: Send + Sync {
     /// Result type from the preparation phase.
     ///
     /// This type must be `Clone` because it's passed to both the exec and post phases.
@@ -305,7 +304,6 @@ pub trait Node<S: StorageBackend>: Send + Sync {
     /// ```rust
     /// # use cosmoflow::node::ExecutionContext;
     /// # use cosmoflow::shared_store::SharedStore;
-    /// # use cosmoflow::storage::StorageBackend;
     /// #
     /// # struct MyPrepData { message: String }
     /// # #[derive(Debug)]
@@ -317,7 +315,7 @@ pub trait Node<S: StorageBackend>: Send + Sync {
     /// #
     /// # struct MyNode;
     /// # impl MyNode {
-    /// async fn prep(&mut self, _store: &SharedStore<impl StorageBackend>, _context: &ExecutionContext)
+    /// async fn prep<S: SharedStore>(&mut self, _store: &S, _context: &ExecutionContext)
     ///     -> Result<MyPrepData, MyError> {
     ///     // Read configuration from storage
     ///     // Validate inputs
@@ -327,7 +325,7 @@ pub trait Node<S: StorageBackend>: Send + Sync {
     /// ```
     async fn prep(
         &mut self,
-        store: &SharedStore<S>,
+        store: &S,
         context: &ExecutionContext,
     ) -> Result<Self::PrepResult, Self::Error>;
 
@@ -439,7 +437,6 @@ pub trait Node<S: StorageBackend>: Send + Sync {
     /// ```rust
     /// # use cosmoflow::node::ExecutionContext;
     /// # use cosmoflow::shared_store::SharedStore;
-    /// # use cosmoflow::storage::StorageBackend;
     /// # use cosmoflow::action::Action;
     /// #
     /// # struct MyPrepData;
@@ -452,7 +449,7 @@ pub trait Node<S: StorageBackend>: Send + Sync {
     /// #
     /// # struct MyNode;
     /// # impl MyNode {
-    /// async fn post(&mut self, _store: &mut SharedStore<impl StorageBackend>, _prep_result: MyPrepData,
+    /// async fn post<S: SharedStore>(&mut self, _store: &mut S, _prep_result: MyPrepData,
     ///               exec_result: String, _context: &ExecutionContext)
     ///     -> Result<Action, MyError> {
     ///     // Store results and determine next action
@@ -466,7 +463,7 @@ pub trait Node<S: StorageBackend>: Send + Sync {
     /// ```
     async fn post(
         &mut self,
-        store: &mut SharedStore<S>,
+        store: &mut S,
         prep_result: Self::PrepResult,
         exec_result: Self::ExecResult,
         context: &ExecutionContext,
@@ -649,8 +646,7 @@ pub trait Node<S: StorageBackend>: Send + Sync {
     ///
     /// ```rust
     /// # use cosmoflow::node::{ExecutionContext, NodeError};
-    /// # use cosmoflow::shared_store::SharedStore;
-    /// # use cosmoflow::storage::StorageBackend;
+    /// # use cosmoflow::SharedStore;
     /// # use cosmoflow::action::Action;
     /// #
     /// # struct MyCustomNode;
@@ -662,7 +658,7 @@ pub trait Node<S: StorageBackend>: Send + Sync {
     /// #     Ok(())
     /// # }
     /// ```
-    async fn run(&mut self, store: &mut SharedStore<S>) -> Result<Action, NodeError> {
+    async fn run(&mut self, store: &mut S) -> Result<Action, NodeError> {
         let context = ExecutionContext::new(self.max_retries(), self.retry_delay());
 
         // Prep phase: read and validate inputs
@@ -758,8 +754,7 @@ pub trait Node<S: StorageBackend>: Send + Sync {
 #[cfg(all(test, feature = "storage-memory"))]
 mod tests {
     use super::*;
-    use crate::shared_store::SharedStore;
-    use crate::storage::MemoryStorage;
+    use crate::shared_store::backends::MemoryStorage;
     use async_trait::async_trait;
     use std::sync::{Arc, Mutex};
 
@@ -825,7 +820,7 @@ mod tests {
 
         async fn prep(
             &mut self,
-            _store: &SharedStore<MemoryStorage>,
+            _store: &MemoryStorage,
             context: &ExecutionContext,
         ) -> Result<Self::PrepResult, Self::Error> {
             if self.should_fail_prep {
@@ -856,7 +851,7 @@ mod tests {
 
         async fn post(
             &mut self,
-            store: &mut SharedStore<MemoryStorage>,
+            store: &mut MemoryStorage,
             _prep_result: Self::PrepResult,
             exec_result: Self::ExecResult,
             _context: &ExecutionContext,
@@ -890,7 +885,7 @@ mod tests {
     #[tokio::test]
     async fn test_node_successful_execution() {
         let mut node = TestNode::new("test_node", "test message", Action::simple("continue"));
-        let mut store = SharedStore::with_storage(MemoryStorage::new());
+        let mut store = MemoryStorage::new();
 
         let result = node.run(&mut store).await;
         assert!(result.is_ok());
@@ -905,7 +900,7 @@ mod tests {
     async fn test_node_prep_failure() {
         let mut node = TestNode::new("test_node", "test message", Action::simple("continue"))
             .with_prep_failure();
-        let mut store = SharedStore::with_storage(MemoryStorage::new());
+        let mut store = MemoryStorage::new();
 
         let result = node.run(&mut store).await;
         assert!(result.is_err());
@@ -920,7 +915,7 @@ mod tests {
         let mut node = TestNode::new("test_node", "test message", Action::simple("continue"))
             .with_exec_failure(1)
             .with_retries(2);
-        let mut store = SharedStore::with_storage(MemoryStorage::new());
+        let mut store = MemoryStorage::new();
 
         let result = node.run(&mut store).await;
         assert!(result.is_ok());
@@ -932,7 +927,7 @@ mod tests {
         let mut node = TestNode::new("test_node", "test message", Action::simple("continue"))
             .with_exec_failure(3)
             .with_retries(2);
-        let mut store = SharedStore::with_storage(MemoryStorage::new());
+        let mut store = MemoryStorage::new();
 
         let result = node.run(&mut store).await;
         assert!(result.is_err());
@@ -946,7 +941,7 @@ mod tests {
     async fn test_node_post_failure() {
         let mut node = TestNode::new("test_node", "test message", Action::simple("continue"))
             .with_post_failure();
-        let mut store = SharedStore::with_storage(MemoryStorage::new());
+        let mut store = MemoryStorage::new();
 
         let result = node.run(&mut store).await;
         assert!(result.is_err());
@@ -991,7 +986,7 @@ mod tests {
 
         async fn prep(
             &mut self,
-            _store: &SharedStore<MemoryStorage>,
+            _store: &MemoryStorage,
             _context: &ExecutionContext,
         ) -> Result<Self::PrepResult, Self::Error> {
             Ok(())
@@ -1007,7 +1002,7 @@ mod tests {
 
         async fn post(
             &mut self,
-            _store: &mut SharedStore<MemoryStorage>,
+            _store: &mut MemoryStorage,
             _prep_result: Self::PrepResult,
             _exec_result: Self::ExecResult,
             _context: &ExecutionContext,
@@ -1028,7 +1023,7 @@ mod tests {
     #[tokio::test]
     async fn test_custom_exec_fallback() {
         let mut node = CustomFallbackNode::new("fallback_success".to_string());
-        let mut store = SharedStore::with_storage(MemoryStorage::new());
+        let mut store = MemoryStorage::new();
 
         let result = node.run(&mut store).await;
         assert!(result.is_ok());

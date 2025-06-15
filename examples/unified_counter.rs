@@ -22,10 +22,7 @@
 use std::collections::HashMap;
 
 use async_trait::async_trait;
-use cosmoflow::{
-    Action, ExecutionContext, FlowBackend, FlowBuilder, Node, NodeError, SharedStore,
-    StorageBackend,
-};
+use cosmoflow::{Action, ExecutionContext, FlowBackend, FlowBuilder, Node, NodeError, SharedStore};
 use serde::{Serialize, de::DeserializeOwned};
 
 /// A simple in-memory storage implementation for demonstration purposes.
@@ -37,7 +34,7 @@ use serde::{Serialize, de::DeserializeOwned};
 /// ## Features:
 /// - JSON serialization/deserialization for type safety
 /// - Error handling for serialization failures
-/// - Complete StorageBackend trait implementation
+/// - Complete SharedStore trait implementation
 /// - Thread-safe operations (when wrapped appropriately)
 #[derive(Debug, Clone)]
 pub struct SimpleStorage {
@@ -63,7 +60,7 @@ impl Default for SimpleStorage {
     }
 }
 
-impl StorageBackend for SimpleStorage {
+impl SharedStore for SimpleStorage {
     type Error = SimpleStorageError;
 
     fn get<T: DeserializeOwned>(&self, key: &str) -> Result<Option<T>, Self::Error> {
@@ -159,7 +156,7 @@ impl CounterNode {
 }
 
 #[async_trait]
-impl Node<SimpleStorage> for CounterNode {
+impl<S: SharedStore + Send + Sync> Node<S> for CounterNode {
     /// Preparation phase returns the current counter value
     type PrepResult = i32;
     /// Execution phase returns the new counter value
@@ -182,7 +179,7 @@ impl Node<SimpleStorage> for CounterNode {
     /// * `Err(NodeError)` - If storage access fails
     async fn prep(
         &mut self,
-        store: &SharedStore<SimpleStorage>,
+        store: &S,
         _context: &ExecutionContext,
     ) -> Result<Self::PrepResult, Self::Error> {
         // Read current counter value from storage, defaulting to 0 if not found
@@ -238,7 +235,7 @@ impl Node<SimpleStorage> for CounterNode {
     /// * `Err(NodeError)` - If storage operations fail
     async fn post(
         &mut self,
-        store: &mut SharedStore<SimpleStorage>,
+        store: &mut S,
         _prep_result: Self::PrepResult,
         exec_result: Self::ExecResult,
         _context: &ExecutionContext,
@@ -284,7 +281,7 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
     println!("========================================");
 
     // Create shared storage with our custom SimpleStorage backend
-    let mut store = SharedStore::with_storage(SimpleStorage::new());
+    let mut store = SimpleStorage::new();
 
     // Build a multi-node workflow with sequential counter processing
     // Each counter node will:

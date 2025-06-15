@@ -1,5 +1,4 @@
 use crate::shared_store::SharedStore;
-use crate::storage::StorageBackend;
 use serde_json::Value;
 
 /// Represents a route from one node to another based on an action
@@ -38,7 +37,7 @@ impl Clone for RouteCondition {
 
 impl RouteCondition {
     /// Evaluate the condition against the shared store
-    pub fn evaluate<S: StorageBackend>(&self, store: &SharedStore<S>) -> bool {
+    pub fn evaluate<S: SharedStore>(&self, store: &S) -> bool {
         match self {
             RouteCondition::Always => true,
             RouteCondition::KeyExists(key) => store.contains_key(key).unwrap_or(false),

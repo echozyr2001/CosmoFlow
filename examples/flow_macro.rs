@@ -40,10 +40,9 @@
 
 use std::collections::HashMap;
 
-use cosmoflow::StorageBackend;
+use cosmoflow::SharedStore;
 use cosmoflow::flow::FlowBackend;
 use cosmoflow::flow::macros::flow;
-use cosmoflow::shared_store::SharedStore;
 use serde::Serialize;
 use serde::de::DeserializeOwned;
 
@@ -51,7 +50,7 @@ use serde::de::DeserializeOwned;
 ///
 /// This storage backend provides JSON-based serialization and maintains
 /// all data in memory using a HashMap. It implements the complete
-/// StorageBackend trait required by CosmoFlow.
+/// SharedStore trait required by CosmoFlow.
 #[derive(Debug, Clone)]
 pub struct SimpleStorage {
     /// Internal data store using JSON values for flexible data types
@@ -73,7 +72,7 @@ impl Default for SimpleStorage {
     }
 }
 
-impl StorageBackend for SimpleStorage {
+impl SharedStore for SimpleStorage {
     type Error = SimpleStorageError;
 
     fn get<T: DeserializeOwned>(&self, key: &str) -> Result<Option<T>, Self::Error> {
@@ -141,16 +140,14 @@ pub enum SimpleStorageError {
 struct DecisionNode;
 
 #[async_trait::async_trait]
-impl<S: cosmoflow::storage::StorageBackend + Send + Sync> cosmoflow::node::Node<S>
-    for DecisionNode
-{
+impl<S: SharedStore + Send + Sync> cosmoflow::node::Node<S> for DecisionNode {
     type PrepResult = ();
     type ExecResult = bool;
     type Error = cosmoflow::node::NodeError;
 
     async fn prep(
         &mut self,
-        _: &cosmoflow::shared_store::SharedStore<S>,
+        _: &S,
         _: &cosmoflow::node::ExecutionContext,
     ) -> Result<(), Self::Error> {
         println!("Decision Node: Preparation phase");
@@ -170,7 +167,7 @@ impl<S: cosmoflow::storage::StorageBackend + Send + Sync> cosmoflow::node::Node<
 
     async fn post(
         &mut self,
-        _: &mut cosmoflow::shared_store::SharedStore<S>,
+        _: &mut S,
         _: (),
         result: bool,
         _: &cosmoflow::node::ExecutionContext,
@@ -192,14 +189,14 @@ impl<S: cosmoflow::storage::StorageBackend + Send + Sync> cosmoflow::node::Node<
 struct SuccessNode;
 
 #[async_trait::async_trait]
-impl<S: cosmoflow::storage::StorageBackend + Send + Sync> cosmoflow::node::Node<S> for SuccessNode {
+impl<S: SharedStore + Send + Sync> cosmoflow::node::Node<S> for SuccessNode {
     type PrepResult = ();
     type ExecResult = ();
     type Error = cosmoflow::node::NodeError;
 
     async fn prep(
         &mut self,
-        _: &cosmoflow::shared_store::SharedStore<S>,
+        _: &S,
         _: &cosmoflow::node::ExecutionContext,
     ) -> Result<(), Self::Error> {
         println!("Success Node: Preparation phase");
@@ -217,7 +214,7 @@ impl<S: cosmoflow::storage::StorageBackend + Send + Sync> cosmoflow::node::Node<
 
     async fn post(
         &mut self,
-        _: &mut cosmoflow::shared_store::SharedStore<S>,
+        _: &mut S,
         _: (),
         _: (),
         _: &cosmoflow::node::ExecutionContext,
@@ -234,14 +231,14 @@ impl<S: cosmoflow::storage::StorageBackend + Send + Sync> cosmoflow::node::Node<
 struct ErrorNode;
 
 #[async_trait::async_trait]
-impl<S: cosmoflow::storage::StorageBackend + Send + Sync> cosmoflow::node::Node<S> for ErrorNode {
+impl<S: SharedStore + Send + Sync> cosmoflow::node::Node<S> for ErrorNode {
     type PrepResult = ();
     type ExecResult = ();
     type Error = cosmoflow::node::NodeError;
 
     async fn prep(
         &mut self,
-        _: &cosmoflow::shared_store::SharedStore<S>,
+        _: &S,
         _: &cosmoflow::node::ExecutionContext,
     ) -> Result<(), Self::Error> {
         println!("Error Node: Preparation phase");
@@ -259,7 +256,7 @@ impl<S: cosmoflow::storage::StorageBackend + Send + Sync> cosmoflow::node::Node<
 
     async fn post(
         &mut self,
-        _: &mut cosmoflow::shared_store::SharedStore<S>,
+        _: &mut S,
         _: (),
         _: (),
         _: &cosmoflow::node::ExecutionContext,
@@ -276,14 +273,14 @@ impl<S: cosmoflow::storage::StorageBackend + Send + Sync> cosmoflow::node::Node<
 struct FinalNode;
 
 #[async_trait::async_trait]
-impl<S: cosmoflow::storage::StorageBackend + Send + Sync> cosmoflow::node::Node<S> for FinalNode {
+impl<S: SharedStore + Send + Sync> cosmoflow::node::Node<S> for FinalNode {
     type PrepResult = ();
     type ExecResult = ();
     type Error = cosmoflow::node::NodeError;
 
     async fn prep(
         &mut self,
-        _: &cosmoflow::shared_store::SharedStore<S>,
+        _: &S,
         _: &cosmoflow::node::ExecutionContext,
     ) -> Result<(), Self::Error> {
         println!("Final Node: Preparation phase");
@@ -301,7 +298,7 @@ impl<S: cosmoflow::storage::StorageBackend + Send + Sync> cosmoflow::node::Node<
 
     async fn post(
         &mut self,
-        _: &mut cosmoflow::shared_store::SharedStore<S>,
+        _: &mut S,
         _: (),
         _: (),
         _: &cosmoflow::node::ExecutionContext,
@@ -331,7 +328,7 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
         }
     };
 
-    let mut store = SharedStore::with_storage(SimpleStorage::new());
+    let mut store = SimpleStorage::new();
     let result = workflow.execute(&mut store).await?;
 
     println!("Workflow execution completed!");

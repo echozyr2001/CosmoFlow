@@ -1,4 +1,4 @@
-use super::StorageBackend;
+use crate::SharedStore;
 use serde::{Serialize, de::DeserializeOwned};
 use serde_json::Value;
 use std::collections::HashMap;
@@ -29,8 +29,8 @@ use thiserror::Error;
 ///
 /// ## Development and Testing
 /// ```rust
-/// use cosmoflow::storage::MemoryStorage;
-/// use cosmoflow::storage::StorageBackend;
+/// use cosmoflow::shared_store::backends::MemoryStorage;
+/// use cosmoflow::SharedStore;
 ///
 /// let mut storage = MemoryStorage::new();
 /// storage.set("test_key".to_string(), "test_value").unwrap();
@@ -41,7 +41,8 @@ use thiserror::Error;
 ///
 /// ## High-Performance Workflows
 /// ```rust
-/// use cosmoflow::storage::{MemoryStorage, StorageBackend};
+/// use cosmoflow::shared_store::backends::MemoryStorage;
+/// use cosmoflow::SharedStore;
 /// use serde_json::json;
 ///
 /// // Pre-allocate for better performance
@@ -57,7 +58,7 @@ use thiserror::Error;
 ///
 /// ## Temporary Data Processing
 /// ```rust
-/// use cosmoflow::storage::{MemoryStorage, StorageBackend};
+/// use cosmoflow::{SharedStore, shared_store::backends::MemoryStorage};
 /// use serde::{Serialize, Deserialize};
 ///
 /// #[derive(Serialize, Deserialize)]
@@ -119,7 +120,7 @@ pub struct MemoryStorage {
 ///
 /// ## Handling Serialization Errors
 /// ```rust
-/// use cosmoflow::storage::{MemoryStorage, MemoryStorageError, StorageBackend};
+/// use cosmoflow::{SharedStore, shared_store::backends::{MemoryStorage, MemoryStorageError}};
 /// use serde::Serialize;
 ///
 /// #[derive(Serialize)]
@@ -142,7 +143,7 @@ pub struct MemoryStorage {
 ///
 /// ## Handling Deserialization Errors
 /// ```rust
-/// use cosmoflow::storage::{MemoryStorage, MemoryStorageError, StorageBackend};
+/// use cosmoflow::{SharedStore, shared_store::backends::{MemoryStorage, MemoryStorageError}};
 /// use serde::{Serialize, Deserialize};
 ///
 /// #[derive(Serialize, Deserialize, Debug)]
@@ -190,7 +191,7 @@ impl MemoryStorage {
     /// # Examples
     ///
     /// ```rust
-    /// use cosmoflow::storage::MemoryStorage;
+    /// use cosmoflow::shared_store::backends::MemoryStorage;
     ///
     /// let storage = MemoryStorage::new();
     /// // Ready to store and retrieve data
@@ -220,7 +221,7 @@ impl MemoryStorage {
     /// # Examples
     ///
     /// ```rust
-    /// use cosmoflow::storage::MemoryStorage;
+    /// use cosmoflow::shared_store::backends::MemoryStorage;
     ///
     /// // Pre-allocate for storing 1000 workflow variables
     /// let storage = MemoryStorage::with_capacity(1000);
@@ -242,7 +243,7 @@ impl MemoryStorage {
     }
 }
 
-impl StorageBackend for MemoryStorage {
+impl SharedStore for MemoryStorage {
     type Error = MemoryStorageError;
 
     fn set<T: Serialize>(&mut self, key: String, value: T) -> Result<(), Self::Error> {

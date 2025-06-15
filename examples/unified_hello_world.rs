@@ -20,6 +20,7 @@
 
 use async_trait::async_trait;
 use cosmoflow::prelude::*;
+use cosmoflow::shared_store::SharedStore;
 use serde::{Serialize, de::DeserializeOwned};
 use std::{collections::HashMap, time::Duration};
 
@@ -32,7 +33,7 @@ use std::{collections::HashMap, time::Duration};
 /// ## Features:
 /// - JSON serialization/deserialization for type safety
 /// - Error handling for serialization failures
-/// - Complete StorageBackend trait implementation
+/// - Complete SharedStore trait implementation
 /// - Thread-safe operations (when wrapped appropriately)
 #[derive(Debug, Clone)]
 pub struct SimpleStorage {
@@ -58,7 +59,7 @@ impl Default for SimpleStorage {
     }
 }
 
-impl StorageBackend for SimpleStorage {
+impl SharedStore for SimpleStorage {
     type Error = SimpleStorageError;
 
     /// Retrieves a value from storage and deserializes it to the requested type.
@@ -137,6 +138,11 @@ impl StorageBackend for SimpleStorage {
     fn len(&self) -> Result<usize, Self::Error> {
         Ok(self.data.len())
     }
+
+    /// Checks if storage is empty.
+    fn is_empty(&self) -> Result<bool, Self::Error> {
+        Ok(self.data.is_empty())
+    }
 }
 
 /// Error types for SimpleStorage operations.
@@ -205,7 +211,7 @@ impl Node<SimpleStorage> for HelloNode {
     /// * `Ok(())` - Always succeeds in this example
     async fn prep(
         &mut self,
-        _store: &SharedStore<SimpleStorage>,
+        _store: &SimpleStorage,
         _context: &ExecutionContext,
     ) -> Result<Self::PrepResult, Self::Error> {
         println!("Preparing HelloNode...");
@@ -253,7 +259,7 @@ impl Node<SimpleStorage> for HelloNode {
     /// * `Err(NodeError)` - If storage operations fail
     async fn post(
         &mut self,
-        store: &mut SharedStore<SimpleStorage>,
+        store: &mut SimpleStorage,
         _prep_result: Self::PrepResult,
         exec_result: Self::ExecResult,
         _context: &ExecutionContext,
@@ -261,8 +267,7 @@ impl Node<SimpleStorage> for HelloNode {
         println!("Post-processing HelloNode: {}", exec_result);
 
         // Store the greeting in shared storage for potential use by other nodes
-        store
-            .set("greeting".to_string(), exec_result)
+        SharedStore::set(store, "greeting".to_string(), exec_result)
             .map_err(|e| NodeError::StorageError(e.to_string()))?;
 
         // Return terminal action to complete the workflow
@@ -307,7 +312,7 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
     println!("========================================");
 
     // Create shared storage with our custom SimpleStorage backend
-    let mut store = SharedStore::with_storage(SimpleStorage::new());
+    let mut store = SimpleStorage::new();
 
     // Build the workflow using the new unified API
     // - start_with() creates the starting node and sets it as the entry point
@@ -336,12 +341,12 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
     println!("------------------");
 
     // Check for the greeting we stored
-    if let Ok(Some(greeting)) = store.get::<String>("greeting") {
+    if let Ok(Some(greeting)) = SharedStore::get::<String>(&store, "greeting") {
         println!("greeting: {greeting}");
     }
 
     // Check for counter (won't exist in this example)
-    if let Ok(Some(counter)) = store.get::<i32>("counter") {
+    if let Ok(Some(counter)) = SharedStore::get::<i32>(&store, "counter") {
         println!("counter: {counter}");
     }
 

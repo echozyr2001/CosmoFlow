@@ -15,8 +15,8 @@
 //! # Usage
 //!
 //! ```rust,no_run
-//! use crate::cosmoflow::StorageBackend;
-//! use cosmoflow::storage::backends::RedisStorage;
+//! use crate::cosmoflow::SharedStore;
+//! use cosmoflow::shared_store::backends::RedisStorage;
 //! use serde_json::json;
 //! use serde_json::Value;
 //!
@@ -44,13 +44,13 @@
 //! - Network connectivity to Redis instance
 //! - Appropriate Redis credentials/permissions
 
-use super::StorageBackend;
+use crate::SharedStore;
 use redis::{Client, Commands, Connection};
 use serde::{Serialize, de::DeserializeOwned};
 use std::sync::{Arc, Mutex};
 use thiserror::Error;
 
-/// Redis-based storage backend that implements the StorageBackend trait.
+/// Redis-based storage backend that implements the SharedStore trait.
 ///
 /// This storage backend provides persistent, distributed storage using Redis as the
 /// underlying data store. All values are automatically serialized to JSON before
@@ -126,7 +126,7 @@ impl RedisStorage {
     /// # Examples
     ///
     /// ```rust,no_run
-    /// use cosmoflow::storage::backends::RedisStorage;
+    /// use cosmoflow::shared_store::backends::RedisStorage;
     ///
     /// let storage = RedisStorage::new("redis://localhost:6379/")?;
     /// # Ok::<(), Box<dyn std::error::Error>>(())
@@ -157,7 +157,7 @@ impl RedisStorage {
     /// # Examples
     ///
     /// ```rust,no_run
-    /// use cosmoflow::storage::backends::RedisStorage;
+    /// use cosmoflow::shared_store::backends::RedisStorage;
     ///
     /// // Use different prefixes for different environments
     /// let prod_storage = RedisStorage::new_with_prefix(
@@ -285,7 +285,7 @@ impl RedisStorage {
     }
 }
 
-impl StorageBackend for RedisStorage {
+impl SharedStore for RedisStorage {
     type Error = RedisStorageError;
 
     /// Stores a value in Redis with the specified key.

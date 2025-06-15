@@ -25,7 +25,7 @@
 //! use std::time::Duration;
 //!
 //! // Create a shared store with memory backend
-//! let mut store = SharedStore::with_storage(MemoryStorage::new());
+//! let mut store = MemoryStorage::new();
 //!
 //! // Create a flow
 //! let mut flow = Flow::new();
@@ -78,11 +78,6 @@ pub use flow::{
 pub mod node;
 pub use node::{ExecutionContext, Node, NodeError};
 
-/// Storage backend abstractions and implementations
-pub mod storage;
-// Re-export storage types for convenience
-pub use storage::StorageBackend;
-
 // ============================================================================
 // FEATURE-GATED EXPORTS
 // ============================================================================
@@ -114,7 +109,7 @@ pub mod prelude {
     // Core types
     pub use crate::{
         Action, ActionCondition, ExecutionContext, Flow, FlowBackend, FlowBuilder, FlowConfig,
-        FlowExecutionResult, Node, NodeError, SharedStore, StorageBackend,
+        FlowExecutionResult, Node, NodeError, SharedStore,
     };
 
     // Feature-gated re-exports
@@ -122,8 +117,11 @@ pub mod prelude {
     pub use crate::builtin::*;
 
     #[cfg(feature = "storage-memory")]
-    pub use crate::storage::MemoryStorage;
+    pub use crate::shared_store::backends::MemoryStorage;
 
     #[cfg(feature = "storage-file")]
-    pub use crate::storage::FileStorage;
+    pub use crate::shared_store::backends::FileStorage;
+
+    #[cfg(feature = "storage-redis")]
+    pub use crate::shared_store::backends::RedisStorage;
 }

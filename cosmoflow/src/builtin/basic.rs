@@ -55,7 +55,8 @@
 //! ```rust
 //! use cosmoflow::builtin::basic::ConditionalNode;
 //! use cosmoflow::action::Action;
-//! use cosmoflow::storage::MemoryStorage;
+//! use cosmoflow::shared_store::backends::MemoryStorage;
+//! use cosmoflow::SharedStore;
 //!
 //! let condition_node = ConditionalNode::<_, MemoryStorage>::new(
 //!     |store| {
@@ -76,7 +77,7 @@ use crate::Node;
 use crate::action::Action;
 use crate::node::{ExecutionContext, NodeError};
 use crate::shared_store::SharedStore;
-use crate::storage::StorageBackend;
+
 use async_trait::async_trait;
 use serde_json::Value;
 
@@ -209,14 +210,14 @@ impl LogNode {
 }
 
 #[async_trait]
-impl<S: StorageBackend + Send + Sync> Node<S> for LogNode {
+impl<S: SharedStore + Send + Sync> Node<S> for LogNode {
     type PrepResult = String;
     type ExecResult = String;
     type Error = NodeError;
 
     async fn prep(
         &mut self,
-        _store: &SharedStore<S>,
+        _store: &S,
         context: &ExecutionContext,
     ) -> Result<Self::PrepResult, Self::Error> {
         Ok(format!(
@@ -236,7 +237,7 @@ impl<S: StorageBackend + Send + Sync> Node<S> for LogNode {
 
     async fn post(
         &mut self,
-        _store: &mut SharedStore<S>,
+        _store: &mut S,
         _prep_result: Self::PrepResult,
         _exec_result: Self::ExecResult,
         _context: &ExecutionContext,
@@ -371,14 +372,14 @@ impl SetValueNode {
 }
 
 #[async_trait]
-impl<S: StorageBackend + Send + Sync> Node<S> for SetValueNode {
+impl<S: SharedStore + Send + Sync> Node<S> for SetValueNode {
     type PrepResult = ();
     type ExecResult = ();
     type Error = NodeError;
 
     async fn prep(
         &mut self,
-        _store: &SharedStore<S>,
+        _store: &S,
         _context: &ExecutionContext,
     ) -> Result<Self::PrepResult, Self::Error> {
         Ok(())
@@ -394,7 +395,7 @@ impl<S: StorageBackend + Send + Sync> Node<S> for SetValueNode {
 
     async fn post(
         &mut self,
-        store: &mut SharedStore<S>,
+        store: &mut S,
         _prep_result: Self::PrepResult,
         _exec_result: Self::ExecResult,
         _context: &ExecutionContext,
@@ -592,7 +593,7 @@ where
 #[async_trait]
 impl<S, F> Node<S> for GetValueNode<F>
 where
-    S: StorageBackend + Send + Sync,
+    S: SharedStore + Send + Sync,
     F: Fn(Option<Value>) -> Value + Send + Sync,
 {
     type PrepResult = Option<Value>;
@@ -601,7 +602,7 @@ where
 
     async fn prep(
         &mut self,
-        store: &SharedStore<S>,
+        store: &S,
         _context: &ExecutionContext,
     ) -> Result<Self::PrepResult, Self::Error> {
         store
@@ -619,7 +620,7 @@ where
 
     async fn post(
         &mut self,
-        store: &mut SharedStore<S>,
+        store: &mut S,
         _prep_result: Self::PrepResult,
         exec_result: Self::ExecResult,
         _context: &ExecutionContext,
@@ -676,7 +677,8 @@ where
 /// use cosmoflow::builtin::basic::ConditionalNode;
 /// use cosmoflow::action::Action;
 /// use serde_json::json;
-/// use cosmoflow::storage::MemoryStorage;
+/// use cosmoflow::shared_store::backends::MemoryStorage;
+/// use cosmoflow::SharedStore;
 ///
 /// let condition_node = ConditionalNode::<_, MemoryStorage>::new(
 ///     |store| {
@@ -697,7 +699,8 @@ where
 /// use cosmoflow::builtin::basic::ConditionalNode;
 /// use cosmoflow::action::Action;
 /// use serde_json::json;
-/// use cosmoflow::storage::MemoryStorage;
+/// use cosmoflow::shared_store::backends::MemoryStorage;
+/// use cosmoflow::SharedStore;
 ///
 /// let complex_condition = ConditionalNode::<_, MemoryStorage>::new(
 ///     |store| {
@@ -721,8 +724,8 @@ where
 /// ```
 pub struct ConditionalNode<F, S>
 where
-    F: Fn(&SharedStore<S>) -> bool + Send + Sync,
-    S: StorageBackend,
+    F: Fn(&S) -> bool + Send + Sync,
+    S: SharedStore,
 {
     condition: F,
     if_true: Action,
@@ -733,8 +736,8 @@ where
 
 impl<F, S> ConditionalNode<F, S>
 where
-    F: Fn(&SharedStore<S>) -> bool + Send + Sync,
-    S: StorageBackend,
+    F: Fn(&S) -> bool + Send + Sync,
+    S: SharedStore,
 {
     /// Create a new conditional node
     ///
@@ -752,7 +755,8 @@ where
     /// ```rust
     /// use cosmoflow::builtin::basic::ConditionalNode;
     /// use cosmoflow::action::Action;
-    /// use cosmoflow::storage::MemoryStorage;
+    /// use cosmoflow::shared_store::backends::MemoryStorage;
+    /// use cosmoflow::SharedStore;
     ///
     /// let node = ConditionalNode::<_, MemoryStorage>::new(
     ///     |store| store.get("ready").ok().flatten().and_then(|v: serde_json::Value| v.as_bool()).unwrap_or(false),
@@ -780,8 +784,8 @@ where
 #[async_trait]
 impl<S, F> Node<S> for ConditionalNode<F, S>
 where
-    S: StorageBackend + Send + Sync,
-    F: Fn(&SharedStore<S>) -> bool + Send + Sync,
+    S: SharedStore + Send + Sync,
+    F: Fn(&S) -> bool + Send + Sync,
 {
     type PrepResult = bool;
     type ExecResult = bool;
@@ -789,7 +793,7 @@ where
 
     async fn prep(
         &mut self,
-        store: &SharedStore<S>,
+        store: &S,
         _context: &ExecutionContext,
     ) -> Result<Self::PrepResult, Self::Error> {
         Ok((self.condition)(store))
@@ -805,7 +809,7 @@ where
 
     async fn post(
         &mut self,
-        _store: &mut SharedStore<S>,
+        _store: &mut S,
         _prep_result: Self::PrepResult,
         exec_result: Self::ExecResult,
         _context: &ExecutionContext,
@@ -939,14 +943,14 @@ impl DelayNode {
 }
 
 #[async_trait]
-impl<S: StorageBackend + Send + Sync> Node<S> for DelayNode {
+impl<S: SharedStore + Send + Sync> Node<S> for DelayNode {
     type PrepResult = ();
     type ExecResult = ();
     type Error = NodeError;
 
     async fn prep(
         &mut self,
-        _store: &SharedStore<S>,
+        _store: &S,
         _context: &ExecutionContext,
     ) -> Result<Self::PrepResult, Self::Error> {
         Ok(())
@@ -963,7 +967,7 @@ impl<S: StorageBackend + Send + Sync> Node<S> for DelayNode {
 
     async fn post(
         &mut self,
-        _store: &mut SharedStore<S>,
+        _store: &mut S,
         _prep_result: Self::PrepResult,
         _exec_result: Self::ExecResult,
         _context: &ExecutionContext,
@@ -1083,14 +1087,13 @@ pub fn get_value<S1: Into<String>, S2: Into<String>>(
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::shared_store::SharedStore;
-    use crate::storage::MemoryStorage;
+    use crate::shared_store::backends::MemoryStorage;
     use serde_json::json;
 
     #[tokio::test]
     async fn test_optimized_log_node() {
         let mut node: LogNode = log("test message");
-        let store: SharedStore<MemoryStorage> = SharedStore::with_storage(MemoryStorage::new());
+        let store = MemoryStorage::new();
         let context = ExecutionContext::new(1, Duration::ZERO);
 
         let prep_result = <LogNode as Node<MemoryStorage>>::prep(&mut node, &store, &context)
@@ -1108,7 +1111,7 @@ mod tests {
     #[tokio::test]
     async fn test_optimized_set_value_node() {
         let mut node: SetValueNode = set_value("test_key", json!("test_value"));
-        let mut store: SharedStore<MemoryStorage> = SharedStore::with_storage(MemoryStorage::new());
+        let mut store = MemoryStorage::new();
         let context = ExecutionContext::new(1, Duration::ZERO);
 
         <SetValueNode as Node<MemoryStorage>>::prep(&mut node, &store, &context)
@@ -1129,7 +1132,7 @@ mod tests {
     #[tokio::test]
     async fn test_optimized_delay_node() {
         let mut node: DelayNode = delay(Duration::from_millis(1));
-        let mut store: SharedStore<MemoryStorage> = SharedStore::with_storage(MemoryStorage::new());
+        let mut store = MemoryStorage::new();
         let context = ExecutionContext::new(1, Duration::ZERO);
 
         let start = std::time::Instant::now();
@@ -1151,7 +1154,7 @@ mod tests {
 
     #[tokio::test]
     async fn test_optimized_get_value_node() {
-        let mut store: SharedStore<MemoryStorage> = SharedStore::with_storage(MemoryStorage::new());
+        let mut store = MemoryStorage::new();
         store
             .set("input_key".to_string(), json!("input_value"))
             .unwrap();

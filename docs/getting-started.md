@@ -22,75 +22,201 @@ use std::time::Duration;
 
 #[tokio::main]
 async fn main() -> Result<(), Box<dyn std::error::Error>> {
-    // Create a shared store with memory backend
-    let mut store = SharedStore::memory();
-
-    // Create a flow builder
-    let flow = Flow::builder("hello-world")
-        .with_store(&mut store)
-        .build()?;
-
-    // Execute the workflow
-    let context = ExecutionContext::new(3, Duration::from_secs(30));
+    // 1. Create a memory-backed storage
+    let mut store = MemoryStorage::new();
+    
+    // 2. Build your workflow
+    let mut flow = Flow::builder()
+        .start_node("greeting")
+        .max_steps(10)
+        .terminal_action("complete")
+        .build();
+    
+    // 3. Add nodes to the workflow
+    flow.add_node("greeting", log("Hello, CosmoFlow!"));
+    flow.add_node("processing", log("Processing data..."));
+    flow.add_node("farewell", log("Workflow complete!"));
+    
+    // 4. Define routing between nodes
+    flow.add_route("greeting", Action::simple("next"), "processing");
+    flow.add_route("processing", Action::simple("done"), "farewell");
+    flow.add_route("farewell", Action::simple("complete"), "");
+    
+    // 5. Execute the workflow
     let result = flow.execute(&mut store).await?;
     
-    println!("Workflow completed: {:?}", result);
+    // 6. Check results
+    println!("Workflow Status: {}", if result.success { "SUCCESS" } else { "FAILED" });
+    println!("Steps Executed: {}", result.steps_executed);
+    println!("Execution Path: {:?}", result.execution_path);
+    
     Ok(())
 }
 ```
 
-## Feature Selection
+## Building Custom Nodes
 
-CosmoFlow offers different feature sets to optimize your build:
-
-- **`minimal`**: Core functionality only (~50KB)
-- **`basic`**: Core + memory storage (~100KB)
-- **`standard`**: Memory storage + built-ins (~200KB) ⭐ *Recommended*
-- **`full`**: All features enabled (~500KB)
-
-See the [Features Guide](features.md) for detailed information.
-
-## Next Steps
-
-- Learn about the [Architecture](architecture.md)
-- Explore the [API Reference](https://docs.rs/cosmoflow)
-- Read about [Contributing](../CONTRIBUTING.md)
-
-## Common Patterns
-
-### Basic Node Creation
+Create powerful custom nodes with the three-phase execution model:
 
 ```rust
 use cosmoflow::prelude::*;
+use serde::{Serialize, Deserialize};
 
-struct MyNode;
+#[derive(Debug, Serialize, Deserialize)]
+struct UserData {
+    name: String,
+    email: String,
+}
+
+struct UserValidationNode {
+    name: String,
+}
 
 #[async_trait::async_trait]
-impl<S> NodeBackend<S> for MyNode 
-where 
-    S: StorageBackend + Send + Sync 
-{
-    async fn execute(
-        &self, 
-        _context: &ExecutionContext, 
-        _store: &mut SharedStore<S>
-    ) -> Result<Action, NodeError> {
-        // Your node logic here
-        Ok(Action::simple("next_node"))
+impl<S: SharedStore> Node<S> for UserValidationNode {
+    type PrepResult = UserData;
+    type ExecResult = bool;
+    type Error = Box<dyn std::error::Error + Send + Sync>;
+
+    fn name(&self) -> &str { &self.name }
+
+    // PREP: Load and validate input data
+    async fn prep(&mut self, store: &S, _ctx: &ExecutionContext) 
+        -> Result<Self::PrepResult, Self::Error> {
+        let user: UserData = store
+            .get("user_data")?
+            .ok_or("Missing user data")?;
+        Ok(user)
+    }
+
+    // EXEC: Perform validation logic
+    async fn exec(&mut self, user: Self::PrepResult, _ctx: &ExecutionContext) 
+        -> Result<Self::ExecResult, Self::Error> {
+        let is_valid = !user.name.is_empty() && user.email.contains("@");
+        Ok(is_valid)
+    }
+
+    // POST: Store results and determine next action
+    async fn post(&mut self, store: &mut S, _user: Self::PrepResult, 
+                  is_valid: Self::ExecResult, _ctx: &ExecutionContext) 
+        -> Result<Action, Self::Error> {
+        store.set("validation_result".to_string(), is_valid)?;
+        
+        if is_valid {
+            Ok(Action::simple("user_valid"))
+        } else {
+            Ok(Action::simple("user_invalid"))
+        }
     }
 }
 ```
 
-### Error Handling
+## Robust Error Handling
+
+CosmoFlow provides comprehensive error handling patterns:
 
 ```rust
-use cosmoflow::{FlowError, Result};
+use cosmoflow::flow::errors::FlowError;
 
-match flow.execute(context).await {
-    Ok(result) => println!("Success: {:?}", result),
-    Err(FlowError::NodeError { node_id, source }) => {
-        eprintln!("Node '{}' failed: {}", node_id, source);
-    },
-    Err(e) => eprintln!("Other error: {}", e),
+match flow.execute(&mut store).await {
+    Ok(result) if result.success => {
+        println!("Workflow completed successfully!");
+        println!("Executed {} steps in {:?}", 
+                 result.steps_executed, result.execution_time);
+    }
+    
+    Ok(result) => {
+        println!("Workflow terminated early at: {}", result.last_node_id);
+        println!("Final action: {:?}", result.final_action);
+    }
+    
+    Err(FlowError::NodeNotFound(node_id)) => {
+        eprintln!("Missing node: '{}'", node_id);
+        // Handle missing node configuration
+    }
+    
+    Err(FlowError::MaxStepsExceeded(limit)) => {
+        eprintln!("Workflow exceeded {} steps - possible infinite loop", limit);
+        // Handle runaway workflows
+    }
+    
+    Err(FlowError::NodeError(msg)) => {
+        eprintln!("Node execution failed: {}", msg);
+        // Handle node-specific errors
+    }
+    
+    Err(e) => {
+        eprintln!("Unexpected error: {}", e);
+        // Handle other errors
+    }
 }
 ```
+
+## Advanced Patterns
+
+### Conditional Routing
+
+```rust
+use cosmoflow::action::{Action, ActionCondition, ComparisonOperator};
+
+// Route based on data values
+let conditional_action = Action::conditional(
+    "check_score".to_string(),
+    ActionCondition::Compare {
+        key: "user_score".to_string(),
+        operator: ComparisonOperator::GreaterThan,
+        value: serde_json::json!(80),
+    },
+    "high_score_path".to_string(),
+    "low_score_path".to_string(),
+);
+```
+
+### Data Communication
+
+```rust
+// Store structured data
+#[derive(Serialize, Deserialize)]
+struct ProcessingConfig {
+    threshold: f64,
+    max_iterations: usize,
+    algorithm: String,
+}
+
+let config = ProcessingConfig {
+    threshold: 0.95,
+    max_iterations: 100,
+    algorithm: "advanced".to_string(),
+};
+
+store.set("config".to_string(), config)?;
+
+// Retrieve with type safety
+let config: ProcessingConfig = store
+    .get("config")?
+    .ok_or("Configuration not found")?;
+```
+
+## Next Steps
+
+Now that you have the basics, explore these advanced topics:
+
+### Architecture Deep Dive
+- **[Architecture Guide](architecture.md)**: Understanding CosmoFlow's design
+- **[Performance Tuning](features.md)**: Optimizing for your use case
+
+### Advanced Features
+- **[Built-in Nodes](https://docs.rs/cosmoflow/latest/cosmoflow/builtin/)**: Ready-to-use components
+- **[Storage Backends](https://docs.rs/cosmoflow/latest/cosmoflow/storage/)**: Persistent data solutions
+- **[LLM Integration](https://docs.rs/cosmoflow/latest/cosmoflow/builtin/llm/)**: AI-powered workflows
+
+### Community Resources
+- **[API Reference](https://docs.rs/cosmoflow)**: Complete API documentation
+- **[Examples Repository](../examples/)**: Real-world implementations
+- **[Contributing Guide](../CONTRIBUTING.md)**: Join the development
+
+## You're Ready!
+
+Congratulations! You now have everything you need to build powerful, type-safe workflows with CosmoFlow. Start with simple nodes and gradually build up to complex, production-ready applications.
+
+Happy workflow building! 🚀
