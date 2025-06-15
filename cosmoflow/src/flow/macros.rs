@@ -522,7 +522,7 @@ mod tests {
             .terminal_route("end", "complete")
             .build();
 
-        let mut store = SharedStore::with_storage(MemoryStorage::new());
+        let mut store = MemoryStorage::new();
         let result = workflow.execute(&mut store).await;
 
         assert!(result.is_ok(), "Legacy flow execution should succeed");
@@ -556,7 +556,7 @@ mod tests {
             }
         };
 
-        let mut store = SharedStore::with_storage(MemoryStorage::new());
+        let mut store = MemoryStorage::new();
         let result = success_workflow.execute(&mut store).await;
 
         assert!(
