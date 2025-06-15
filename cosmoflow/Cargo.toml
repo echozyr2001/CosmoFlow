@@ -1,6 +1,6 @@
 [package]
 name = "cosmoflow"
-version = "0.2.0"
+version = "0.2.1"
 edition = "2024"
 authors = ["echozyr2001 <echo.zyr.2001@gmail.com>"]
 description = "CosmoFlow - A type-safe workflow engine for Rust, inspired by PocketFlow and optimized for LLM applications"
@@ -11,10 +11,10 @@ repository = "https://github.com/echozyr2001/CosmoFlow"
 readme = "README.md"
 
 [dependencies]
-async-openai = { workspace = true }
+async-openai = { workspace = true, optional = true }
 async-trait = { workspace = true }
-futures = { workspace = true }
-rand = { workspace = true }
+futures = { workspace = true, optional = true }
+rand = { workspace = true, optional = true }
 serde = { workspace = true }
 serde_json = { workspace = true }
 thiserror = { workspace = true }
@@ -34,7 +34,7 @@ storage-file = []
 storage-redis = ["redis"]
 storage-full = ["storage-memory", "storage-file", "storage-redis"]
 
-builtin = []
+builtin = ["async-openai", "futures", "rand"]
 
 minimal = []
 basic = ["storage-memory"]
