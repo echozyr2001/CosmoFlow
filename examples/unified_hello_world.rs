@@ -33,7 +33,7 @@ use std::{collections::HashMap, time::Duration};
 /// ## Features:
 /// - JSON serialization/deserialization for type safety
 /// - Error handling for serialization failures
-/// - Complete StorageBackend trait implementation
+/// - Complete SharedStore trait implementation
 /// - Thread-safe operations (when wrapped appropriately)
 #[derive(Debug, Clone)]
 pub struct SimpleStorage {

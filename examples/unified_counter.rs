@@ -34,7 +34,7 @@ use serde::{Serialize, de::DeserializeOwned};
 /// ## Features:
 /// - JSON serialization/deserialization for type safety
 /// - Error handling for serialization failures
-/// - Complete StorageBackend trait implementation
+/// - Complete SharedStore trait implementation
 /// - Thread-safe operations (when wrapped appropriately)
 #[derive(Debug, Clone)]
 pub struct SimpleStorage {

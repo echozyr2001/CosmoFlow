@@ -9,7 +9,7 @@
 //! - **Simple Communication**: Data flows between nodes via the shared store
 //!
 //! ## Core Features Demonstrated
-//! - **Custom Storage Backend**: Complete implementation of StorageBackend trait
+//! - **Custom Storage Backend**: Complete implementation of SharedStore trait
 //! - **Basic Node Implementation**: Simple prep, exec, and post phases
 //! - **Minimal Dependencies**: Uses only CosmoFlow's core without built-ins
 //! - **Data Communication**: Nodes sharing data via the SharedStore

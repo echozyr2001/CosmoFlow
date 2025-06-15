@@ -50,7 +50,7 @@ use serde::de::DeserializeOwned;
 ///
 /// This storage backend provides JSON-based serialization and maintains
 /// all data in memory using a HashMap. It implements the complete
-/// StorageBackend trait required by CosmoFlow.
+/// SharedStore trait required by CosmoFlow.
 #[derive(Debug, Clone)]
 pub struct SimpleStorage {
     /// Internal data store using JSON values for flexible data types
