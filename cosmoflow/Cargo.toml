@@ -1,6 +1,6 @@
 [package]
 name = "cosmoflow"
-version = "0.2.0"
+version = "0.2.1"
 edition = "2024"
 authors = ["echozyr2001 <echo.zyr.2001@gmail.com>"]
 description = "CosmoFlow - A type-safe workflow engine for Rust, inspired by PocketFlow and optimized for LLM applications"
