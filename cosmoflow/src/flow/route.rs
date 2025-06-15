@@ -6,8 +6,8 @@ use serde_json::Value;
 pub struct Route {
     /// The action that triggers this route
     pub action: String,
-    /// The target node ID
-    pub target_node_id: String,
+    /// The target node ID, or None for terminal routes
+    pub target_node_id: Option<String>,
     /// Optional condition that must be met for this route to be taken
     pub condition: Option<RouteCondition>,
 }

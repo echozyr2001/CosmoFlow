@@ -296,7 +296,7 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
         .route("hello", "next", "counter1") // Unused route (legacy)
         .route("counter1", "continue", "counter2") // 3 → counter2
         .route("counter2", "continue", "counter3") // 6 → counter3
-        .terminal_action("complete") // 11 → terminate
+        .terminal_route("counter3", "complete") // 11 → terminate (explicit)
         .max_steps(20) // Safety limit
         .build();
 
