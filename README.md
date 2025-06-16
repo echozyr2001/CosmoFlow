@@ -51,7 +51,7 @@ Make sure you activated the full features of the cosmoflow crate on Cargo.toml:
 
 ```toml
 [dependencies]
-cosmoflow = { version = "0.2.0", features = ["full"] }
+cosmoflow = { version = "0.3.0", features = ["full"] }
 ```
 
 Then, on your main.rs:
