@@ -157,19 +157,21 @@ match flow.execute(&mut store).await {
 ### Conditional Routing
 
 ```rust
-use cosmoflow::action::{Action, ActionCondition, ComparisonOperator};
+use cosmoflow::action::Action;
+use serde_json::json;
+use std::collections::HashMap;
 
-// Route based on data values
-let conditional_action = Action::conditional(
-    "check_score".to_string(),
-    ActionCondition::Compare {
-        key: "user_score".to_string(),
-        operator: ComparisonOperator::GreaterThan,
-        value: serde_json::json!(80),
-    },
-    "high_score_path".to_string(),
-    "low_score_path".to_string(),
-);
+// For conditional routing, use parameterized actions
+let mut params = HashMap::new();
+params.insert("condition_key".to_string(), json!("user_score"));
+params.insert("condition_value".to_string(), json!(80));
+params.insert("true_action".to_string(), json!("high_score_path"));
+params.insert("false_action".to_string(), json!("low_score_path"));
+
+let conditional_action = Action::with_params("conditional", params);
+
+// Note: For complex conditional logic (greater-than, less-than, etc.),
+// use ConditionalNode with closure functions for more flexibility.
 ```
 
 ### Data Communication
