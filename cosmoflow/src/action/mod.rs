@@ -1,16 +1,33 @@
 #![deny(missing_docs)]
-//! # CosmoFlow Action (Simplified)
+//! # CosmoFlow Action (Streamlined)
 //!
-//! This module provides a simplified action system for controlling workflow
-//! execution in the CosmoFlow engine. The design has been streamlined based
-//! on usage analysis to focus on the most commonly used patterns.
+//! This module provides a streamlined action system for controlling workflow
+//! execution in the CosmoFlow engine. The design focuses on essential functionality
+//! while eliminating redundant and rarely-used features.
 //!
-//! ## Key Simplifications
+//! ## Key Features
 //!
-//! - **Reduced Variants**: From 6 to 3 Action variants (Simple, Parameterized, Conditional)
-//! - **Eliminated Complexity**: Removed Prioritized, WithMetadata, and Multiple variants
-//! - **Simplified Conditions**: Replaced complex ActionCondition system with simple key-value comparisons
-//! - **Performance Optimized**: Removed recursive operations and complex nested structures
+//! - **Consistent Naming**: Standardized `is_*` and `has_*` method patterns
+//! - **Convenience Methods**: Reduced boilerplate with `with_param()` for single parameters
+//! - **Essential Functionality**: Focused API with only the most commonly used methods
+//! - **Clean Design**: Removed redundant aliases and utility methods
+//!
+//! ## Core API
+//!
+//! ### Creation Methods
+//! - `simple(name)` - Create simple action
+//! - `with_params(name, params)` - Create action with multiple parameters
+//! - `with_param(name, key, value)` - Convenience method for single parameter
+//!
+//! ### Type Checking
+//! - `is_simple()` - Check if action is simple
+//! - `is_parameterized()` - Check if action has parameters
+//!
+//! ### Parameter Access
+//! - `params()` - Get all parameters
+//! - `get_param(key)` - Get specific parameter value
+//! - `has_param(key)` - Check if specific parameter exists
+//! - `param_count()` - Get number of parameters
 //!
 //! ## Usage Statistics (Based on Analysis)
 //!
@@ -25,31 +42,30 @@
 //! use cosmoflow::action::Action;
 //!
 //! let action = Action::simple("next_step");
+//! assert!(action.is_simple());
 //! ```
 //!
-//! ### Parameterized Actions
+//! ### Single Parameter Actions (Convenience)
+//! ```rust
+//! use cosmoflow::action::Action;
+//! use serde_json::json;
+//!
+//! let action = Action::with_param("retry", "count", json!(3));
+//! assert!(action.has_param("count"));
+//! assert_eq!(action.get_param("count"), Some(&json!(3)));
+//! ```
+//!
+//! ### Multiple Parameter Actions
 //! ```rust
 //! use cosmoflow::action::Action;
 //! use serde_json::json;
 //! use std::collections::HashMap;
 //!
 //! let mut params = HashMap::new();
-//! params.insert("retry_count".to_string(), json!(3));
-//! let action = Action::with_params("retry", params);
-//! ```
-//!
-//! ### Routing Actions (for Conditional Logic)
-//! ```rust
-//! use cosmoflow::action::Action;
-//! use serde_json::json;
-//! use std::collections::HashMap;
-//!
-//! // Use parameterized actions for conditional routing
-//! let mut params = HashMap::new();
-//! params.insert("condition".to_string(), json!("ready"));
-//! params.insert("true_action".to_string(), json!("proceed"));
-//! params.insert("false_action".to_string(), json!("wait"));
-//! let action = Action::with_params("conditional", params);
+//! params.insert("timeout".to_string(), json!(30));
+//! params.insert("retries".to_string(), json!(3));
+//! let action = Action::with_params("process", params);
+//! assert_eq!(action.param_count(), 2);
 //! ```
 //!
 //! For more information, please see the main [`cosmoflow`](https://docs.rs/cosmoflow)
