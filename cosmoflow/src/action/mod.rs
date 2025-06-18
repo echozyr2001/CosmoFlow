@@ -1,5 +1,5 @@
 #![deny(missing_docs)]
-//! # CosmoFlow Action (Streamlined)
+//! # CosmoFlow Action
 //!
 //! This module provides a streamlined action system for controlling workflow
 //! execution in the CosmoFlow engine. The design focuses on essential functionality
@@ -28,12 +28,6 @@
 //! - `get_param(key)` - Get specific parameter value
 //! - `has_param(key)` - Check if specific parameter exists
 //! - `param_count()` - Get number of parameters
-//!
-//! ## Usage Statistics (Based on Analysis)
-//!
-//! - **Simple Actions**: 53.3% of usage - Basic string-based routing
-//! - **Parameterized Actions**: 1.0% of usage - Actions with additional data
-//! - **Conditional Actions**: 0.3% of usage - Dynamic routing based on conditions
 //!
 //! ## Examples
 //!

@@ -15,7 +15,7 @@ use std::fmt;
 /// use serde_json::json;
 /// use std::collections::HashMap;
 ///
-/// // Simple action (most common - 53.3% of usage)
+/// // Simple action
 /// let simple = Action::simple("next_node");
 /// assert_eq!(simple.name(), "next_node");
 /// assert!(simple.is_simple());
@@ -34,10 +34,10 @@ use std::fmt;
 /// ```
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
 pub enum Action {
-    /// Simple string-based action (most common - 53.3% of usage)
+    /// Simple string-based action
     Simple(String),
 
-    /// Action with parameters (essential for data passing - 1.0% of usage)
+    /// Action with parameters
     Parameterized {
         /// The name of the action.
         name: String,
@@ -50,7 +50,7 @@ pub enum Action {
 impl Action {
     /// Create a simple action from a string
     ///
-    /// Simple actions are the most common type (53.3% of usage), consisting of just a name/label
+    /// Simple actions are the most common type, consisting of just a name/label
     /// that identifies the next step in the workflow.
     pub fn simple<S: Into<String>>(name: S) -> Self {
         Action::Simple(name.into())
