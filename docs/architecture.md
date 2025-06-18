@@ -50,19 +50,28 @@ impl NodeBackend for MyNode {
 
 ### Actions
 
-The `cosmoflow::action` module handles flow control between nodes, supporting simple transitions, parameterized routing, and conditional branching.
+The `cosmoflow::action` module handles flow control between nodes, supporting simple transitions and parameterized routing.
 
 **Types of Actions:**
-- **Simple**: Direct transition to named node
-- **Parameterized**: Transition with additional data
-- **Conditional**: Branch based on conditions
-- **Complete**: Terminate workflow
+- **Simple**: Direct transition to named node (most common usage - 53.3%)
+- **Parameterized**: Transition with additional data for complex routing logic
 
 **Example:**
 ```rust
-// Conditional action
-let condition = ActionCondition::KeyExists("user_authenticated".to_string());
-let action = Action::conditional(condition, "authenticated_flow", "login_flow");
+use cosmoflow::action::Action;
+use serde_json::json;
+use std::collections::HashMap;
+
+// Simple action (most common)
+let simple_action = Action::simple("next_node");
+
+// Parameterized action for conditional routing
+let mut params = HashMap::new();
+params.insert("condition_key".to_string(), json!("user_authenticated"));
+params.insert("condition_value".to_string(), json!(true));
+params.insert("true_action".to_string(), json!("authenticated_flow"));
+params.insert("false_action".to_string(), json!("login_flow"));
+let conditional_action = Action::with_params("conditional", params);
 ```
 
 ### Shared Store
