@@ -65,7 +65,7 @@ pub use shared_store::SharedStore;
 
 /// Action definition and condition evaluation
 pub mod action;
-pub use action::{Action, ActionCondition};
+pub use action::Action;
 
 /// Flow definition and execution
 pub mod flow;
@@ -108,8 +108,8 @@ pub type Result<T> = std::result::Result<T, FlowError>;
 pub mod prelude {
     // Core types
     pub use crate::{
-        Action, ActionCondition, ExecutionContext, Flow, FlowBackend, FlowBuilder, FlowConfig,
-        FlowExecutionResult, Node, NodeError, SharedStore,
+        Action, ExecutionContext, Flow, FlowBackend, FlowBuilder, FlowConfig, FlowExecutionResult,
+        Node, NodeError, SharedStore,
     };
 
     // Feature-gated re-exports
