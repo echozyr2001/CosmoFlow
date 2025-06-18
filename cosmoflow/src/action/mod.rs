@@ -38,12 +38,18 @@
 //! let action = Action::with_params("retry", params);
 //! ```
 //!
-//! ### Conditional Actions (Simplified)
+//! ### Routing Actions (for Conditional Logic)
 //! ```rust
 //! use cosmoflow::action::Action;
 //! use serde_json::json;
+//! use std::collections::HashMap;
 //!
-//! let action = Action::conditional("status", json!("ready"), "proceed", "wait");
+//! // Use parameterized actions for conditional routing
+//! let mut params = HashMap::new();
+//! params.insert("condition".to_string(), json!("ready"));
+//! params.insert("true_action".to_string(), json!("proceed"));
+//! params.insert("false_action".to_string(), json!("wait"));
+//! let action = Action::with_params("conditional", params);
 //! ```
 //!
 //! For more information, please see the main [`cosmoflow`](https://docs.rs/cosmoflow)

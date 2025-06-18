@@ -30,12 +30,18 @@ use std::fmt;
 /// assert!(action.has_params());
 /// ```
 ///
-/// ## Creating Conditional Actions (simplified)
+/// ## Creating Actions with Routing Logic
 /// ```
 /// use cosmoflow::action::Action;
 /// use serde_json::json;
+/// use std::collections::HashMap;
 ///
-/// let action = Action::conditional("status", json!("ready"), "proceed", "wait");
+/// // Use parameterized actions for conditional routing
+/// let mut params = HashMap::new();
+/// params.insert("condition".to_string(), json!("ready"));
+/// params.insert("true_action".to_string(), json!("proceed"));
+/// params.insert("false_action".to_string(), json!("wait"));
+/// let action = Action::with_params("conditional", params);
 /// ```
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
 pub enum Action {
@@ -110,20 +116,22 @@ impl Action {
 
     /// Get the primary name/identifier of the action
     ///
-    /// Returns the string identifier for this action. For conditional actions,
-    /// this returns a descriptive string.
+    /// Returns the string identifier for this action.
     ///
     /// # Examples
     ///
     /// ```rust
     /// use cosmoflow::action::Action;
     /// use serde_json::json;
+    /// use std::collections::HashMap;
     ///
     /// let simple = Action::simple("test");
     /// assert_eq!(simple.name(), "test");
     ///
-    /// let conditional = Action::conditional("ready", json!(true), "go", "wait");
-    /// assert_eq!(conditional.name(), "conditional(ready)");
+    /// let mut params = HashMap::new();
+    /// params.insert("condition".to_string(), json!("ready"));
+    /// let conditional = Action::with_params("conditional", params);
+    /// assert_eq!(conditional.name(), "conditional");
     /// ```
     pub fn name(&self) -> String {
         match self {
