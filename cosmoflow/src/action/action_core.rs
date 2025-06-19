@@ -10,45 +10,34 @@ use std::fmt;
 ///
 /// # Examples
 ///
-/// ## Creating Simple Actions (53.3% of usage)
-/// ```
-/// use cosmoflow::action::Action;
-///
-/// let action = Action::simple("next_node");
-/// assert_eq!(action.name(), "next_node");
-/// ```
-///
-/// ## Creating Parameterized Actions (1.0% of usage)
 /// ```
 /// use cosmoflow::action::Action;
 /// use serde_json::json;
 /// use std::collections::HashMap;
 ///
-/// let mut params = HashMap::new();
-/// params.insert("key".to_string(), json!("value"));
-/// let action = Action::with_params("process", params);
-/// assert!(action.has_params());
-/// ```
+/// // Simple action
+/// let simple = Action::simple("next_node");
+/// assert_eq!(simple.name(), "next_node");
+/// assert!(simple.is_simple());
 ///
-/// ## Creating Actions with Routing Logic
-/// ```
-/// use cosmoflow::action::Action;
-/// use serde_json::json;
-/// use std::collections::HashMap;
+/// // Single parameter action (convenience method)
+/// let single_param = Action::with_param("retry", "count", json!(3));
+/// assert!(single_param.is_parameterized());
+/// assert_eq!(single_param.get_param("count"), Some(&json!(3)));
 ///
-/// // Use parameterized actions for conditional routing
+/// // Multiple parameters action
 /// let mut params = HashMap::new();
-/// params.insert("condition".to_string(), json!("ready"));
-/// params.insert("true_action".to_string(), json!("proceed"));
-/// params.insert("false_action".to_string(), json!("wait"));
-/// let action = Action::with_params("conditional", params);
+/// params.insert("timeout".to_string(), json!(30));
+/// params.insert("retries".to_string(), json!(3));
+/// let multi_param = Action::with_params("process", params);
+/// assert_eq!(multi_param.param_count(), 2);
 /// ```
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
 pub enum Action {
-    /// Simple string-based action (most common - 53.3% of usage)
+    /// Simple string-based action
     Simple(String),
 
-    /// Action with parameters (essential for data passing - 1.0% of usage)
+    /// Action with parameters
     Parameterized {
         /// The name of the action.
         name: String,
@@ -61,22 +50,8 @@ pub enum Action {
 impl Action {
     /// Create a simple action from a string
     ///
-    /// Simple actions are the most common type (53.3% of usage), consisting of just a name/label
+    /// Simple actions are the most common type, consisting of just a name/label
     /// that identifies the next step in the workflow.
-    ///
-    /// # Arguments
-    ///
-    /// * `name` - The action name/label
-    ///
-    /// # Examples
-    ///
-    /// ```rust
-    /// use cosmoflow::action::Action;
-    ///
-    /// let action = Action::simple("next_step");
-    /// assert_eq!(action.name(), "next_step");
-    /// assert!(!action.has_params());
-    /// ```
     pub fn simple<S: Into<String>>(name: S) -> Self {
         Action::Simple(name.into())
     }
@@ -84,29 +59,7 @@ impl Action {
     /// Create a parameterized action with additional data
     ///
     /// Parameterized actions carry additional data that can be used by the
-    /// target node or routing logic. This is useful for passing configuration,
-    /// retry counts, or other contextual information.
-    ///
-    /// # Arguments
-    ///
-    /// * `name` - The action name/label
-    /// * `params` - Key-value parameters to include with the action
-    ///
-    /// # Examples
-    ///
-    /// ```rust
-    /// use cosmoflow::action::Action;
-    /// use serde_json::json;
-    /// use std::collections::HashMap;
-    ///
-    /// let mut params = HashMap::new();
-    /// params.insert("retry_count".to_string(), json!(3));
-    /// params.insert("timeout".to_string(), json!(30));
-    ///
-    /// let action = Action::with_params("retry", params);
-    /// assert_eq!(action.name(), "retry");
-    /// assert!(action.has_params());
-    /// ```
+    /// target node or routing logic.
     pub fn with_params<S: Into<String>>(name: S, params: HashMap<String, Value>) -> Self {
         Action::Parameterized {
             name: name.into(),
@@ -114,25 +67,20 @@ impl Action {
         }
     }
 
+    /// Create a parameterized action with a single parameter (convenience method)
+    ///
+    /// This is a convenience method for the common case of creating an action
+    /// with just one parameter, reducing boilerplate code.
+    pub fn with_param<S: Into<String>, K: Into<String>>(name: S, key: K, value: Value) -> Self {
+        let mut params = HashMap::new();
+        params.insert(key.into(), value);
+        Action::Parameterized {
+            name: name.into(),
+            params,
+        }
+    }
+
     /// Get the primary name/identifier of the action
-    ///
-    /// Returns the string identifier for this action.
-    ///
-    /// # Examples
-    ///
-    /// ```rust
-    /// use cosmoflow::action::Action;
-    /// use serde_json::json;
-    /// use std::collections::HashMap;
-    ///
-    /// let simple = Action::simple("test");
-    /// assert_eq!(simple.name(), "test");
-    ///
-    /// let mut params = HashMap::new();
-    /// params.insert("condition".to_string(), json!("ready"));
-    /// let conditional = Action::with_params("conditional", params);
-    /// assert_eq!(conditional.name(), "conditional");
-    /// ```
     pub fn name(&self) -> String {
         match self {
             Action::Simple(name) => name.clone(),
@@ -144,21 +92,6 @@ impl Action {
     ///
     /// Returns a reference to the parameters map if this action carries parameters,
     /// or None if it doesn't.
-    ///
-    /// # Examples
-    ///
-    /// ```rust
-    /// use cosmoflow::action::Action;
-    /// use serde_json::json;
-    /// use std::collections::HashMap;
-    ///
-    /// let mut params = HashMap::new();
-    /// params.insert("key".to_string(), json!("value"));
-    /// let action = Action::with_params("test", params);
-    ///
-    /// assert!(action.params().is_some());
-    /// assert_eq!(action.params().unwrap().get("key").unwrap(), &json!("value"));
-    /// ```
     pub fn params(&self) -> Option<&HashMap<String, Value>> {
         match self {
             Action::Parameterized { params, .. } => Some(params),
@@ -166,45 +99,41 @@ impl Action {
         }
     }
 
+    /// Get a specific parameter value by key
+    ///
+    /// Returns a reference to the parameter value if it exists, or None if
+    /// the action doesn't have parameters or the key doesn't exist.
+    pub fn get_param(&self, key: &str) -> Option<&Value> {
+        self.params()?.get(key)
+    }
+
     /// Check if this is a simple action
     ///
-    /// Returns true if this is a simple string-based action without any
-    /// additional features like parameters or conditions.
-    ///
-    /// # Examples
-    ///
-    /// ```rust
-    /// use cosmoflow::action::Action;
-    ///
-    /// let simple = Action::simple("test");
-    /// assert!(simple.is_simple());
-    ///
-    /// let complex = Action::with_params("test", std::collections::HashMap::new());
-    /// assert!(!complex.is_simple());
-    /// ```
+    /// Returns true if this is a simple string-based action without any parameters.
     pub fn is_simple(&self) -> bool {
         matches!(self, Action::Simple(_))
     }
 
-    /// Check if this action has parameters
+    /// Check if this is a parameterized action
     ///
     /// Returns true if this action carries parameters (key-value data).
+    /// This is the inverse of `is_simple()`.
+    pub fn is_parameterized(&self) -> bool {
+        matches!(self, Action::Parameterized { .. })
+    }
+
+    /// Check if this action has a specific parameter
     ///
-    /// # Examples
+    /// Returns true if this action has parameters and contains the specified key.
+    pub fn has_param(&self, key: &str) -> bool {
+        self.params().is_some_and(|params| params.contains_key(key))
+    }
+
+    /// Get the number of parameters
     ///
-    /// ```rust
-    /// use cosmoflow::action::Action;
-    /// use std::collections::HashMap;
-    ///
-    /// let simple = Action::simple("test");
-    /// assert!(!simple.has_params());
-    ///
-    /// let params = HashMap::new();
-    /// let parameterized = Action::with_params("test", params);
-    /// assert!(parameterized.has_params());
-    /// ```
-    pub fn has_params(&self) -> bool {
-        self.params().is_some()
+    /// Returns the number of parameters this action carries, or 0 if it's a simple action.
+    pub fn param_count(&self) -> usize {
+        self.params().map_or(0, |params| params.len())
     }
 }
 
