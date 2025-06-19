@@ -24,7 +24,32 @@ cd examples && cargo run --bin custom_node --features minimal
 
 ---
 
-### 3. Flow Macro (`flow_macro.rs`)
+### 4. LLM Request (`llm_request.rs`)
+
+A real-world example demonstrating LLM API integration with environment-based configuration and comprehensive error handling.
+
+```bash
+# Set environment variables first
+export LLM_API_KEY="your_api_key"
+export LLM_BASE_URL="https://api.openai.com/v1"
+export LLM_MODEL="gpt-3.5-turbo"
+
+# Run the example
+cargo run --bin llm_request --features basic
+```
+
+**Features:**
+- Real HTTP API calls to LLM providers (OpenAI, Anthropic, Local APIs)
+- Environment variable configuration
+- Lightweight HTTP client without heavy SDK dependencies
+- Comprehensive error handling and retry logic
+- Copyable patterns for production use
+
+See `lightweight_llm_README.md` for detailed setup instructions.
+
+---
+
+### 5. Flow Macro (`flow_macro.rs`)
 
 Demonstrates the powerful `flow!` macro for declarative workflow construction with custom action routing.
 

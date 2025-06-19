@@ -5,13 +5,14 @@ edition = "2024"
 publish = false
 
 [dependencies]
-cosmoflow = { path = "../cosmoflow" }
+cosmoflow = { path = "../cosmoflow", features = ["storage-memory"] }
 tokio = { version = "1.0", features = ["full"] }
 async-trait = "0.1"
 serde = { version = "1.0", features = ["derive"] }
 serde_json = "1.0"
 rand = "0.8"
 thiserror = "2.0"
+reqwest = { version = "0.12", features = ["json"] }
 
 [[bin]]
 name = "hello_world"
@@ -36,6 +37,10 @@ path = "flow_macro.rs"
 [[bin]]
 name = "unified_shared_store"
 path = "unified_shared_store.rs"
+
+[[bin]]
+name = "llm_request"
+path = "llm_request.rs"
 
 [features]
 default = []

@@ -5,10 +5,7 @@ resolver = "2"
 
 [workspace.dependencies]
 # Shared dependencies for workspace members
-async-openai = "0.28"
 async-trait = "0.1"
-futures = "0.3"
-rand = "0.8"
 redis = "0.31"
 tempfile = "3.0"
 thiserror = "2.0"
