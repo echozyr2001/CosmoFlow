@@ -235,7 +235,7 @@ impl<S: SharedStore + Send + Sync> Node<S> for DataSetupNode {
 
         // Load LLM configuration from environment variables
         let config = LlmConfig::from_env()
-            .map_err(|e| NodeError::ExecutionError(format!("Failed to load LLM config: {}", e)))?;
+            .map_err(|e| NodeError::ExecutionError(format!("Failed to load LLM config: {e}")))?;
 
         store.set("llm_config".to_string(), config).unwrap();
 
@@ -303,7 +303,7 @@ impl<S: SharedStore + Send + Sync> Node<S> for LlmNode {
         let response = client
             .post("chat/completions", &request)
             .await
-            .map_err(|e| NodeError::ExecutionError(format!("LLM API request failed: {}", e)))?;
+            .map_err(|e| NodeError::ExecutionError(format!("LLM API request failed: {e}")))?;
 
         // Extract response content
         let content = extract_content(&response).ok_or_else(|| {
@@ -404,7 +404,7 @@ async fn main() -> Result<(), FlowError> {
 
     // Check environment variables early
     if let Err(e) = LlmConfig::from_env() {
-        eprintln!("❌ Configuration Error: {}", e);
+        eprintln!("❌ Configuration Error: {e}");
         eprintln!();
         eprintln!("Please set the following environment variables:");
         eprintln!("  LLM_API_KEY=your_api_key");

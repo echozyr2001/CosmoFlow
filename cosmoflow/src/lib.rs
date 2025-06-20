@@ -23,21 +23,25 @@
 //! # async fn example() -> Result<(), Box<dyn std::error::Error>> {
 //! use cosmoflow::prelude::*;
 //! use cosmoflow::flow::FlowBackend;
+//! use async_trait::async_trait;
 //!
 //! // Create a shared store with memory backend
 //! let mut store = MemoryStorage::new();
 //!
 //! // Define a simple node
 //! struct MyNode;
-//! impl Node for MyNode {
+//! #[async_trait]
+//! impl<S: SharedStore> Node<S> for MyNode {
+//!     type PrepResult = String;
+//!     type ExecResult = ();
 //!     type Error = NodeError;
-//!     async fn prep(&mut self, _store: &mut impl SharedStore, _context: &ExecutionContext) -> Result<String, Self::Error> {
+//!     async fn prep(&mut self, _store: &S, _context: &ExecutionContext) -> Result<String, Self::Error> {
 //!         Ok("prepared".to_string())
 //!     }
-//!     async fn exec(&mut self, _store: &mut impl SharedStore, _prep_result: String, _context: &ExecutionContext) -> Result<(), Self::Error> {
+//!     async fn exec(&mut self, _prep_result: String, _context: &ExecutionContext) -> Result<(), Self::Error> {
 //!         Ok(())
 //!     }
-//!     async fn post(&mut self, _store: &mut impl SharedStore, _prep_result: String, _exec_result: (), _context: &ExecutionContext) -> Result<Action, Self::Error> {
+//!     async fn post(&mut self, _store: &mut S, _prep_result: String, _exec_result: (), _context: &ExecutionContext) -> Result<Action, Self::Error> {
 //!         Ok(Action::simple("complete"))
 //!     }
 //! }
