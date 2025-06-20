@@ -1,16 +1,14 @@
 # CosmoFlow
 
-A runtime for writing reliable, asynchronous, and scalable workflow applications with
-the Rust programming language. It is:
+A lightweight, type-safe workflow engine for Rust, optimized for LLM applications.
 
-* **Fast**: CosmoFlow's zero-cost abstractions give you bare-metal
-  performance for workflow orchestration.
+CosmoFlow provides a minimal yet powerful framework for building complex workflows
+with clean abstractions and excellent performance. It is:
 
-* **Reliable**: CosmoFlow leverages Rust's ownership, type system, and
-  concurrency model to reduce bugs and ensure thread safety.
-
-* **Scalable**: CosmoFlow has a minimal footprint, and handles backpressure
-  and cancellation naturally.
+* **Lightweight**: Minimal dependencies with optional features
+* **Type-Safe**: Full Rust type safety with async/await support  
+* **LLM-Optimized**: Built-in patterns for AI/LLM workflows
+* **Modular**: Enable only what you need through feature flags
 
 [![Crates.io][crates-badge]][crates-url]
 [![MIT licensed][mit-badge]][mit-url]
@@ -24,7 +22,8 @@ the Rust programming language. It is:
 [docs-url]: https://docs.rs/cosmoflow
 
 [Guides](./docs/getting-started.md) |
-[API Docs](https://docs.rs/cosmoflow/latest/cosmoflow)
+[API Docs](https://docs.rs/cosmoflow/latest/cosmoflow) |
+[Examples](./examples/)
 
 ## Overview
 
@@ -33,46 +32,43 @@ design philosophy of [PocketFlow](https://github.com/The-Pocket/PocketFlow) to
 the Rust ecosystem. Built from the ground up for **LLM applications**, **high-performance scenarios**, 
 and **production reliability**. it provides a few major components:
 
-* A multithreaded, async-based workflow [scheduler].
-* A pluggable storage system backed by memory, files, or custom backends.
+* A lightweight, async-based workflow [scheduler].
+* Pluggable storage system (memory, file, Redis).
 * Asynchronous [node execution][nodes] with retry logic and error handling.
 
 These components provide the runtime infrastructure necessary for building
 complex workflow applications.
 
-[nodes]: https://docs.rs/cosmoflow/latest/cosmoflow/nodes/index.html
-[scheduler]: https://docs.rs/cosmoflow/latest/cosmoflow/flows/index.html
+[nodes]: https://docs.rs/cosmoflow/latest/cosmoflow/node/index.html
+[scheduler]: https://docs.rs/cosmoflow/latest/cosmoflow/flow/index.html
 
-## Example
+## Quick Start
 
-A basic workflow with CosmoFlow.
-
-Make sure you activated the full features of the cosmoflow crate on Cargo.toml:
+Add to your `Cargo.toml`:
 
 ```toml
 [dependencies]
-cosmoflow = { version = "0.3.0", features = ["full"] }
+cosmoflow = { version = "0.3.0", features = ["storage-memory"] }
 ```
 
-Then, on your main.rs:
+Create your first workflow:
 
 ```rust
 use cosmoflow::prelude::*;
-use std::time::Duration;
 
 #[tokio::main]
 async fn main() -> Result<(), Box<dyn std::error::Error>> {
-    // Create a shared store with memory backend
-    let mut store = SharedStore::memory();
+    // Create storage
+    let mut store = MemoryStorage::new();
     
-    // Create a flow builder
-    let flow = Flow::builder("hello-workflow")
-        .with_store(&mut store)
-        .build()?;
-
-    // Execute the workflow
+    // Build workflow  
+    let mut flow = FlowBuilder::new()
+        .node("start", MyNode::new())
+        .terminal_route("start", "complete")
+        .build();
+    
+    // Execute
     let result = flow.execute(&mut store).await?;
-    
     println!("Workflow completed: {:?}", result);
     Ok(())
 }
@@ -95,33 +91,21 @@ question. You can also ask your question on [the discussions page][discussions].
 [Chat]: https://discord.gg/cosmoflow
 [discussions]: https://github.com/echozyr2001/CosmoFlow/discussions
 
-## Module Ecosystem
+## Core Modules
 
-CosmoFlow is built with a modular architecture. Each component is a module within the main
-`cosmoflow` crate, allowing you to use only what you need through feature flags while 
-maintaining full composability:
+CosmoFlow provides a focused set of core modules:
 
 * [`cosmoflow`]: Main integration and API crate for CosmoFlow workflows.
-
 * [`cosmoflow::flow`]: Workflow orchestration engine for managing complex multi-node workflows.
-
 * [`cosmoflow::node`]: Execution nodes system with async support and retry logic.
-
 * [`cosmoflow::action`]: Control flow logic and condition evaluation.
-
 * [`cosmoflow::shared_store`]: Thread-safe data communication layer between workflow components.
-
-* [`cosmoflow::storage`]: Pluggable storage backends (memory, file, and custom implementations).
-
-* [`cosmoflow::builtin`]: Pre-built node components for common workflow operations.
 
 [`cosmoflow`]: https://docs.rs/cosmoflow/latest/cosmoflow
 [`cosmoflow::flow`]: https://docs.rs/cosmoflow/latest/cosmoflow/flow/index.html
 [`cosmoflow::node`]: https://docs.rs/cosmoflow/latest/cosmoflow/node/index.html
 [`cosmoflow::action`]: https://docs.rs/cosmoflow/latest/cosmoflow/action/index.html
 [`cosmoflow::shared_store`]: https://docs.rs/cosmoflow/latest/cosmoflow/shared_store/index.html
-[`cosmoflow::storage`]: https://docs.rs/cosmoflow/latest/cosmoflow/storage/index.html
-[`cosmoflow::builtin`]: https://docs.rs/cosmoflow/latest/cosmoflow/builtin/index.html
 
 ## License
 

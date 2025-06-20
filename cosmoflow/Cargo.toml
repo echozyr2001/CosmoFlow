@@ -11,10 +11,7 @@ repository = "https://github.com/echozyr2001/CosmoFlow"
 readme = "README.md"
 
 [dependencies]
-async-openai = { workspace = true, optional = true }
 async-trait = { workspace = true }
-futures = { workspace = true, optional = true }
-rand = { workspace = true, optional = true }
 serde = { workspace = true }
 serde_json = { workspace = true }
 thiserror = { workspace = true }
@@ -34,9 +31,7 @@ storage-file = []
 storage-redis = ["redis"]
 storage-full = ["storage-memory", "storage-file", "storage-redis"]
 
-builtin = ["async-openai", "futures", "rand"]
-
 minimal = []
 basic = ["storage-memory"]
-standard = ["storage-memory", "builtin"]
-full = ["storage-full", "builtin"]
+standard = ["storage-memory"]
+full = ["storage-full"]
