@@ -48,7 +48,7 @@ Add to your `Cargo.toml`:
 
 ```toml
 [dependencies]
-cosmoflow = { version = "0.3.0", features = ["storage-memory"] }
+cosmoflow = { version = "0.4.0", features = ["storage-memory"] }
 ```
 
 Create your first workflow:

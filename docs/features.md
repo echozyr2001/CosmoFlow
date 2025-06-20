@@ -7,7 +7,7 @@ This guide covers CosmoFlow's feature system and configuration options.
 ### Minimal Configuration
 ```toml
 [dependencies]
-cosmoflow = { version = "0.3.0", default-features = false, features = ["minimal"] }
+cosmoflow = { version = "0.4.0", default-features = false, features = ["minimal"] }
 ```
 - **Features**: None (truly minimal)
 - **Storage**: No storage backends enabled
@@ -17,7 +17,7 @@ cosmoflow = { version = "0.3.0", default-features = false, features = ["minimal"
 ### Basic Configuration
 ```toml
 [dependencies]
-cosmoflow = { version = "0.3.0", default-features = false, features = ["basic"] }
+cosmoflow = { version = "0.4.0", default-features = false, features = ["basic"] }
 ```
 - **Features**: Memory storage only
 - **Storage**: In-memory storage backend
@@ -27,7 +27,7 @@ cosmoflow = { version = "0.3.0", default-features = false, features = ["basic"] 
 ### Standard Configuration (Recommended)
 ```toml
 [dependencies]
-cosmoflow = { version = "0.3.0", default-features = false, features = ["standard"] }
+cosmoflow = { version = "0.4.0", default-features = false, features = ["standard"] }
 ```
 - **Features**: Memory storage + built-in nodes
 - **Storage**: In-memory storage backend
@@ -37,7 +37,7 @@ cosmoflow = { version = "0.3.0", default-features = false, features = ["standard
 ### Full Configuration
 ```toml
 [dependencies]
-cosmoflow = { version = "0.3.0", default-features = false, features = ["full"] }
+cosmoflow = { version = "0.4.0", default-features = false, features = ["full"] }
 ```
 - **Features**: All storage backends + built-in nodes
 - **Storage**: Memory and file-based storage
@@ -61,13 +61,13 @@ You can mix and match features for your specific needs:
 
 ```toml
 # Memory storage + built-ins
-cosmoflow = { version = "0.3.0", default-features = false, features = ["storage-memory", "builtin"] }
+cosmoflow = { version = "0.4.0", default-features = false, features = ["storage-memory", "builtin"] }
 
 # File storage only
-cosmoflow = { version = "0.3.0", default-features = false, features = ["storage-file"] }
+cosmoflow = { version = "0.4.0", default-features = false, features = ["storage-file"] }
 
 # Both storage backends, no built-ins
-cosmoflow = { version = "0.3.0", default-features = false, features = ["storage-full"] }
+cosmoflow = { version = "0.4.0", default-features = false, features = ["storage-full"] }
 ```
 
 ## 📊 Feature Comparison
