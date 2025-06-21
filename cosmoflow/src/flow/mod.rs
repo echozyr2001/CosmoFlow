@@ -194,8 +194,6 @@ pub struct FlowExecutionResult {
 pub struct FlowConfig {
     /// Maximum number of execution steps before terminating
     pub max_steps: usize,
-    /// Whether to detect and prevent cycles
-    pub detect_cycles: bool,
     /// Starting node ID
     pub start_node_id: String,
 }
@@ -204,7 +202,6 @@ impl Default for FlowConfig {
     fn default() -> Self {
         Self {
             max_steps: 1000,
-            detect_cycles: true,
             start_node_id: "start".to_string(),
         }
     }
@@ -406,13 +403,40 @@ impl<S: SharedStore + 'static> FlowBuilder<S> {
         self
     }
 
-    /// Build the flow
+    /// Build the flow with the configured settings
     pub fn build(self) -> Flow<S> {
         Flow {
             nodes: self.nodes,
             routes: self.routes,
             config: self.config,
         }
+    }
+
+    /// Convenience method to create a self-routing loop
+    ///
+    /// This is equivalent to `.route(node_id, action, node_id)` but more explicit
+    /// about the intent to create a loop.
+    ///
+    /// # Examples
+    ///
+    /// ```rust
+    /// # #[cfg(feature = "storage-memory")]
+    /// # {
+    /// use cosmoflow::flow::FlowBuilder;
+    /// use cosmoflow::shared_store::backends::MemoryStorage;
+    ///
+    /// let flow = FlowBuilder::<MemoryStorage>::new()
+    ///     .start_node("counter")
+    ///     .max_steps(100)  // Allow intentional loops
+    ///     // ... add nodes ...
+    ///     .self_route("counter", "continue")  // Loop back to self
+    ///     .terminal_route("counter", "done")  // Exit condition
+    ///     .build();
+    /// # }
+    /// ```
+    pub fn self_route(self, node_id: impl Into<String>, action: impl Into<String>) -> Self {
+        let node_id_str = node_id.into();
+        self.route(node_id_str.clone(), action, node_id_str)
     }
 }
 
@@ -446,7 +470,6 @@ impl<S: SharedStore + 'static> FlowBuilder<S> {
 /// // Create a flow with custom configuration
 /// let config = FlowConfig {
 ///     max_steps: 500,
-///     detect_cycles: true,
 ///     start_node_id: "start".to_string(),
 /// };
 /// let flow: Flow<MemoryStorage> = Flow::with_config(config);
@@ -492,7 +515,7 @@ impl<S: SharedStore> Flow<S> {
     /// Create a new basic flow with custom configuration
     ///
     /// Use this constructor when you need to specify custom execution behavior
-    /// such as timeouts, cycle detection, or terminal actions.
+    /// such as timeouts or terminal actions.
     ///
     /// # Arguments
     ///
@@ -508,7 +531,6 @@ impl<S: SharedStore> Flow<S> {
     ///
     /// let config = FlowConfig {
     ///     max_steps: 1000,
-    ///     detect_cycles: true,
     ///     start_node_id: "start".to_string(),
     /// };
     ///
@@ -574,47 +596,6 @@ impl<S: SharedStore> Flow<S> {
             current_node_id.to_string(),
             action_str,
         ))
-    }
-
-    /// Check for cycles in the execution path
-    ///
-    /// Implements cycle detection to prevent infinite loops in workflow execution.
-    /// When enabled via configuration, this method checks if the next node would
-    /// create a cycle in the execution path.
-    ///
-    /// # Algorithm
-    ///
-    /// Uses a simple linear search through the execution path to detect if the
-    /// next node ID already exists in the current path. This is efficient for
-    /// typical workflow depths but may need optimization for very deep workflows.
-    ///
-    /// # Arguments
-    ///
-    /// * `path` - Current execution path (list of node IDs)
-    /// * `next_node_id` - ID of the next node to execute
-    ///
-    /// # Returns
-    ///
-    /// * `Ok(())` - No cycle detected or cycle detection disabled
-    /// * `Err(FlowError::CycleDetected)` - Cycle would be created
-    ///
-    /// # Performance
-    ///
-    /// Time complexity: O(n) where n is the length of the execution path
-    /// Space complexity: O(n) for the cycle path in error cases
-    fn check_cycle(&self, path: &[String], next_node_id: &str) -> Result<(), FlowError> {
-        if !self.config.detect_cycles {
-            return Ok(());
-        }
-
-        // Use more efficient search for cycle detection
-        if let Some(cycle_start_index) = path.iter().position(|id| id == next_node_id) {
-            let mut cycle_path = path[cycle_start_index..].to_vec();
-            cycle_path.push(next_node_id.to_string());
-            return Err(FlowError::CycleDetected(cycle_path));
-        }
-
-        Ok(())
     }
 }
 
@@ -707,13 +688,13 @@ where
     /// # Returns
     ///
     /// * `Ok(FlowExecutionResult)` - Successful execution result with metadata
-    /// * `Err(FlowError)` - Execution error (node not found, cycles, etc.)
+    /// * `Err(FlowError)` - Execution error (node not found, etc.)
     ///
     /// # Errors
     ///
     /// * [`FlowError::NodeNotFound`] - Start node doesn't exist
     /// * [`FlowError::MaxStepsExceeded`] - Execution exceeded step limit
-    /// * [`FlowError::CycleDetected`] - Infinite loop detected
+    /// * [`FlowError::MaxStepsExceeded`] - Execution limit reached
     /// * [`FlowError::NoRouteFound`] - No route available for node's action
     ///
     /// # Examples
@@ -757,19 +738,19 @@ where
     /// # Returns
     ///
     /// * `Ok(FlowExecutionResult)` - Successful execution result with metadata
-    /// * `Err(FlowError)` - Execution error (node not found, cycles, etc.)
+    /// * `Err(FlowError)` - Execution error (node not found, etc.)
     ///
     /// # Execution Flow
     ///
     /// 1. Starts from the specified node
     /// 2. Executes nodes sequentially following routing rules
-    /// 3. Checks for cycles and step limits at each iteration
+    /// 3. Checks step limits at each iteration
     /// 4. Continues until a terminal action is reached
     /// 5. Returns detailed execution results
     ///
     /// # Performance Considerations
     ///
-    /// - Each step includes cycle detection (O(n) where n is path length)
+    /// - Each step includes step limit checking (O(1))
     /// - Step counting prevents infinite loops in complex workflows
     /// - Node execution is sequential (no parallel execution within a flow)
     ///
@@ -806,9 +787,6 @@ where
             if steps_executed >= self.config.max_steps {
                 return Err(FlowError::MaxStepsExceeded(self.config.max_steps));
             }
-
-            // Check for cycles
-            self.check_cycle(&execution_path, &current_node_id)?;
 
             // Add current node to execution path
             execution_path.push(current_node_id.clone());
@@ -888,7 +866,6 @@ where
     /// let mut flow: Flow<MemoryStorage> = Flow::new();
     /// let new_config = FlowConfig {
     ///     max_steps: 1000,
-    ///     detect_cycles: true,
     ///     start_node_id: "entry_point".to_string(),
     /// };
     /// flow.set_config(new_config);
@@ -1169,28 +1146,6 @@ mod tests {
     }
 
     #[tokio::test]
-    async fn test_flow_cycle_detection() {
-        let mut flow = FlowBuilder::new()
-            .start_node("start")
-            .node("start", TestNode::new(Action::simple("next")))
-            .node("middle", TestNode::new(Action::simple("back")))
-            .route("start", "next", "middle")
-            .route("middle", "back", "start") // Creates a cycle
-            .build();
-
-        let mut store = MemoryStorage::new();
-        let result = flow.execute(&mut store).await;
-
-        assert!(result.is_err());
-        match result.unwrap_err() {
-            FlowError::CycleDetected(path) => {
-                assert!(path.contains(&"start".to_string()));
-            }
-            _ => panic!("Expected CycleDetected error"),
-        }
-    }
-
-    #[tokio::test]
     async fn test_flow_max_steps_exceeded() {
         let mut flow = FlowBuilder::new()
             .start_node("start")
@@ -1284,7 +1239,6 @@ mod tests {
         let config = FlowConfig::default();
         assert_eq!(config.start_node_id, "start");
         assert_eq!(config.max_steps, 1000);
-        assert!(config.detect_cycles);
     }
 
     #[tokio::test]

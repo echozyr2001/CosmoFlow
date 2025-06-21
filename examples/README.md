@@ -124,7 +124,7 @@ CosmoFlow provides different feature tiers to match various use cases:
 
 2. **Performance Considerations**:
    - Set appropriate `max_steps` limits to prevent infinite loops
-   - Consider cycle detection overhead for iterative workflows
+   - Simple max_steps protection for iterative workflows
    - Monitor execution metrics and optimize bottlenecks
 
 3. **Maintainability**:

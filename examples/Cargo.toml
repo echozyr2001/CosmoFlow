@@ -15,6 +15,10 @@ thiserror = "2.0"
 reqwest = { version = "0.12", features = ["json"] }
 
 [[bin]]
+name = "simple_loops"
+path = "simple_loops.rs"
+
+[[bin]]
 name = "hello_world"
 path = "hello_world.rs"
 
@@ -41,6 +45,10 @@ path = "unified_shared_store.rs"
 [[bin]]
 name = "llm_request"
 path = "llm_request.rs"
+
+[[bin]]
+name = "chat_loop"
+path = "chat_loop.rs"
 
 [features]
 default = []
