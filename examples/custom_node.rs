@@ -14,7 +14,7 @@
 //! - **Stateful Nodes**: Nodes maintain internal state and persist data to shared store
 //! - **Complex Business Logic**: Coordinator implements sophisticated iteration control
 //! - **Three-Phase Execution**: Proper use of prep, exec, and post phases
-//! - **Cycle-Aware Workflows**: Disables cycle detection to allow iterative patterns
+//! - **Simple Workflows**: Uses max_steps for loop protection
 //! - **Data Persistence**: Stores counter values and execution history
 //! - **Statistical Analysis**: Calculates metrics and generates formatted reports
 //! - **Custom Storage Backend**: Implements a complete storage interface
@@ -588,11 +588,6 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
         .route("statistics", "report", "report")
         .terminal_route("report", "complete") // Explicit termination
         .build();
-
-    // Disable cycle detection to allow iterative workflows
-    let mut config = flow.config().clone();
-    config.detect_cycles = false;
-    flow.set_config(config);
 
     println!("📋 Flow configuration:");
     println!("  Start node: {}", flow.config().start_node_id);

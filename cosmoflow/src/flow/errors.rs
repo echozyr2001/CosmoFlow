@@ -12,10 +12,6 @@ pub enum FlowError {
     #[error("No route found from node '{0}' for action '{1}'")]
     NoRouteFound(String, String),
 
-    /// Cycle detected in the flow
-    #[error("Cycle detected in flow: {}", .0.join(" -> "))]
-    CycleDetected(Vec<String>),
-
     /// Maximum execution steps exceeded
     #[error("Maximum execution steps exceeded: {0}")]
     MaxStepsExceeded(usize),
@@ -50,18 +46,6 @@ mod tests {
         assert_eq!(
             error.to_string(),
             "No route found from node 'node1' for action 'action1'"
-        );
-
-        // Test CycleDetected error
-        let error = FlowError::CycleDetected(vec![
-            "A".to_string(),
-            "B".to_string(),
-            "C".to_string(),
-            "A".to_string(),
-        ]);
-        assert_eq!(
-            error.to_string(),
-            "Cycle detected in flow: A -> B -> C -> A"
         );
 
         // Test MaxStepsExceeded error
