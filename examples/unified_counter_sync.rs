@@ -25,8 +25,7 @@
 //!
 //! Run with: `cargo run --bin unified_counter_sync --no-default-features --features cosmoflow/storage-memory`
 
-#![cfg(all(feature = "sync", not(feature = "async")))]
-
+#[cfg(not(feature = "async"))]
 use cosmoflow::{
     Node,
     action::Action,
@@ -51,6 +50,7 @@ use cosmoflow::{
 /// ## Conditional Logic:
 /// - If counter >= 10: returns "complete" action (terminates workflow)
 /// - If counter < 10: returns "continue" action (proceeds to next node)
+#[cfg(not(feature = "async"))]
 struct CounterNode {
     /// Human-readable name for this counter node
     name: String,
@@ -58,6 +58,7 @@ struct CounterNode {
     increment: i32,
 }
 
+#[cfg(not(feature = "async"))]
 impl CounterNode {
     /// Creates a new CounterNode with the specified name and increment value.
     ///
@@ -72,6 +73,7 @@ impl CounterNode {
     }
 }
 
+#[cfg(not(feature = "async"))]
 impl Node<MemoryStorage> for CounterNode {
     /// Preparation phase returns the current counter value
     type PrepResult = i32;
@@ -202,7 +204,8 @@ impl Node<MemoryStorage> for CounterNode {
 /// 2. counter2: 3 + 3 = 6 → "continue" → counter3  
 /// 3. counter3: 6 + 5 = 11 → "complete" → workflow ends
 #[cfg(all(feature = "sync", not(feature = "async")))]
-fn main() -> Result<(), Box<dyn std::error::Error>> {
+#[cfg(not(feature = "async"))]
+fn sync_main() -> Result<(), Box<dyn std::error::Error>> {
     println!("🚀 CosmoFlow Unified Counter Example (Sync Version)");
     println!("===================================================");
     println!("📦 Compiled without async features for minimal size!\n");
@@ -279,8 +282,21 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
     Ok(())
 }
 
-/// Dummy main function when sync example is not compiled
-#[cfg(not(all(feature = "sync", not(feature = "async"))))]
 fn main() {
-    // This sync example is not available when async features are enabled
+    #[cfg(not(feature = "async"))]
+    {
+        if let Err(e) = sync_main() {
+            eprintln!("Error running sync unified counter example: {}", e);
+            std::process::exit(1);
+        }
+    }
+
+    #[cfg(feature = "async")]
+    {
+        println!("This sync example is not available when async features are enabled.");
+        println!("To run this example, use:");
+        println!(
+            "cargo run --bin unified_counter_sync --no-default-features --features cosmoflow/storage-memory,sync"
+        );
+    }
 }

@@ -34,395 +34,403 @@
 //! cargo run --bin custom_node_sync --no-default-features --features cosmoflow/storage-memory
 //! ```
 
-#![cfg(all(feature = "sync", not(feature = "async")))]
-
-use cosmoflow::{
-    Node,
-    action::Action,
-    node::{ExecutionContext, NodeError},
-    shared_store::SharedStore,
-    shared_store::backends::MemoryStorage,
-};
-use serde_json::Value;
-use std::collections::HashMap;
-
-/// A counter node that tracks how many times it has been executed (sync version)
-#[derive(Debug)]
-struct CounterNode {
-    name: String,
-    count: usize,
-    increment_by: usize,
-    max_count: Option<usize>,
-}
-
-impl CounterNode {
-    fn new(name: impl Into<String>, increment_by: usize) -> Self {
-        Self {
-            name: name.into(),
-            count: 0,
-            increment_by,
-            max_count: Some(30), // Set a reasonable limit for demo
-        }
+/// Main function - choose between sync and async implementation
+fn main() -> Result<(), Box<dyn std::error::Error>> {
+    #[cfg(not(feature = "async"))]
+    {
+        sync_main()
+    }
+    #[cfg(feature = "async")]
+    {
+        println!("This sync example is not available when async features are enabled.");
+        println!("To run this example, use: cargo run --bin custom_node_sync --features sync");
+        Ok(())
     }
 }
 
-impl Node<MemoryStorage> for CounterNode {
-    type PrepResult = usize; // Previous count
-    type ExecResult = usize; // New count
-    type Error = NodeError;
+#[cfg(not(feature = "async"))]
+fn sync_main() -> Result<(), Box<dyn std::error::Error>> {
+    use cosmoflow::{
+        Node,
+        action::Action,
+        node::{ExecutionContext, NodeError},
+        shared_store::SharedStore,
+        shared_store::backends::MemoryStorage,
+    };
+    use serde_json::Value;
+    use std::collections::HashMap;
 
-    fn name(&self) -> &str {
-        &self.name
+    /// A counter node that tracks how many times it has been executed (sync version)
+    #[derive(Debug)]
+    struct CounterNode {
+        name: String,
+        count: usize,
+        increment_by: usize,
+        max_count: Option<usize>,
     }
 
-    fn prep(
-        &mut self,
-        store: &MemoryStorage,
-        context: &ExecutionContext,
-    ) -> Result<Self::PrepResult, Self::Error> {
-        let previous_count = self.count;
-
-        // Check if we have stored count in the shared store
-        let store_key = format!("{}_count", self.name);
-        if let Some(count_value) = store
-            .get::<Value>(&store_key)
-            .ok()
-            .flatten()
-            .and_then(|v| v.as_u64())
-        {
-            self.count = count_value as usize;
-            println!(
-                "🔄 [PREP] {} (exec_id: {}) restored count from store: {}",
-                self.name,
-                context.execution_id(),
-                self.count
-            );
-        } else {
-            println!(
-                "🔄 [PREP] {} (exec_id: {}) starting fresh",
-                self.name,
-                context.execution_id()
-            );
-        }
-
-        Ok(previous_count)
-    }
-
-    fn exec(
-        &mut self,
-        prep_result: Self::PrepResult,
-        _context: &ExecutionContext,
-    ) -> Result<Self::ExecResult, Self::Error> {
-        // Check if we've reached the maximum count
-        if let Some(max) = self.max_count {
-            if self.count >= max {
-                return Err(NodeError::ValidationError(format!(
-                    "Counter {} has reached maximum count: {}",
-                    self.name, max
-                )));
+    impl CounterNode {
+        fn new(name: impl Into<String>, increment_by: usize) -> Self {
+            Self {
+                name: name.into(),
+                count: 0,
+                increment_by,
+                max_count: Some(30), // Set a reasonable limit for demo
             }
         }
-
-        // Simulate some synchronous computation
-        std::thread::sleep(std::time::Duration::from_millis(5));
-
-        // Increment the counter
-        self.count += self.increment_by;
-
-        println!(
-            "⚡ [EXEC] {} count: {} -> {} (increment: {})",
-            self.name, prep_result, self.count, self.increment_by
-        );
-
-        Ok(self.count)
     }
 
-    fn post(
-        &mut self,
-        store: &mut MemoryStorage,
-        _prep_result: Self::PrepResult,
-        exec_result: Self::ExecResult,
-        _context: &ExecutionContext,
-    ) -> Result<Action, Self::Error> {
-        println!("✅ [POST] {} storing count: {}", self.name, exec_result);
+    impl Node<MemoryStorage> for CounterNode {
+        type PrepResult = usize; // Previous count
+        type ExecResult = usize; // New count
+        type Error = NodeError;
 
-        // Store the current count
-        let store_key = format!("{}_count", self.name);
-        store
-            .set(store_key, Value::Number(exec_result.into()))
-            .map_err(|e| NodeError::StorageError(e.to_string()))?;
+        fn name(&self) -> &str {
+            &self.name
+        }
 
-        // Store count history
-        let history_key = format!("{}_history", self.name);
-        let mut history: Vec<usize> = match store.get::<serde_json::Value>(&history_key) {
-            Ok(Some(value)) => {
-                if let Some(array) = value.as_array() {
-                    array
-                        .iter()
-                        .filter_map(|v| v.as_u64().map(|n| n as usize))
-                        .collect()
-                } else {
-                    Vec::new()
+        fn prep(
+            &mut self,
+            store: &MemoryStorage,
+            context: &ExecutionContext,
+        ) -> Result<Self::PrepResult, Self::Error> {
+            let previous_count = self.count;
+
+            // Check if we have stored count in the shared store
+            let store_key = format!("{}_count", self.name);
+            if let Some(count_value) = store
+                .get::<Value>(&store_key)
+                .ok()
+                .flatten()
+                .and_then(|v| v.as_u64())
+            {
+                self.count = count_value as usize;
+                println!(
+                    "🔄 [PREP] {} (exec_id: {}) restored count from store: {}",
+                    self.name,
+                    context.execution_id(),
+                    self.count
+                );
+            } else {
+                println!(
+                    "🔄 [PREP] {} (exec_id: {}) starting fresh",
+                    self.name,
+                    context.execution_id()
+                );
+            }
+
+            Ok(previous_count)
+        }
+
+        fn exec(
+            &mut self,
+            prep_result: Self::PrepResult,
+            _context: &ExecutionContext,
+        ) -> Result<Self::ExecResult, Self::Error> {
+            // Check if we've reached the maximum count
+            if let Some(max) = self.max_count {
+                if self.count >= max {
+                    return Err(NodeError::ValidationError(format!(
+                        "Counter {} has reached maximum count: {}",
+                        self.name, max
+                    )));
                 }
             }
-            _ => Vec::new(),
-        };
 
-        history.push(exec_result);
-        store
-            .set(
-                history_key,
-                Value::Array(
-                    history
-                        .into_iter()
-                        .map(|n| Value::Number(n.into()))
-                        .collect(),
-                ),
-            )
-            .map_err(|e| NodeError::StorageError(e.to_string()))?;
+            // Simulate some synchronous computation
+            std::thread::sleep(std::time::Duration::from_millis(5));
 
-        // Determine next action based on count
-        if let Some(max) = self.max_count {
-            if exec_result >= max {
-                Ok(Action::simple("max_reached"))
-            } else {
-                Ok(Action::simple("continue"))
-            }
-        } else {
-            Ok(Action::simple("continue"))
+            // Increment the counter
+            self.count += self.increment_by;
+
+            println!(
+                "⚡ [EXEC] {} count: {} -> {} (increment: {})",
+                self.name, prep_result, self.count, self.increment_by
+            );
+
+            Ok(self.count)
         }
-    }
-}
 
-/// A statistics node that analyzes counter data (sync version)
-struct StatisticsNode;
+        fn post(
+            &mut self,
+            store: &mut MemoryStorage,
+            _prep_result: Self::PrepResult,
+            exec_result: Self::ExecResult,
+            _context: &ExecutionContext,
+        ) -> Result<Action, Self::Error> {
+            println!("✅ [POST] {} storing count: {}", self.name, exec_result);
 
-impl Node<MemoryStorage> for StatisticsNode {
-    type PrepResult = HashMap<String, Vec<usize>>;
-    type ExecResult = HashMap<String, f64>;
-    type Error = NodeError;
+            // Store the current count
+            let store_key = format!("{}_count", self.name);
+            store
+                .set(store_key, Value::Number(exec_result.into()))
+                .map_err(|e| NodeError::StorageError(e.to_string()))?;
 
-    fn name(&self) -> &str {
-        "StatisticsNode"
-    }
-
-    fn prep(
-        &mut self,
-        store: &MemoryStorage,
-        _context: &ExecutionContext,
-    ) -> Result<Self::PrepResult, Self::Error> {
-        println!("🔄 [PREP] Gathering statistics from all counters...");
-
-        let mut counter_histories = HashMap::new();
-
-        // Look for all counter histories in the store
-        let keys = ["main_counter_history", "secondary_counter_history"];
-
-        for key in keys {
-            if let Ok(Some(value)) = store.get::<serde_json::Value>(key) {
-                if let Some(array) = value.as_array() {
-                    let history: Vec<usize> = array
-                        .iter()
-                        .filter_map(|v| v.as_u64().map(|n| n as usize))
-                        .collect();
-
-                    if !history.is_empty() {
-                        let counter_name = key.replace("_history", "");
-                        let history_len = history.len();
-                        counter_histories.insert(counter_name.clone(), history);
-                        println!(
-                            "📊 Found history for {}: {} entries",
-                            counter_name, history_len
-                        );
+            // Store count history
+            let history_key = format!("{}_history", self.name);
+            let mut history: Vec<usize> = match store.get::<serde_json::Value>(&history_key) {
+                Ok(Some(value)) => {
+                    if let Some(array) = value.as_array() {
+                        array
+                            .iter()
+                            .filter_map(|v| v.as_u64().map(|n| n as usize))
+                            .collect()
+                    } else {
+                        Vec::new()
                     }
                 }
-            }
-        }
-
-        Ok(counter_histories)
-    }
-
-    fn exec(
-        &mut self,
-        prep_result: Self::PrepResult,
-        _context: &ExecutionContext,
-    ) -> Result<Self::ExecResult, Self::Error> {
-        println!("⚡ [EXEC] Calculating statistics...");
-
-        let mut statistics = HashMap::new();
-
-        for (counter_name, history) in prep_result {
-            if history.is_empty() {
-                continue;
-            }
-
-            // Simulate some computation time
-            std::thread::sleep(std::time::Duration::from_millis(10));
-
-            // Calculate basic statistics
-            let sum: usize = history.iter().sum();
-            let count = history.len();
-            let average = sum as f64 / count as f64;
-
-            let min = *history.iter().min().unwrap() as f64;
-            let max = *history.iter().max().unwrap() as f64;
-
-            // Calculate growth rate
-            let growth_rate = if history.len() > 1 {
-                let first = history[0] as f64;
-                let last = history[history.len() - 1] as f64;
-                if first > 0.0 {
-                    (last - first) / first * 100.0
-                } else {
-                    0.0
-                }
-            } else {
-                0.0
+                _ => Vec::new(),
             };
 
-            println!("📊 {} statistics:", counter_name);
-            println!("    Count: {}", count);
-            println!("    Average: {:.2}", average);
-            println!("    Min: {}, Max: {}", min, max);
-            println!("    Growth rate: {:.1}%", growth_rate);
-
-            statistics.insert(format!("{}_average", counter_name), average);
-            statistics.insert(format!("{}_min", counter_name), min);
-            statistics.insert(format!("{}_max", counter_name), max);
-            statistics.insert(format!("{}_growth_rate", counter_name), growth_rate);
-        }
-
-        Ok(statistics)
-    }
-
-    fn post(
-        &mut self,
-        store: &mut MemoryStorage,
-        _prep_result: Self::PrepResult,
-        exec_result: Self::ExecResult,
-        _context: &ExecutionContext,
-    ) -> Result<Action, Self::Error> {
-        println!("✅ [POST] Storing statistics...");
-
-        // Store all statistics
-        for (key, value) in exec_result {
+            history.push(exec_result);
             store
                 .set(
-                    format!("stats_{}", key),
-                    Value::Number(
-                        serde_json::Number::from_f64(value).unwrap_or(serde_json::Number::from(0)),
+                    history_key,
+                    Value::Array(
+                        history
+                            .into_iter()
+                            .map(|n| Value::Number(n.into()))
+                            .collect(),
                     ),
                 )
                 .map_err(|e| NodeError::StorageError(e.to_string()))?;
-        }
 
-        Ok(Action::simple("generate_report"))
-    }
-}
-
-/// A report node that generates a final summary (sync version)
-struct ReportNode;
-
-impl Node<MemoryStorage> for ReportNode {
-    type PrepResult = HashMap<String, f64>;
-    type ExecResult = String;
-    type Error = NodeError;
-
-    fn name(&self) -> &str {
-        "ReportNode"
-    }
-
-    fn prep(
-        &mut self,
-        store: &MemoryStorage,
-        _context: &ExecutionContext,
-    ) -> Result<Self::PrepResult, Self::Error> {
-        println!("🔄 [PREP] Collecting statistics for report...");
-
-        let mut stats = HashMap::new();
-
-        // Collect all statistics
-        let stat_keys = [
-            "stats_main_counter_average",
-            "stats_main_counter_growth_rate",
-            "stats_secondary_counter_average",
-            "stats_secondary_counter_growth_rate",
-        ];
-
-        for key in stat_keys {
-            if let Ok(Some(value)) = store.get::<serde_json::Value>(key) {
-                if let Some(number) = value.as_f64() {
-                    stats.insert(key.to_string(), number);
-                    println!("📊 Loaded stat {}: {:.2}", key, number);
+            // Determine next action based on count
+            if let Some(max) = self.max_count {
+                if exec_result >= max {
+                    Ok(Action::simple("max_reached"))
+                } else {
+                    Ok(Action::simple("continue"))
                 }
+            } else {
+                Ok(Action::simple("continue"))
             }
         }
-
-        Ok(stats)
     }
 
-    fn exec(
-        &mut self,
-        prep_result: Self::PrepResult,
-        _context: &ExecutionContext,
-    ) -> Result<Self::ExecResult, Self::Error> {
-        println!("⚡ [EXEC] Generating final report...");
+    /// A statistics node that analyzes counter data (sync version)
+    struct StatisticsNode;
 
-        // Simulate report generation time
-        std::thread::sleep(std::time::Duration::from_millis(15));
+    impl Node<MemoryStorage> for StatisticsNode {
+        type PrepResult = HashMap<String, Vec<usize>>;
+        type ExecResult = HashMap<String, f64>;
+        type Error = NodeError;
 
-        let mut report = String::new();
-        report.push_str("🎯 COUNTER ANALYSIS REPORT\n");
-        report.push_str("==========================\n\n");
-
-        // Main counter stats
-        if let (Some(avg), Some(growth)) = (
-            prep_result.get("stats_main_counter_average"),
-            prep_result.get("stats_main_counter_growth_rate"),
-        ) {
-            report.push_str(&format!(
-                "📈 Main Counter:\n  Average: {:.2}\n  Growth Rate: {:.1}%\n\n",
-                avg, growth
-            ));
+        fn name(&self) -> &str {
+            "StatisticsNode"
         }
 
-        // Secondary counter stats
-        if let (Some(avg), Some(growth)) = (
-            prep_result.get("stats_secondary_counter_average"),
-            prep_result.get("stats_secondary_counter_growth_rate"),
-        ) {
-            report.push_str(&format!(
-                "📊 Secondary Counter:\n  Average: {:.2}\n  Growth Rate: {:.1}%\n\n",
-                avg, growth
-            ));
+        fn prep(
+            &mut self,
+            store: &MemoryStorage,
+            _context: &ExecutionContext,
+        ) -> Result<Self::PrepResult, Self::Error> {
+            println!("🔄 [PREP] Gathering statistics from all counters...");
+
+            let mut counter_histories = HashMap::new();
+
+            // Look for all counter histories in the store
+            let keys = ["main_counter_history", "secondary_counter_history"];
+
+            for key in keys {
+                if let Ok(Some(value)) = store.get::<serde_json::Value>(key) {
+                    if let Some(array) = value.as_array() {
+                        let history: Vec<usize> = array
+                            .iter()
+                            .filter_map(|v| v.as_u64().map(|n| n as usize))
+                            .collect();
+
+                        if !history.is_empty() {
+                            let counter_name = key.replace("_history", "");
+                            let history_len = history.len();
+                            counter_histories.insert(counter_name.clone(), history);
+                            println!("📊 Found history for {counter_name}: {history_len} entries");
+                        }
+                    }
+                }
+            }
+
+            Ok(counter_histories)
         }
 
-        report.push_str("✨ Analysis completed successfully!");
+        fn exec(
+            &mut self,
+            prep_result: Self::PrepResult,
+            _context: &ExecutionContext,
+        ) -> Result<Self::ExecResult, Self::Error> {
+            println!("⚡ [EXEC] Calculating statistics...");
 
-        Ok(report)
+            let mut statistics = HashMap::new();
+
+            for (counter_name, history) in prep_result {
+                if history.is_empty() {
+                    continue;
+                }
+
+                // Simulate some computation time
+                std::thread::sleep(std::time::Duration::from_millis(10));
+
+                // Calculate basic statistics
+                let sum: usize = history.iter().sum();
+                let count = history.len();
+                let average = sum as f64 / count as f64;
+
+                let min = *history.iter().min().unwrap() as f64;
+                let max = *history.iter().max().unwrap() as f64;
+
+                // Calculate growth rate
+                let growth_rate = if history.len() > 1 {
+                    let first = history[0] as f64;
+                    let last = history[history.len() - 1] as f64;
+                    if first > 0.0 {
+                        (last - first) / first * 100.0
+                    } else {
+                        0.0
+                    }
+                } else {
+                    0.0
+                };
+
+                println!("📊 {counter_name} statistics:");
+                println!("    Count: {count}");
+                println!("    Average: {average:.2}");
+                println!("    Min: {min}, Max: {max}");
+                println!("    Growth rate: {growth_rate:.1}%");
+
+                statistics.insert(format!("{counter_name}_average"), average);
+                statistics.insert(format!("{counter_name}_min"), min);
+                statistics.insert(format!("{counter_name}_max"), max);
+                statistics.insert(format!("{counter_name}_growth_rate"), growth_rate);
+            }
+
+            Ok(statistics)
+        }
+
+        fn post(
+            &mut self,
+            store: &mut MemoryStorage,
+            _prep_result: Self::PrepResult,
+            exec_result: Self::ExecResult,
+            _context: &ExecutionContext,
+        ) -> Result<Action, Self::Error> {
+            println!("✅ [POST] Storing statistics...");
+
+            // Store all statistics
+            for (key, value) in exec_result {
+                store
+                    .set(
+                        format!("stats_{key}"),
+                        Value::Number(
+                            serde_json::Number::from_f64(value)
+                                .unwrap_or(serde_json::Number::from(0)),
+                        ),
+                    )
+                    .map_err(|e| NodeError::StorageError(e.to_string()))?;
+            }
+
+            Ok(Action::simple("generate_report"))
+        }
     }
 
-    fn post(
-        &mut self,
-        store: &mut MemoryStorage,
-        _prep_result: Self::PrepResult,
-        exec_result: Self::ExecResult,
-        _context: &ExecutionContext,
-    ) -> Result<Action, Self::Error> {
-        println!("✅ [POST] Final report generated:");
-        println!("{}", exec_result);
+    /// A report node that generates a final summary (sync version)
+    struct ReportNode;
 
-        // Store the final report
-        store
-            .set("final_report".to_string(), exec_result)
-            .map_err(|e| NodeError::StorageError(e.to_string()))?;
+    impl Node<MemoryStorage> for ReportNode {
+        type PrepResult = HashMap<String, f64>;
+        type ExecResult = String;
+        type Error = NodeError;
 
-        Ok(Action::simple("complete"))
+        fn name(&self) -> &str {
+            "ReportNode"
+        }
+
+        fn prep(
+            &mut self,
+            store: &MemoryStorage,
+            _context: &ExecutionContext,
+        ) -> Result<Self::PrepResult, Self::Error> {
+            println!("🔄 [PREP] Collecting statistics for report...");
+
+            let mut stats = HashMap::new();
+
+            // Collect all statistics
+            let stat_keys = [
+                "stats_main_counter_average",
+                "stats_main_counter_growth_rate",
+                "stats_secondary_counter_average",
+                "stats_secondary_counter_growth_rate",
+            ];
+
+            for key in stat_keys {
+                if let Ok(Some(value)) = store.get::<serde_json::Value>(key) {
+                    if let Some(number) = value.as_f64() {
+                        stats.insert(key.to_string(), number);
+                        println!("📊 Loaded stat {key}: {number:.2}");
+                    }
+                }
+            }
+
+            Ok(stats)
+        }
+
+        fn exec(
+            &mut self,
+            prep_result: Self::PrepResult,
+            _context: &ExecutionContext,
+        ) -> Result<Self::ExecResult, Self::Error> {
+            println!("⚡ [EXEC] Generating final report...");
+
+            // Simulate report generation time
+            std::thread::sleep(std::time::Duration::from_millis(15));
+
+            let mut report = String::new();
+            report.push_str("🎯 COUNTER ANALYSIS REPORT\n");
+            report.push_str("==========================\n\n");
+
+            // Main counter stats
+            if let (Some(avg), Some(growth)) = (
+                prep_result.get("stats_main_counter_average"),
+                prep_result.get("stats_main_counter_growth_rate"),
+            ) {
+                report.push_str(&format!(
+                    "📈 Main Counter:\n  Average: {avg:.2}\n  Growth Rate: {growth:.1}%\n\n"
+                ));
+            }
+
+            // Secondary counter stats
+            if let (Some(avg), Some(growth)) = (
+                prep_result.get("stats_secondary_counter_average"),
+                prep_result.get("stats_secondary_counter_growth_rate"),
+            ) {
+                report.push_str(&format!(
+                    "📊 Secondary Counter:\n  Average: {avg:.2}\n  Growth Rate: {growth:.1}%\n\n"
+                ));
+            }
+
+            report.push_str("✨ Analysis completed successfully!");
+
+            Ok(report)
+        }
+
+        fn post(
+            &mut self,
+            store: &mut MemoryStorage,
+            _prep_result: Self::PrepResult,
+            exec_result: Self::ExecResult,
+            _context: &ExecutionContext,
+        ) -> Result<Action, Self::Error> {
+            println!("✅ [POST] Final report generated:");
+            println!("{exec_result}");
+
+            // Store the final report
+            store
+                .set("final_report".to_string(), exec_result)
+                .map_err(|e| NodeError::StorageError(e.to_string()))?;
+
+            Ok(Action::simple("complete"))
+        }
     }
-}
 
-/// Main function demonstrating synchronous iterative workflow with data analysis
-fn main() -> Result<(), Box<dyn std::error::Error>> {
     println!("🚀 CosmoFlow Custom Node (Sync Version)");
     println!("========================================");
     println!("📦 Advanced iterative workflow with statistical analysis!\n");
@@ -440,7 +448,7 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
     // Execute multiple iterations
     let max_iterations = 6;
     for iteration in 1..=max_iterations {
-        println!("🔁 Iteration {}/{}:", iteration, max_iterations);
+        println!("🔁 Iteration {iteration}/{max_iterations}:");
 
         // Execute main counter
         println!("  1️⃣ Executing Main Counter:");
@@ -480,16 +488,16 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
     println!("========================");
 
     if let Ok(Some(main_count)) = store.get::<Value>("main_counter_count") {
-        println!("Main Counter Final: {}", main_count);
+        println!("Main Counter Final: {main_count}");
     }
 
     if let Ok(Some(secondary_count)) = store.get::<Value>("secondary_counter_count") {
-        println!("Secondary Counter Final: {}", secondary_count);
+        println!("Secondary Counter Final: {secondary_count}");
     }
 
     if let Ok(Some(report)) = store.get::<String>("final_report") {
         println!("\n📋 Stored Report:");
-        println!("{}", report);
+        println!("{report}");
     }
 
     println!("\n🎯 Sync Version Benefits:");
@@ -503,10 +511,4 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
     println!("   with manual iteration control and statistical analysis.");
 
     Ok(())
-}
-
-/// Dummy main function when sync example is not compiled
-#[cfg(not(all(feature = "sync", not(feature = "async"))))]
-fn main() {
-    // This sync example is not available when async features are enabled
 }

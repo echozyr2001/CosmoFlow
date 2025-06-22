@@ -37,8 +37,7 @@
 //! cargo run --bin flow_composition_sync --no-default-features --features cosmoflow/storage-memory
 //! ```
 
-#![cfg(all(feature = "sync", not(feature = "async")))]
-
+#[cfg(not(feature = "async"))]
 use cosmoflow::{
     Node,
     action::Action,
@@ -46,16 +45,19 @@ use cosmoflow::{
     shared_store::SharedStore,
     shared_store::backends::MemoryStorage,
 };
+#[cfg(not(feature = "async"))]
 use rand::Rng;
 
 /// Decision node that evaluates conditions and chooses execution paths (sync version)
 ///
 /// This node demonstrates conditional routing by analyzing business logic
 /// and returning different actions based on the evaluation results.
+#[cfg(not(feature = "async"))]
 struct DecisionNode {
     decision_criteria: f64,
 }
 
+#[cfg(not(feature = "async"))]
 impl DecisionNode {
     fn new(criteria: f64) -> Self {
         Self {
@@ -64,6 +66,7 @@ impl DecisionNode {
     }
 }
 
+#[cfg(not(feature = "async"))]
 impl Node<MemoryStorage> for DecisionNode {
     type PrepResult = f64;
     type ExecResult = bool;
@@ -147,16 +150,19 @@ impl Node<MemoryStorage> for DecisionNode {
 ///
 /// This node processes successful scenarios and continues the workflow
 /// toward the final convergence point.
+#[cfg(not(feature = "async"))]
 struct SuccessNode {
     success_count: usize,
 }
 
+#[cfg(not(feature = "async"))]
 impl SuccessNode {
     fn new() -> Self {
         Self { success_count: 0 }
     }
 }
 
+#[cfg(not(feature = "async"))]
 impl Node<MemoryStorage> for SuccessNode {
     type PrepResult = ();
     type ExecResult = String;
@@ -231,16 +237,19 @@ impl Node<MemoryStorage> for SuccessNode {
 ///
 /// This node processes error scenarios and provides an alternative
 /// execution path that also leads to the final convergence point.
+#[cfg(not(feature = "async"))]
 struct ErrorNode {
     error_count: usize,
 }
 
+#[cfg(not(feature = "async"))]
 impl ErrorNode {
     fn new() -> Self {
         Self { error_count: 0 }
     }
 }
 
+#[cfg(not(feature = "async"))]
 impl Node<MemoryStorage> for ErrorNode {
     type PrepResult = ();
     type ExecResult = String;
@@ -312,8 +321,10 @@ impl Node<MemoryStorage> for ErrorNode {
 ///
 /// This node serves as the endpoint for both success and error paths,
 /// demonstrating how different workflow branches can converge.
+#[cfg(not(feature = "async"))]
 struct FinalNode;
 
+#[cfg(not(feature = "async"))]
 impl Node<MemoryStorage> for FinalNode {
     type PrepResult = (String, Option<String>, Option<String>);
     type ExecResult = String;
@@ -397,6 +408,7 @@ impl Node<MemoryStorage> for FinalNode {
 }
 
 /// Manual workflow orchestrator that handles routing between nodes
+#[cfg(not(feature = "async"))]
 struct WorkflowOrchestrator {
     decision_node: DecisionNode,
     success_node: SuccessNode,
@@ -404,6 +416,7 @@ struct WorkflowOrchestrator {
     final_node: FinalNode,
 }
 
+#[cfg(not(feature = "async"))]
 impl WorkflowOrchestrator {
     fn new(decision_threshold: f64) -> Self {
         Self {
@@ -457,7 +470,8 @@ impl WorkflowOrchestrator {
 
 /// Main function demonstrating sync node composition with manual orchestration
 #[cfg(all(feature = "sync", not(feature = "async")))]
-fn main() -> Result<(), Box<dyn std::error::Error>> {
+#[cfg(not(feature = "async"))]
+fn sync_main() -> Result<(), Box<dyn std::error::Error>> {
     println!("🚀 CosmoFlow Flow Composition (Sync Version)");
     println!("=============================================");
     println!("📦 Manual node orchestration without async complexity!\n");
@@ -505,8 +519,21 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
     Ok(())
 }
 
-/// Dummy main function when sync example is not compiled
-#[cfg(not(all(feature = "sync", not(feature = "async"))))]
 fn main() {
-    // This sync example is not available when async features are enabled
+    #[cfg(not(feature = "async"))]
+    {
+        if let Err(e) = sync_main() {
+            eprintln!("Error running sync flow composition example: {}", e);
+            std::process::exit(1);
+        }
+    }
+
+    #[cfg(feature = "async")]
+    {
+        println!("This sync example is not available when async features are enabled.");
+        println!("To run this example, use:");
+        println!(
+            "cargo run --bin flow_composition_sync --no-default-features --features cosmoflow/storage-memory"
+        );
+    }
 }

@@ -61,32 +61,32 @@ required-features = ["async"]
 [[bin]]
 name = "custom_node_sync"
 path = "custom_node_sync.rs"
-required-features = ["sync-only"]
+required-features = ["sync"]
 
 [[bin]]
 name = "unified_hello_world_sync"
 path = "unified_hello_world_sync.rs"
-required-features = ["sync-only"]
+required-features = ["sync"]
 
 [[bin]]
 name = "flow_composition_sync"
 path = "flow_composition_sync.rs"
-required-features = ["sync-only"]
+required-features = ["sync"]
 
 [[bin]]
 name = "hello_world_sync"
 path = "hello_world_sync.rs"
-required-features = ["sync-only"]
+required-features = ["sync"]
 
 [[bin]]
 name = "simple_loops_sync"
 path = "simple_loops_sync.rs"
-required-features = ["sync-only"]
+required-features = ["sync"]
 
 [[bin]]
 name = "unified_counter_sync"
 path = "unified_counter_sync.rs"
-required-features = ["sync-only"]
+required-features = ["sync"]
 
 [features]
 default = []
@@ -98,4 +98,3 @@ async = [
   "cosmoflow/storage-memory",
 ]
 sync = ["cosmoflow/storage-memory"]
-sync-only = ["sync"]

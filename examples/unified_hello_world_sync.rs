@@ -26,8 +26,7 @@
 //!
 //! Run with: `cargo run --bin unified_hello_world_sync --no-default-features --features cosmoflow/storage-memory`
 
-#![cfg(all(feature = "sync", not(feature = "async")))]
-
+#[cfg(not(feature = "async"))]
 use cosmoflow::{
     Node,
     action::Action,
@@ -35,6 +34,7 @@ use cosmoflow::{
     shared_store::SharedStore,
     shared_store::backends::MemoryStorage,
 };
+#[cfg(not(feature = "async"))]
 use std::time::Duration;
 
 /// A simple greeting node that demonstrates the unified Node trait (sync version).
@@ -49,11 +49,13 @@ use std::time::Duration;
 /// - Error handling with proper error propagation
 /// - Data storage in shared storage
 /// - Synchronous execution for better performance
+#[cfg(not(feature = "async"))]
 struct HelloNode {
     /// The message to include in the greeting
     message: String,
 }
 
+#[cfg(not(feature = "async"))]
 impl HelloNode {
     /// Creates a new HelloNode with the specified message.
     ///
@@ -66,6 +68,7 @@ impl HelloNode {
     }
 }
 
+#[cfg(not(feature = "async"))]
 impl Node<MemoryStorage> for HelloNode {
     /// Preparation phase returns unit type (no data needed for execution)
     type PrepResult = ();
@@ -186,10 +189,12 @@ impl Node<MemoryStorage> for HelloNode {
 }
 
 /// A response node that reads the greeting and generates a response (sync version)
+#[cfg(not(feature = "async"))]
 struct ResponseNode {
     responder_name: String,
 }
 
+#[cfg(not(feature = "async"))]
 impl ResponseNode {
     fn new(responder_name: impl Into<String>) -> Self {
         Self {
@@ -198,6 +203,7 @@ impl ResponseNode {
     }
 }
 
+#[cfg(not(feature = "async"))]
 impl Node<MemoryStorage> for ResponseNode {
     type PrepResult = String;
     type ExecResult = String;
@@ -290,7 +296,8 @@ impl Node<MemoryStorage> for ResponseNode {
 /// stores it in shared storage, and a ResponseNode that reads the
 /// greeting and generates a response.
 #[cfg(all(feature = "sync", not(feature = "async")))]
-fn main() -> Result<(), Box<dyn std::error::Error>> {
+#[cfg(not(feature = "async"))]
+fn sync_main() -> Result<(), Box<dyn std::error::Error>> {
     println!("🚀 CosmoFlow Unified Node Trait (Sync Version)");
     println!("===============================================");
     println!("📦 Compiled without async features for optimal performance!\n");
@@ -352,8 +359,21 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
     Ok(())
 }
 
-/// Dummy main function when sync example is not compiled
-#[cfg(not(all(feature = "sync", not(feature = "async"))))]
 fn main() {
-    // This sync example is not available when async features are enabled
+    #[cfg(not(feature = "async"))]
+    {
+        if let Err(e) = sync_main() {
+            eprintln!("Error running sync unified hello world example: {}", e);
+            std::process::exit(1);
+        }
+    }
+
+    #[cfg(feature = "async")]
+    {
+        println!("This sync example is not available when async features are enabled.");
+        println!("To run this example, use:");
+        println!(
+            "cargo run --bin unified_hello_world_sync --no-default-features --features cosmoflow/storage-memory,sync"
+        );
+    }
 }
