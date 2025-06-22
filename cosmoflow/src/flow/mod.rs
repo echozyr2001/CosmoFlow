@@ -16,14 +16,13 @@
 //!
 //! ## Quick Start
 //!
-//! ```rust
-//! # #[cfg(feature = "storage-memory")]
-//! # {
+//! ```rust,no_run
+//! # #[cfg(all(feature = "async", feature = "storage-memory"))]
+//! # async fn example() -> Result<(), Box<dyn std::error::Error>> {
 //! use cosmoflow::{Flow, FlowBuilder, FlowBackend};
 //! use cosmoflow::shared_store::SharedStore;
 //! use cosmoflow::shared_store::backends::MemoryStorage;
 //!
-//! # async fn example() -> Result<(), Box<dyn std::error::Error>> {
 //! // Create a shared store
 //! let mut store = MemoryStorage::new();
 //!
@@ -36,7 +35,6 @@
 //! let result = flow.execute(&mut store).await?;
 //! println!("Flow completed with {} steps", result.steps_executed);
 //! # Ok(())
-//! # }
 //! # }
 //! ```
 //!
@@ -52,12 +50,12 @@
 //!
 //! The flow crate provides comprehensive error handling through [`FlowError`]:
 //!
-//! ```rust
-//! # #[cfg(feature = "storage-memory")]
-//! # {
-//! use cosmoflow::{Flow, FlowError, FlowBackend};
+//! ```rust,no_run
+//! # #[cfg(all(feature = "async", feature = "storage-memory"))]
+//! # async fn example() -> Result<(), Box<dyn std::error::Error>> {
+//! use cosmoflow::{Flow, FlowBackend};
+//! use cosmoflow::flow::errors::FlowError;
 //!
-//! # async fn example() -> Result<(), FlowError> {
 //! # let mut flow = Flow::new();
 //! # let mut store = cosmoflow::shared_store::backends::MemoryStorage::new();
 //! match flow.execute(&mut store).await {
@@ -69,7 +67,6 @@
 //!     Err(e) => eprintln!("Flow error: {}", e),
 //! }
 //! # Ok(())
-//! # }
 //! # }
 //! ```
 
@@ -380,6 +377,7 @@ impl<S: SharedStore + 'static> FlowBuilder<S> {
     /// # #[cfg(feature = "storage-memory")]
     /// # {
     /// use cosmoflow::FlowBuilder;
+    /// use cosmoflow::flow::route::RouteCondition;
     /// use cosmoflow::shared_store::backends::MemoryStorage;
     ///
     /// let flow = FlowBuilder::<MemoryStorage>::new()
@@ -705,25 +703,21 @@ where
     ///
     /// # Examples
     ///
-    /// ```rust
-    /// # #[cfg(feature = "storage-memory")]
+    /// ```rust,no_run
+    /// # #[cfg(all(not(feature = "async"), feature = "storage-memory"))]
     /// # {
     /// use cosmoflow::flow::{Flow, FlowBackend, FlowConfig};
     /// use cosmoflow::shared_store::SharedStore;
     /// use cosmoflow::shared_store::backends::MemoryStorage;
     ///
-    /// # async {
     /// let mut flow: Flow<MemoryStorage> = Flow::new();
     /// let mut store = MemoryStorage::new();
     ///
     /// // Add nodes and routes to flow...
     ///
-    /// let result = flow.execute(&mut store).await.unwrap();
-    /// # };
-    /// # }
-    /// ```
+    /// let result = flow.execute(&mut store).unwrap();
     /// println!("Execution completed in {} steps", result.steps_executed);
-    /// # };
+    /// # }
     /// ```
     fn execute(&mut self, store: &mut S) -> Result<FlowExecutionResult, FlowError> {
         let start_node_id = self.config.start_node_id.clone();
@@ -762,22 +756,19 @@ where
     ///
     /// # Examples
     ///
-    /// ```rust
-    /// # #[cfg(feature = "storage-memory")]
+    /// ```rust,no_run
+    /// # #[cfg(all(not(feature = "async"), feature = "storage-memory"))]
     /// # {
     /// use cosmoflow::flow::{Flow, FlowBackend};
     /// use cosmoflow::shared_store::SharedStore;
     /// use cosmoflow::shared_store::backends::MemoryStorage;
     ///
-    /// # async {
     /// let mut flow: Flow<MemoryStorage> = Flow::new();
     /// let mut store = MemoryStorage::new();
     ///
     /// // Execute from a specific node (useful for testing)
-    /// let result = flow.execute_from(&mut store, "validation_step".to_string()).await.unwrap();
-    /// # };
+    /// let result = flow.execute_from(&mut store, "validation_step".to_string()).unwrap();
     /// # }
-    /// ```
     /// ```
     fn execute_from(
         &mut self,
