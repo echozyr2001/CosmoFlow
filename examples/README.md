@@ -49,6 +49,57 @@ See `lightweight_llm_README.md` for detailed setup instructions.
 
 ---
 
+### 6. Custom Node (Sync Version) (`custom_node_sync.rs`)
+
+A synchronous version of the advanced iterative workflow demonstrating stateful nodes, data analysis, and report generation without async overhead.
+
+```bash
+cargo run --bin custom_node_sync --no-default-features --features cosmoflow/storage-memory
+```
+
+**Features:**
+- Sync node implementation for faster compilation
+- Advanced iterative counter workflow with statistical analysis
+- Built-in MemoryStorage backend for simplicity
+- Individual node execution without Flow complexity
+- Perfect for CPU-intensive statistical computations
+
+---
+
+### 7. Unified Hello World (Sync Version) (`unified_hello_world_sync.rs`)
+
+A synchronous version demonstrating the unified Node trait API without async complexity.
+
+```bash
+cargo run --bin unified_hello_world_sync --no-default-features --features cosmoflow/storage-memory
+```
+
+**Features:**
+- Unified Node trait implementation in sync mode
+- Built-in MemoryStorage backend
+- Faster compilation and smaller binary size
+- Perfect for CPU-intensive workflows
+- Simpler debugging without async complexity
+
+---
+
+### 8. Flow Composition (Sync Version) (`flow_composition_sync.rs`)
+
+A synchronous version demonstrating manual node orchestration and decision-based routing without the flow macro.
+
+```bash
+cargo run --bin flow_composition_sync --no-default-features --features cosmoflow/storage-memory
+```
+
+**Features:**
+- Manual workflow orchestration without async
+- Decision-based routing with explicit control flow
+- Multiple execution paths with convergence
+- Perfect for CPU-intensive decision workflows
+- No flow macro dependency for maximum control
+
+---
+
 ### 5. Flow Macro (`flow_macro.rs`)
 
 Demonstrates the powerful `flow!` macro for declarative workflow construction with custom action routing.

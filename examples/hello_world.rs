@@ -29,11 +29,13 @@
 //! cd examples && cargo run --bin hello_world --features minimal
 //! ```
 
+#![cfg(feature = "async")]
+
 use async_trait::async_trait;
 use cosmoflow::{
+    FlowBackend, FlowBuilder, Node,
     action::Action,
-    flow::{FlowBackend, FlowBuilder},
-    node::{ExecutionContext, Node, NodeError},
+    node::{ExecutionContext, NodeError},
     shared_store::SharedStore,
 };
 use serde::{Serialize, de::DeserializeOwned};

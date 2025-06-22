@@ -1,25 +1,16 @@
-//! Custom Node Example - Advanced Iterative Workflow with Data Analysis
+//! Custom Node Example - CosmoFlow Minimal Features
 //!
-//! This example demonstrates sophisticated custom nodes that implement an iterative
-//! counter workflow with data analysis and reporting. The workflow features:
+//! This example demonstrates building custom nodes and storage backends for CosmoFlow
+//! workflows. It showcases the fundamental building blocks of the workflow system
+//! while using only core features without built-in storage backends.
 //!
-//! ## Workflow Behavior
-//! - **Coordinator Node**: Orchestrates the iteration logic, deciding which counter to increment
-//! - **Counter Nodes**: Two stateful counters (main increments by 5, secondary by 3)
-//! - **Iterative Execution**: Counters alternate execution until reaching 6 total iterations
-//! - **Statistics Analysis**: Analyzes counter data including averages, min/max, and growth rates
-//! - **Report Generation**: Creates a formatted analysis report with all statistics
+//! # Features Demonstrated
+//! - Custom coordinator and counter nodes
+//! - In-memory storage backend implementation
+//! - Iterative workflow execution with stateful nodes
+//! - Data analysis and reporting
 //!
-//! ## Advanced Features Demonstrated
-//! - **Stateful Nodes**: Nodes maintain internal state and persist data to shared store
-//! - **Complex Business Logic**: Coordinator implements sophisticated iteration control
-//! - **Three-Phase Execution**: Proper use of prep, exec, and post phases
-//! - **Simple Workflows**: Uses max_steps for loop protection
-//! - **Data Persistence**: Stores counter values and execution history
-//! - **Statistical Analysis**: Calculates metrics and generates formatted reports
-//! - **Custom Storage Backend**: Implements a complete storage interface
-//!
-//! ## Execution Flow
+//! # Execution Flow
 //! 1. Coordinator analyzes current state and decides next action
 //! 2. Appropriate counter increments and stores its new value
 //! 3. Counter returns control to coordinator for next iteration
@@ -32,12 +23,13 @@
 //! cd examples && cargo run --bin custom_node --features minimal
 //! ```
 
+#![cfg(feature = "async")]
+
 use async_trait::async_trait;
 use cosmoflow::{
-    SharedStore,
+    FlowBackend, FlowBuilder, Node, SharedStore,
     action::Action,
-    flow::{FlowBackend, FlowBuilder},
-    node::{ExecutionContext, Node, NodeError},
+    node::{ExecutionContext, NodeError},
 };
 use serde::{Serialize, de::DeserializeOwned};
 use serde_json::Value;

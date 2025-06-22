@@ -11,11 +11,11 @@ repository = "https://github.com/echozyr2001/CosmoFlow"
 readme = "README.md"
 
 [dependencies]
-async-trait = { workspace = true }
+async-trait = { workspace = true, optional = true }
 serde = { workspace = true }
 serde_json = { workspace = true }
 thiserror = { workspace = true }
-tokio = { workspace = true }
+tokio = { workspace = true, optional = true }
 uuid = { workspace = true }
 redis = { workspace = true, optional = true }
 
@@ -24,14 +24,19 @@ tempfile = { workspace = true }
 tokio-test = { workspace = true }
 
 [features]
-default = []
+default = ["storage-memory"]
 
+# Async support
+async = ["async-trait", "tokio"]
+
+# Storage backends
 storage-memory = []
 storage-file = []
 storage-redis = ["redis"]
 storage-full = ["storage-memory", "storage-file", "storage-redis"]
 
+# Convenience feature combinations
 minimal = []
 basic = ["storage-memory"]
-standard = ["storage-memory"]
-full = ["storage-full"]
+standard = ["storage-memory", "async"]
+full = ["storage-full", "async"]

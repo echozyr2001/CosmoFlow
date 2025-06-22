@@ -19,7 +19,7 @@
 //! ```rust
 //! # #[cfg(feature = "storage-memory")]
 //! # {
-//! use cosmoflow::flow::{Flow, FlowBuilder, FlowBackend};
+//! use cosmoflow::{Flow, FlowBuilder, FlowBackend};
 //! use cosmoflow::shared_store::SharedStore;
 //! use cosmoflow::shared_store::backends::MemoryStorage;
 //!
@@ -55,7 +55,7 @@
 //! ```rust
 //! # #[cfg(feature = "storage-memory")]
 //! # {
-//! use cosmoflow::flow::{Flow, errors::FlowError, FlowBackend};
+//! use cosmoflow::{Flow, FlowError, FlowBackend};
 //!
 //! # async fn example() -> Result<(), FlowError> {
 //! # let mut flow = Flow::new();
@@ -80,50 +80,51 @@ pub mod macros;
 /// The route module contains the `Route` struct and `RouteCondition` enum.
 pub mod route;
 
+/// Async-specific implementations (only available with "async" feature)
+#[cfg(feature = "async")]
+pub mod r#async;
+
+#[cfg(feature = "async")]
+pub use r#async::NodeRunner;
+
+#[cfg(not(feature = "async"))]
 use std::collections::HashMap;
+#[cfg(not(feature = "async"))]
 use std::time::Duration;
 
 use crate::action::Action;
+#[cfg(not(feature = "async"))]
 use crate::node::{ExecutionContext, Node, NodeError};
 use crate::shared_store::SharedStore;
-use async_trait::async_trait;
 
 use errors::FlowError;
-use route::{Route, RouteCondition};
+use route::Route;
+#[cfg(not(feature = "async"))]
+use route::RouteCondition;
 
-/// Node runner trait for workflow execution
+/// Node runner trait for workflow execution (sync version only)
 ///
 /// This trait provides a unified interface for executing nodes with different
 /// associated types in the same flow, allowing the flow system to work with
 /// heterogeneous node collections while maintaining type safety.
-///
-/// ## Purpose
-///
-/// The NodeRunner trait provides a simplified interface that:
-/// - Enables different node types to work together in the same flow
-/// - Maintains a consistent execution interface for the flow system
-/// - Enables storage of different node types in the same collection
-/// - Preserves type safety
-#[async_trait]
+#[cfg(not(feature = "async"))]
 pub trait NodeRunner<S: SharedStore>: Send + Sync {
     /// Execute the node and return the resulting action
-    async fn run(&mut self, store: &mut S) -> Result<Action, NodeError>;
+    fn run(&mut self, store: &mut S) -> Result<Action, NodeError>;
 
     /// Get the node's name for debugging and logging
     fn name(&self) -> &str;
 }
 
-/// Implementation of NodeRunner for any Node
-///
-/// Any type that implements Node<S> automatically implements NodeRunner<S>.
-#[async_trait]
+/// Implementation of NodeRunner for any Node (sync version only)
+#[cfg(not(feature = "async"))]
 impl<T, S> NodeRunner<S> for T
 where
     T: Node<S> + Send + Sync,
     S: SharedStore + Send + Sync,
 {
-    async fn run(&mut self, store: &mut S) -> Result<Action, NodeError> {
-        Node::run(self, store).await
+    fn run(&mut self, store: &mut S) -> Result<Action, NodeError> {
+        Node::run(self, store)
     }
 
     fn name(&self) -> &str {
@@ -139,9 +140,9 @@ where
 /// # Examples
 ///
 /// ```rust
-/// # #[cfg(feature = "storage-memory")]
+/// # #[cfg(all(feature = "storage-memory", feature = "async"))]
 /// # {
-/// use cosmoflow::flow::{Flow, FlowExecutionResult, FlowBackend};
+/// use cosmoflow::{Flow, FlowExecutionResult, FlowBackend};
 /// use cosmoflow::action::Action;
 ///
 /// # async fn example() -> Result<(), Box<dyn std::error::Error>> {
@@ -208,7 +209,6 @@ impl Default for FlowConfig {
 }
 
 /// Trait for implementing flow execution logic
-#[async_trait]
 pub trait FlowBackend<S: SharedStore> {
     /// Add a node to the flow
     fn add_node(&mut self, id: String, node: Box<dyn NodeRunner<S>>) -> Result<(), FlowError>;
@@ -217,10 +217,10 @@ pub trait FlowBackend<S: SharedStore> {
     fn add_route(&mut self, from_node_id: String, route: Route) -> Result<(), FlowError>;
 
     /// Execute the flow starting from the configured start node
-    async fn execute(&mut self, store: &mut S) -> Result<FlowExecutionResult, FlowError>;
+    fn execute(&mut self, store: &mut S) -> Result<FlowExecutionResult, FlowError>;
 
     /// Execute the flow starting from a specific node
-    async fn execute_from(
+    fn execute_from(
         &mut self,
         store: &mut S,
         start_node_id: String,
@@ -237,18 +237,21 @@ pub trait FlowBackend<S: SharedStore> {
 }
 
 /// Builder for creating flows easily
+#[cfg(not(feature = "async"))]
 pub struct FlowBuilder<S: SharedStore> {
     nodes: HashMap<String, Box<dyn NodeRunner<S>>>,
     routes: HashMap<String, Vec<Route>>,
     config: FlowConfig,
 }
 
+#[cfg(not(feature = "async"))]
 impl<S: SharedStore + 'static> Default for FlowBuilder<S> {
     fn default() -> Self {
         Self::new()
     }
 }
 
+#[cfg(not(feature = "async"))]
 impl<S: SharedStore + 'static> FlowBuilder<S> {
     /// Create a new flow builder
     pub fn new() -> Self {
@@ -376,7 +379,7 @@ impl<S: SharedStore + 'static> FlowBuilder<S> {
     /// ```rust
     /// # #[cfg(feature = "storage-memory")]
     /// # {
-    /// use cosmoflow::flow::{FlowBuilder, route::RouteCondition};
+    /// use cosmoflow::FlowBuilder;
     /// use cosmoflow::shared_store::backends::MemoryStorage;
     ///
     /// let flow = FlowBuilder::<MemoryStorage>::new()
@@ -461,7 +464,7 @@ impl<S: SharedStore + 'static> FlowBuilder<S> {
 /// ```rust
 /// # #[cfg(feature = "storage-memory")]
 /// # {
-/// use cosmoflow::flow::{Flow, FlowConfig};
+/// use cosmoflow::{Flow, FlowConfig};
 /// use cosmoflow::shared_store::backends::MemoryStorage;
 ///
 /// // Create a flow with default configuration
@@ -481,12 +484,14 @@ impl<S: SharedStore + 'static> FlowBuilder<S> {
 /// The `Flow` struct is designed to be used in single-threaded contexts within
 /// CosmoFlow's execution model. For concurrent execution of multiple workflows,
 /// create separate `Flow` instances for each workflow.
+#[cfg(not(feature = "async"))]
 pub struct Flow<S: SharedStore> {
     nodes: HashMap<String, Box<dyn NodeRunner<S>>>,
     routes: HashMap<String, Vec<Route>>,
     config: FlowConfig,
 }
 
+#[cfg(not(feature = "async"))]
 impl<S: SharedStore> Flow<S> {
     /// Create a new basic flow with default configuration
     ///
@@ -526,7 +531,7 @@ impl<S: SharedStore> Flow<S> {
     /// ```rust
     /// # #[cfg(feature = "storage-memory")]
     /// # {
-    /// use cosmoflow::flow::{Flow, FlowConfig};
+    /// use cosmoflow::{Flow, FlowConfig};
     /// use cosmoflow::shared_store::backends::MemoryStorage;
     ///
     /// let config = FlowConfig {
@@ -599,7 +604,8 @@ impl<S: SharedStore> Flow<S> {
     }
 }
 
-#[async_trait]
+// Implementation of FlowBackend for Flow
+#[cfg(not(feature = "async"))]
 impl<S: SharedStore + Send + Sync> FlowBackend<S> for Flow<S>
 where
     S::Error: Send + Sync + 'static,
@@ -719,9 +725,9 @@ where
     /// println!("Execution completed in {} steps", result.steps_executed);
     /// # };
     /// ```
-    async fn execute(&mut self, store: &mut S) -> Result<FlowExecutionResult, FlowError> {
+    fn execute(&mut self, store: &mut S) -> Result<FlowExecutionResult, FlowError> {
         let start_node_id = self.config.start_node_id.clone();
-        self.execute_from(store, start_node_id).await
+        self.execute_from(store, start_node_id)
     }
 
     /// Execute the flow from a specific node
@@ -773,7 +779,7 @@ where
     /// # }
     /// ```
     /// ```
-    async fn execute_from(
+    fn execute_from(
         &mut self,
         store: &mut S,
         start_node_id: String,
@@ -798,7 +804,7 @@ where
                 .ok_or_else(|| FlowError::NodeNotFound(current_node_id.clone()))?;
 
             // Execute the node
-            let action = node.run(store).await?;
+            let action = node.run(store)?;
             steps_executed += 1;
 
             // Find next node
@@ -949,13 +955,14 @@ where
     }
 }
 
+#[cfg(not(feature = "async"))]
 impl<S: SharedStore + 'static> Default for Flow<S> {
     fn default() -> Self {
         Self::new()
     }
 }
 
-/// Implementation of Node for Flow, allowing flows to be nested
+/// Implementation of Node for Flow, allowing flows to be nested (sync version)
 ///
 /// This implementation enables flows to be used as nodes within other flows,
 /// creating hierarchical workflow structures. Key features:
@@ -964,7 +971,7 @@ impl<S: SharedStore + 'static> Default for Flow<S> {
 /// - Nesting depth protection to prevent infinite recursion
 /// - Result storage in shared store for parent flow access
 /// - Proper error propagation through the flow hierarchy
-#[async_trait]
+#[cfg(not(feature = "async"))]
 impl<S: SharedStore + Send + Sync + 'static> Node<S> for Flow<S>
 where
     S::Error: Send + Sync + 'static,
@@ -973,7 +980,7 @@ where
     type ExecResult = FlowExecutionResult;
     type Error = FlowError;
 
-    async fn prep(
+    fn prep(
         &mut self,
         _store: &S,
         context: &ExecutionContext,
@@ -995,7 +1002,7 @@ where
         Ok(())
     }
 
-    async fn exec(
+    fn exec(
         &mut self,
         _prep_result: Self::PrepResult,
         context: &ExecutionContext,
@@ -1011,7 +1018,7 @@ where
         })
     }
 
-    async fn post(
+    fn post(
         &mut self,
         store: &mut S,
         _prep_result: Self::PrepResult,
@@ -1031,7 +1038,7 @@ where
             .map_err(|e| FlowError::NodeError(format!("Failed to set nesting depth: {e}")))?;
 
         // Execute the nested flow
-        let result = self.execute(store).await?;
+        let result = self.execute(store)?;
 
         // Store the nested flow result in the shared store for parent flow access
         let result_key = format!("nested_flow_result_{}", context.execution_id());
@@ -1063,207 +1070,433 @@ where
     }
 }
 
-#[cfg(all(test, feature = "storage-memory"))]
+/// Implementation of Node for Flow, allowing flows to be nested (sync version)
+///
+/// This implementation enables flows to be used as nodes within other flows,
+/// creating hierarchical workflow structures. Key features:
+///
+/// - Automatic flow validation during preparation
+/// - Nesting depth protection to prevent infinite recursion
+/// - Result storage in shared store for parent flow access
+/// - Proper error propagation through the flow hierarchy
+
+#[cfg(all(test, feature = "storage-memory", not(feature = "async")))]
 mod tests {
     use super::*;
     use crate::action::Action;
     use crate::node::ExecutionContext;
     use crate::shared_store::backends::MemoryStorage;
-    use async_trait::async_trait;
 
-    // Test helper node
-    struct TestNode {
-        action: Action,
-        should_fail: bool,
-    }
+    // Sync test helper node
+    #[cfg(not(feature = "async"))]
+    mod sync_test_node {
+        use super::*;
 
-    impl TestNode {
-        fn new(action: Action) -> Self {
-            Self {
-                action,
-                should_fail: false,
+        pub struct TestNode {
+            pub action: Action,
+            pub should_fail: bool,
+        }
+
+        impl TestNode {
+            pub fn new(action: Action) -> Self {
+                Self {
+                    action,
+                    should_fail: false,
+                }
+            }
+        }
+
+        impl Node<MemoryStorage> for TestNode {
+            type PrepResult = ();
+            type ExecResult = ();
+            type Error = NodeError;
+
+            fn prep(
+                &mut self,
+                _store: &MemoryStorage,
+                _context: &ExecutionContext,
+            ) -> Result<Self::PrepResult, Self::Error> {
+                if self.should_fail {
+                    return Err(NodeError::PreparationError("Test failure".to_string()));
+                }
+                Ok(())
+            }
+
+            fn exec(
+                &mut self,
+                _prep_result: Self::PrepResult,
+                _context: &ExecutionContext,
+            ) -> Result<Self::ExecResult, Self::Error> {
+                Ok(())
+            }
+
+            fn post(
+                &mut self,
+                _store: &mut MemoryStorage,
+                _prep_result: Self::PrepResult,
+                _exec_result: Self::ExecResult,
+                _context: &ExecutionContext,
+            ) -> Result<Action, Self::Error> {
+                Ok(self.action.clone())
             }
         }
     }
 
-    #[async_trait]
-    impl Node<MemoryStorage> for TestNode {
-        type PrepResult = ();
-        type ExecResult = ();
-        type Error = NodeError;
+    // Async test helper node
+    #[cfg(feature = "async")]
+    mod async_test_node {
+        use super::*;
+        use async_trait::async_trait;
 
-        async fn prep(
-            &mut self,
-            _store: &MemoryStorage,
-            _context: &ExecutionContext,
-        ) -> Result<Self::PrepResult, Self::Error> {
-            if self.should_fail {
-                return Err(NodeError::PrepError("Test failure".to_string()));
+        pub struct TestNode {
+            pub action: Action,
+            pub should_fail: bool,
+        }
+
+        impl TestNode {
+            pub fn new(action: Action) -> Self {
+                Self {
+                    action,
+                    should_fail: false,
+                }
             }
-            Ok(())
         }
 
-        async fn exec(
-            &mut self,
-            _prep_result: Self::PrepResult,
-            _context: &ExecutionContext,
-        ) -> Result<Self::ExecResult, Self::Error> {
-            Ok(())
-        }
+        #[async_trait]
+        impl Node<MemoryStorage> for TestNode {
+            type PrepResult = ();
+            type ExecResult = ();
+            type Error = NodeError;
 
-        async fn post(
-            &mut self,
-            _store: &mut MemoryStorage,
-            _prep_result: Self::PrepResult,
-            _exec_result: Self::ExecResult,
-            _context: &ExecutionContext,
-        ) -> Result<Action, Self::Error> {
-            Ok(self.action.clone())
-        }
-    }
-
-    #[tokio::test]
-    async fn test_basic_flow_execution() {
-        let mut flow = FlowBuilder::new()
-            .start_node("start")
-            .node("start", TestNode::new(Action::simple("next")))
-            .node("middle", TestNode::new(Action::simple("end")))
-            .route("start", "next", "middle")
-            .terminal_route("middle", "end")
-            .build();
-
-        let mut store = MemoryStorage::new();
-        let result = flow.execute(&mut store).await;
-
-        if let Err(e) = &result {
-            eprintln!("Flow execution failed: {:?}", e);
-        }
-        assert!(result.is_ok());
-        let result = result.unwrap();
-        assert!(result.success);
-        assert_eq!(result.steps_executed, 2);
-        assert_eq!(result.execution_path, vec!["start", "middle"]);
-    }
-
-    #[tokio::test]
-    async fn test_flow_max_steps_exceeded() {
-        let mut flow = FlowBuilder::new()
-            .start_node("start")
-            .max_steps(2)
-            .node("start", TestNode::new(Action::simple("next")))
-            .node("middle", TestNode::new(Action::simple("continue")))
-            .node("end_node", TestNode::new(Action::simple("end")))
-            .route("start", "next", "middle")
-            .route("middle", "continue", "end_node")
-            .route("end_node", "end", "final")
-            .build();
-
-        let mut store = MemoryStorage::new();
-        let result = flow.execute(&mut store).await;
-
-        assert!(result.is_err());
-        match result.unwrap_err() {
-            FlowError::MaxStepsExceeded(max) => assert_eq!(max, 2),
-            _ => panic!("Expected MaxStepsExceeded error"),
-        }
-    }
-
-    #[tokio::test]
-    async fn test_flow_node_not_found() {
-        let mut flow = FlowBuilder::new()
-            .start_node("start")
-            .node("start", TestNode::new(Action::simple("next")))
-            .route("start", "next", "nonexistent")
-            .build();
-
-        let mut store = MemoryStorage::new();
-        let result = flow.execute(&mut store).await;
-
-        assert!(result.is_err());
-        match result.unwrap_err() {
-            FlowError::NodeNotFound(id) => assert_eq!(id, "nonexistent"),
-            _ => panic!("Expected NodeNotFound error"),
-        }
-    }
-
-    #[tokio::test]
-    async fn test_flow_no_route_found() {
-        let mut flow = FlowBuilder::new()
-            .start_node("start")
-            .node("start", TestNode::new(Action::simple("unknown")))
-            .build();
-
-        let mut store = MemoryStorage::new();
-        let result = flow.execute(&mut store).await;
-
-        assert!(result.is_err());
-        match result.unwrap_err() {
-            FlowError::NoRouteFound(node_id, action) => {
-                assert_eq!(node_id, "start");
-                assert_eq!(action, "unknown");
+            async fn prep(
+                &mut self,
+                _store: &MemoryStorage,
+                _context: &ExecutionContext,
+            ) -> Result<Self::PrepResult, Self::Error> {
+                if self.should_fail {
+                    return Err(NodeError::PreparationError("Test failure".to_string()));
+                }
+                Ok(())
             }
-            _ => panic!("Expected NoRouteFound error"),
-        }
-    }
 
-    #[tokio::test]
-    async fn test_flow_validation() {
-        let flow = FlowBuilder::new()
-            .start_node("nonexistent")
-            .node("start", TestNode::new(Action::simple("next")))
-            .build();
-
-        let result = flow.validate();
-        assert!(result.is_err());
-        match result.unwrap_err() {
-            FlowError::InvalidConfiguration(msg) => {
-                assert!(msg.contains("Start node 'nonexistent' not found"));
+            async fn exec(
+                &mut self,
+                _prep_result: Self::PrepResult,
+                _context: &ExecutionContext,
+            ) -> Result<Self::ExecResult, Self::Error> {
+                Ok(())
             }
-            _ => panic!("Expected InvalidConfiguration error"),
+
+            async fn post(
+                &mut self,
+                _store: &mut MemoryStorage,
+                _prep_result: Self::PrepResult,
+                _exec_result: Self::ExecResult,
+                _context: &ExecutionContext,
+            ) -> Result<Action, Self::Error> {
+                Ok(self.action.clone())
+            }
         }
     }
 
-    #[tokio::test]
-    async fn test_flow_builder_methods() {
-        let flow: Flow<MemoryStorage> = FlowBuilder::new()
-            .start_node("custom_start")
-            .max_steps(500)
-            .build();
+    // Use appropriate TestNode implementation
+    #[cfg(feature = "async")]
+    use async_test_node::TestNode;
+    #[cfg(not(feature = "async"))]
+    use sync_test_node::TestNode;
 
-        assert_eq!(flow.config().start_node_id, "custom_start");
-        assert_eq!(flow.config().max_steps, 500);
+    // Sync tests
+    #[cfg(not(feature = "async"))]
+    mod sync_tests {
+        use super::*;
+
+        #[test]
+        fn test_basic_flow_execution() {
+            let mut flow = FlowBuilder::new()
+                .start_node("start")
+                .node("start", TestNode::new(Action::simple("next")))
+                .node("middle", TestNode::new(Action::simple("end")))
+                .route("start", "next", "middle")
+                .terminal_route("middle", "end")
+                .build();
+
+            let mut store = MemoryStorage::new();
+            let result = flow.execute(&mut store);
+
+            if let Err(e) = &result {
+                eprintln!("Flow execution failed: {:?}", e);
+            }
+            assert!(result.is_ok());
+            let result = result.unwrap();
+            assert!(result.success);
+            assert_eq!(result.steps_executed, 2);
+            assert_eq!(result.execution_path, vec!["start", "middle"]);
+        }
+
+        #[test]
+        fn test_flow_max_steps_exceeded() {
+            let mut flow = FlowBuilder::new()
+                .start_node("start")
+                .max_steps(2)
+                .node("start", TestNode::new(Action::simple("next")))
+                .node("middle", TestNode::new(Action::simple("continue")))
+                .node("end_node", TestNode::new(Action::simple("end")))
+                .route("start", "next", "middle")
+                .route("middle", "continue", "end_node")
+                .route("end_node", "end", "final")
+                .build();
+
+            let mut store = MemoryStorage::new();
+            let result = flow.execute(&mut store);
+
+            assert!(result.is_err());
+            match result.unwrap_err() {
+                FlowError::MaxStepsExceeded(max) => assert_eq!(max, 2),
+                _ => panic!("Expected MaxStepsExceeded error"),
+            }
+        }
+
+        #[test]
+        fn test_flow_node_not_found() {
+            let mut flow = FlowBuilder::new()
+                .start_node("start")
+                .node("start", TestNode::new(Action::simple("next")))
+                .route("start", "next", "nonexistent")
+                .build();
+
+            let mut store = MemoryStorage::new();
+            let result = flow.execute(&mut store);
+
+            assert!(result.is_err());
+            match result.unwrap_err() {
+                FlowError::NodeNotFound(id) => assert_eq!(id, "nonexistent"),
+                _ => panic!("Expected NodeNotFound error"),
+            }
+        }
+
+        #[test]
+        fn test_flow_no_route_found() {
+            let mut flow = FlowBuilder::new()
+                .start_node("start")
+                .node("start", TestNode::new(Action::simple("unknown")))
+                .build();
+
+            let mut store = MemoryStorage::new();
+            let result = flow.execute(&mut store);
+
+            assert!(result.is_err());
+            match result.unwrap_err() {
+                FlowError::NoRouteFound(node_id, action) => {
+                    assert_eq!(node_id, "start");
+                    assert_eq!(action, "unknown");
+                }
+                _ => panic!("Expected NoRouteFound error"),
+            }
+        }
+
+        #[test]
+        fn test_flow_validation() {
+            let flow = FlowBuilder::new()
+                .start_node("nonexistent")
+                .node("start", TestNode::new(Action::simple("next")))
+                .build();
+
+            let result = flow.validate();
+            assert!(result.is_err());
+            match result.unwrap_err() {
+                FlowError::InvalidConfiguration(msg) => {
+                    assert!(msg.contains("Start node 'nonexistent' not found"));
+                }
+                _ => panic!("Expected InvalidConfiguration error"),
+            }
+        }
+
+        #[test]
+        fn test_flow_builder_methods() {
+            let flow: Flow<MemoryStorage> = FlowBuilder::new()
+                .start_node("custom_start")
+                .max_steps(500)
+                .build();
+
+            assert_eq!(flow.config().start_node_id, "custom_start");
+            assert_eq!(flow.config().max_steps, 500);
+        }
+
+        #[test]
+        fn test_conditional_route() {
+            use crate::flow::route::RouteCondition;
+
+            let mut flow = FlowBuilder::new()
+                .start_node("start")
+                .node("start", TestNode::new(Action::simple("check")))
+                .node("success", TestNode::new(Action::simple("end")))
+                .node("failure", TestNode::new(Action::simple("end")))
+                .conditional_route("start", "check", "success", RouteCondition::Always)
+                .terminal_route("success", "end")
+                .terminal_route("failure", "end")
+                .build();
+
+            let mut store = MemoryStorage::new();
+            let result = flow.execute(&mut store);
+
+            if let Err(e) = &result {
+                eprintln!("Conditional route test failed: {:?}", e);
+            }
+            assert!(result.is_ok());
+            let result = result.unwrap();
+            assert_eq!(result.execution_path, vec!["start", "success"]);
+        }
     }
 
+    // Async tests
+    #[cfg(feature = "async")]
+    mod async_tests {
+        use super::*;
+
+        #[tokio::test]
+        fn test_basic_flow_execution() {
+            let mut flow = FlowBuilder::new()
+                .start_node("start")
+                .node("start", TestNode::new(Action::simple("next")))
+                .node("middle", TestNode::new(Action::simple("end")))
+                .route("start", "next", "middle")
+                .terminal_route("middle", "end")
+                .build();
+
+            let mut store = MemoryStorage::new();
+            let result = flow.execute(&mut store);
+
+            if let Err(e) = &result {
+                eprintln!("Flow execution failed: {:?}", e);
+            }
+            assert!(result.is_ok());
+            let result = result.unwrap();
+            assert!(result.success);
+            assert_eq!(result.steps_executed, 2);
+            assert_eq!(result.execution_path, vec!["start", "middle"]);
+        }
+
+        #[tokio::test]
+        fn test_flow_max_steps_exceeded() {
+            let mut flow = FlowBuilder::new()
+                .start_node("start")
+                .max_steps(2)
+                .node("start", TestNode::new(Action::simple("next")))
+                .node("middle", TestNode::new(Action::simple("continue")))
+                .node("end_node", TestNode::new(Action::simple("end")))
+                .route("start", "next", "middle")
+                .route("middle", "continue", "end_node")
+                .route("end_node", "end", "final")
+                .build();
+
+            let mut store = MemoryStorage::new();
+            let result = flow.execute(&mut store);
+
+            assert!(result.is_err());
+            match result.unwrap_err() {
+                FlowError::MaxStepsExceeded(max) => assert_eq!(max, 2),
+                _ => panic!("Expected MaxStepsExceeded error"),
+            }
+        }
+
+        #[tokio::test]
+        fn test_flow_node_not_found() {
+            let mut flow = FlowBuilder::new()
+                .start_node("start")
+                .node("start", TestNode::new(Action::simple("next")))
+                .route("start", "next", "nonexistent")
+                .build();
+
+            let mut store = MemoryStorage::new();
+            let result = flow.execute(&mut store);
+
+            assert!(result.is_err());
+            match result.unwrap_err() {
+                FlowError::NodeNotFound(id) => assert_eq!(id, "nonexistent"),
+                _ => panic!("Expected NodeNotFound error"),
+            }
+        }
+
+        #[tokio::test]
+        fn test_flow_no_route_found() {
+            let mut flow = FlowBuilder::new()
+                .start_node("start")
+                .node("start", TestNode::new(Action::simple("unknown")))
+                .build();
+
+            let mut store = MemoryStorage::new();
+            let result = flow.execute(&mut store);
+
+            assert!(result.is_err());
+            match result.unwrap_err() {
+                FlowError::NoRouteFound(node_id, action) => {
+                    assert_eq!(node_id, "start");
+                    assert_eq!(action, "unknown");
+                }
+                _ => panic!("Expected NoRouteFound error"),
+            }
+        }
+
+        #[tokio::test]
+        fn test_flow_validation() {
+            let flow = FlowBuilder::new()
+                .start_node("nonexistent")
+                .node("start", TestNode::new(Action::simple("next")))
+                .build();
+
+            let result = flow.validate();
+            assert!(result.is_err());
+            match result.unwrap_err() {
+                FlowError::InvalidConfiguration(msg) => {
+                    assert!(msg.contains("Start node 'nonexistent' not found"));
+                }
+                _ => panic!("Expected InvalidConfiguration error"),
+            }
+        }
+
+        #[tokio::test]
+        fn test_flow_builder_methods() {
+            let flow: Flow<MemoryStorage> = FlowBuilder::new()
+                .start_node("custom_start")
+                .max_steps(500)
+                .build();
+
+            assert_eq!(flow.config().start_node_id, "custom_start");
+            assert_eq!(flow.config().max_steps, 500);
+        }
+
+        #[tokio::test]
+        fn test_conditional_route() {
+            use crate::flow::route::RouteCondition;
+
+            let mut flow = FlowBuilder::new()
+                .start_node("start")
+                .node("start", TestNode::new(Action::simple("check")))
+                .node("success", TestNode::new(Action::simple("end")))
+                .node("failure", TestNode::new(Action::simple("end")))
+                .conditional_route("start", "check", "success", RouteCondition::Always)
+                .terminal_route("success", "end")
+                .terminal_route("failure", "end")
+                .build();
+
+            let mut store = MemoryStorage::new();
+            let result = flow.execute(&mut store);
+
+            if let Err(e) = &result {
+                eprintln!("Conditional route test failed: {:?}", e);
+            }
+            assert!(result.is_ok());
+            let result = result.unwrap();
+            assert_eq!(result.execution_path, vec!["start", "success"]);
+        }
+    }
+
+    // Common tests that don't require flow execution
     #[test]
     fn test_flow_config_default() {
         let config = FlowConfig::default();
         assert_eq!(config.start_node_id, "start");
         assert_eq!(config.max_steps, 1000);
-    }
-
-    #[tokio::test]
-    async fn test_conditional_route() {
-        use crate::flow::route::RouteCondition;
-
-        let mut flow = FlowBuilder::new()
-            .start_node("start")
-            .node("start", TestNode::new(Action::simple("check")))
-            .node("success", TestNode::new(Action::simple("end")))
-            .node("failure", TestNode::new(Action::simple("end")))
-            .conditional_route("start", "check", "success", RouteCondition::Always)
-            .terminal_route("success", "end")
-            .terminal_route("failure", "end")
-            .build();
-
-        let mut store = MemoryStorage::new();
-        let result = flow.execute(&mut store).await;
-
-        if let Err(e) = &result {
-            eprintln!("Conditional route test failed: {:?}", e);
-        }
-        assert!(result.is_ok());
-        let result = result.unwrap();
-        assert_eq!(result.execution_path, vec!["start", "success"]);
     }
 
     #[test]

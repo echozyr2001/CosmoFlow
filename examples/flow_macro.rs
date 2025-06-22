@@ -38,10 +38,12 @@
 //! cd examples && cargo run --bin flow_macro --features basic
 //! ```
 
+#![cfg(feature = "async")]
+
 use std::collections::HashMap;
 
+use cosmoflow::FlowBackend;
 use cosmoflow::SharedStore;
-use cosmoflow::flow::FlowBackend;
 use cosmoflow::flow::macros::flow;
 use serde::Serialize;
 use serde::de::DeserializeOwned;
@@ -140,10 +142,10 @@ pub enum SimpleStorageError {
 struct DecisionNode;
 
 #[async_trait::async_trait]
-impl<S: SharedStore + Send + Sync> cosmoflow::node::Node<S> for DecisionNode {
+impl<S: SharedStore + Send + Sync> cosmoflow::Node<S> for DecisionNode {
     type PrepResult = ();
     type ExecResult = bool;
-    type Error = cosmoflow::node::NodeError;
+    type Error = cosmoflow::NodeError;
 
     async fn prep(
         &mut self,
@@ -189,10 +191,10 @@ impl<S: SharedStore + Send + Sync> cosmoflow::node::Node<S> for DecisionNode {
 struct SuccessNode;
 
 #[async_trait::async_trait]
-impl<S: SharedStore + Send + Sync> cosmoflow::node::Node<S> for SuccessNode {
+impl<S: SharedStore + Send + Sync> cosmoflow::Node<S> for SuccessNode {
     type PrepResult = ();
     type ExecResult = ();
-    type Error = cosmoflow::node::NodeError;
+    type Error = cosmoflow::NodeError;
 
     async fn prep(
         &mut self,
@@ -231,10 +233,10 @@ impl<S: SharedStore + Send + Sync> cosmoflow::node::Node<S> for SuccessNode {
 struct ErrorNode;
 
 #[async_trait::async_trait]
-impl<S: SharedStore + Send + Sync> cosmoflow::node::Node<S> for ErrorNode {
+impl<S: SharedStore + Send + Sync> cosmoflow::Node<S> for ErrorNode {
     type PrepResult = ();
     type ExecResult = ();
-    type Error = cosmoflow::node::NodeError;
+    type Error = cosmoflow::NodeError;
 
     async fn prep(
         &mut self,
@@ -273,10 +275,10 @@ impl<S: SharedStore + Send + Sync> cosmoflow::node::Node<S> for ErrorNode {
 struct FinalNode;
 
 #[async_trait::async_trait]
-impl<S: SharedStore + Send + Sync> cosmoflow::node::Node<S> for FinalNode {
+impl<S: SharedStore + Send + Sync> cosmoflow::Node<S> for FinalNode {
     type PrepResult = ();
     type ExecResult = ();
-    type Error = cosmoflow::node::NodeError;
+    type Error = cosmoflow::NodeError;
 
     async fn prep(
         &mut self,
