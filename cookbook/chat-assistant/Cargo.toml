@@ -1,0 +1,14 @@
+[package]
+name = "chat-assistant"
+version = "0.1.0"
+edition = "2021"
+description = "A complete chat assistant implementation using CosmoFlow"
+
+[dependencies]
+cosmoflow = { workspace = true, features = ["async"] }
+tokio = { workspace = true }
+serde = { workspace = true }
+serde_json = { workspace = true }
+async-trait = { workspace = true }
+reqwest = { version = "0.12", features = ["json"] }
+thiserror = { workspace = true }
