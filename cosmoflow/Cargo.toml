@@ -24,7 +24,7 @@ tempfile = { workspace = true }
 tokio-test = { workspace = true }
 
 [features]
-default = ["storage-memory"]
+default = []
 
 # Async support
 async = ["async-trait", "tokio"]
