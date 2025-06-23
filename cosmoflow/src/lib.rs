@@ -16,13 +16,53 @@
 //! *   **Shared Store**: A key-value store used to share data between nodes.
 //! *   **Storage Backend**: A pluggable storage mechanism for the shared store.
 //!
-//! ## Quick Start
+//! # Quick Start
+//!
+//! ## Synchronous Usage (default)
 //!
 //! ```rust,no_run
-//! # #[cfg(feature = "storage-memory")]
+//! # #[cfg(all(feature = "storage-memory", not(feature = "async")))]
+//! # fn example() -> Result<(), Box<dyn std::error::Error>> {
+//! use cosmoflow::prelude::*;
+//!
+//! // Create a shared store with memory backend
+//! let mut store = MemoryStorage::new();
+//!
+//! // Define a simple node
+//! struct MyNode;
+//! impl<S: SharedStore> Node<S> for MyNode {
+//!     type PrepResult = String;
+//!     type ExecResult = ();
+//!     type Error = NodeError;
+//!     fn prep(&mut self, _store: &S, _context: &ExecutionContext) -> Result<String, Self::Error> {
+//!         Ok("prepared".to_string())
+//!     }
+//!     fn exec(&mut self, _prep_result: String, _context: &ExecutionContext) -> Result<(), Self::Error> {
+//!         Ok(())
+//!     }
+//!     fn post(&mut self, _store: &mut S, _prep_result: String, _exec_result: (), _context: &ExecutionContext) -> Result<Action, Self::Error> {
+//!         Ok(Action::simple("complete"))
+//!     }
+//! }
+//!
+//! // Create a flow
+//! let mut flow = FlowBuilder::new()
+//!     .node("start", MyNode)
+//!     .terminal_route("start", "complete")
+//!     .build();
+//!
+//! // Execute the flow
+//! let result = flow.execute(&mut store)?;
+//! # Ok(())
+//! # }
+//! ```
+//!
+//! ## Asynchronous Usage (with async feature)
+//!
+//! ```rust,no_run
+//! # #[cfg(all(feature = "async", feature = "storage-memory"))]
 //! # async fn example() -> Result<(), Box<dyn std::error::Error>> {
 //! use cosmoflow::prelude::*;
-//! use cosmoflow::flow::FlowBackend;
 //! use async_trait::async_trait;
 //!
 //! // Create a shared store with memory backend
@@ -71,10 +111,15 @@
 //!
 //! ### Convenience Features
 //!
-//! *   `minimal`: Just the core engine (bring your own storage).
-//! *   `basic`: Core + memory storage (perfect for development).
-//! *   `standard`: Core + memory storage.
-//! *   `full`: All storage backends enabled.
+//! *   `minimal`: Just the core engine (bring your own storage) - sync only.
+//! *   `basic`: Core + memory storage - sync only.
+//! *   `standard`: Core + memory storage + async support.
+//! *   `full`: All storage backends + async support enabled.
+//!
+//! ### Sync/Async Mode
+//!
+//! *   `async`: Enable async/await support (requires tokio runtime).
+//! *   Without `async`: Synchronous execution only (lighter weight).
 
 // ============================================================================
 // CORE EXPORTS
@@ -90,14 +135,33 @@ pub use action::Action;
 
 /// Flow definition and execution
 pub mod flow;
+
+// Sync exports
+#[cfg(not(feature = "async"))]
 pub use flow::{
     Flow, FlowBackend, FlowBuilder, FlowConfig, FlowExecutionResult, errors::FlowError,
     route::Route,
 };
 
+// Async exports
+#[cfg(feature = "async")]
+pub use flow::{
+    FlowConfig, FlowExecutionResult,
+    r#async::{Flow, FlowBackend, FlowBuilder},
+    errors::FlowError,
+    route::Route,
+};
+
 /// Node execution system and traits
 pub mod node;
+
+// Sync Node exports
+#[cfg(not(feature = "async"))]
 pub use node::{ExecutionContext, Node, NodeError};
+
+// Async Node exports
+#[cfg(feature = "async")]
+pub use node::{ExecutionContext, NodeError, r#async::Node};
 
 // ============================================================================
 // CONVENIENCE TYPE ALIAS
@@ -119,11 +183,15 @@ pub type Result<T> = std::result::Result<T, FlowError>;
 /// use cosmoflow::prelude::*;
 /// ```
 pub mod prelude {
-    // Core types
-    pub use crate::{
-        Action, ExecutionContext, Flow, FlowBackend, FlowBuilder, FlowConfig, FlowExecutionResult,
-        Node, NodeError, SharedStore,
-    };
+    // Core types (always available)
+    pub use crate::{Action, ExecutionContext, Node, NodeError, SharedStore};
+
+    // Flow types (always available)
+    pub use crate::{Flow, FlowBackend, FlowBuilder, FlowConfig, FlowExecutionResult};
+
+    // Re-export async_trait when async feature is enabled
+    #[cfg(feature = "async")]
+    pub use async_trait::async_trait;
 
     // Storage backends
     #[cfg(feature = "storage-memory")]

@@ -21,7 +21,7 @@
 use async_trait::async_trait;
 use cosmoflow::prelude::*;
 use cosmoflow::shared_store::SharedStore;
-use serde::{Serialize, de::DeserializeOwned};
+use serde::{de::DeserializeOwned, Serialize};
 use std::{collections::HashMap, time::Duration};
 
 /// A simple in-memory storage implementation for demonstration purposes.

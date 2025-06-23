@@ -1,6 +1,6 @@
-//! Flow Macro Example - Declarative Workflow Construction with Custom Action Routing
+//! Flow Builder Example - Declarative Workflow Construction with Custom Action Routing
 //!
-//! This example demonstrates the powerful `flow!` macro for building CosmoFlow workflows
+//! This example demonstrates building CosmoFlow workflows using the FlowBuilder API
 //! with declarative syntax and custom action routing. The workflow showcases:
 //!
 //! ## Workflow Behavior
@@ -11,16 +11,17 @@
 //! - **Custom Actions**: Uses specific action names like "default", "error", "continue"
 //!
 //! ## Advanced Features Demonstrated
-//! - **Declarative Syntax**: Clean, readable workflow definition using the `flow!` macro
+//! - **Declarative Syntax**: Clean, readable workflow definition using FlowBuilder
 //! - **Custom Action Routing**: Specific action names for conditional workflow paths
 //! - **Decision-Based Routing**: Nodes that choose different execution paths based on logic
 //! - **Path Convergence**: Multiple execution paths that merge at a common endpoint
 //! - **Custom Storage Backend**: Complete implementation with JSON serialization
 //! - **Structured Workflow**: Explicit node and route definitions for complex flows
 //!
-//! ## Macro Syntax Features
-//! - **Node Definition**: `"id" : NodeType` syntax for clean node registration
-//! - **Action Routing**: `"from" - "action" => "to"` syntax for explicit action handling
+//! ## FlowBuilder API Features
+//! - **Node Registration**: `.node("id", NodeType)` syntax for clean node registration
+//! - **Action Routing**: `.route("from", "action", "to")` syntax for explicit action handling
+//! - **Terminal Routes**: `.terminal_route("from", "action")` for workflow termination
 //! - **Type Safety**: Compile-time storage type checking and validation
 //! - **Flexible Routing**: Support for multiple actions from a single node
 //!
@@ -31,20 +32,17 @@
 //! 4. Both paths converge at the final node for completion
 //! 5. Workflow demonstrates conditional routing with custom action names
 //!
-//! This example is perfect for understanding advanced macro usage and conditional workflows.
+//! This example is perfect for understanding advanced FlowBuilder usage and conditional workflows.
 //!
 //! To run this example:
 //! ```bash
-//! cd examples && cargo run --bin flow_macro --features basic
+//! cd cookbook/async-workflows && cargo run
 //! ```
 
 use std::collections::HashMap;
 
-use cosmoflow::SharedStore;
-use cosmoflow::flow::FlowBackend;
-use cosmoflow::flow::macros::flow;
-use serde::Serialize;
-use serde::de::DeserializeOwned;
+use cosmoflow::{FlowBackend, SharedStore};
+use serde::{de::DeserializeOwned, Serialize};
 
 /// A simple in-memory storage implementation for the workflow
 ///
@@ -140,10 +138,10 @@ pub enum SimpleStorageError {
 struct DecisionNode;
 
 #[async_trait::async_trait]
-impl<S: SharedStore + Send + Sync> cosmoflow::node::Node<S> for DecisionNode {
+impl<S: SharedStore + Send + Sync> cosmoflow::Node<S> for DecisionNode {
     type PrepResult = ();
     type ExecResult = bool;
-    type Error = cosmoflow::node::NodeError;
+    type Error = cosmoflow::NodeError;
 
     async fn prep(
         &mut self,
@@ -189,10 +187,10 @@ impl<S: SharedStore + Send + Sync> cosmoflow::node::Node<S> for DecisionNode {
 struct SuccessNode;
 
 #[async_trait::async_trait]
-impl<S: SharedStore + Send + Sync> cosmoflow::node::Node<S> for SuccessNode {
+impl<S: SharedStore + Send + Sync> cosmoflow::Node<S> for SuccessNode {
     type PrepResult = ();
     type ExecResult = ();
-    type Error = cosmoflow::node::NodeError;
+    type Error = cosmoflow::NodeError;
 
     async fn prep(
         &mut self,
@@ -231,10 +229,10 @@ impl<S: SharedStore + Send + Sync> cosmoflow::node::Node<S> for SuccessNode {
 struct ErrorNode;
 
 #[async_trait::async_trait]
-impl<S: SharedStore + Send + Sync> cosmoflow::node::Node<S> for ErrorNode {
+impl<S: SharedStore + Send + Sync> cosmoflow::Node<S> for ErrorNode {
     type PrepResult = ();
     type ExecResult = ();
-    type Error = cosmoflow::node::NodeError;
+    type Error = cosmoflow::NodeError;
 
     async fn prep(
         &mut self,
@@ -273,10 +271,10 @@ impl<S: SharedStore + Send + Sync> cosmoflow::node::Node<S> for ErrorNode {
 struct FinalNode;
 
 #[async_trait::async_trait]
-impl<S: SharedStore + Send + Sync> cosmoflow::node::Node<S> for FinalNode {
+impl<S: SharedStore + Send + Sync> cosmoflow::Node<S> for FinalNode {
     type PrepResult = ();
     type ExecResult = ();
-    type Error = cosmoflow::node::NodeError;
+    type Error = cosmoflow::NodeError;
 
     async fn prep(
         &mut self,
@@ -310,23 +308,21 @@ impl<S: SharedStore + Send + Sync> cosmoflow::node::Node<S> for FinalNode {
 
 #[tokio::main]
 async fn main() -> Result<(), Box<dyn std::error::Error>> {
-    // Create a workflow using custom action routing with the flow! macro
-    let mut workflow = flow! {
-        storage: SimpleStorage,
-        start: "decision",
-        nodes: {
-            "decision" : DecisionNode,
-            "success_path" : SuccessNode,
-            "error_path" : ErrorNode,
-            "final" : FinalNode,
-        },
-        routes: {
-            "decision" - "default" => "success_path",
-            "decision" - "error" => "error_path",
-            "success_path" - "continue" => "final",
-            "error_path" - "continue" => "final",
-        }
-    };
+    use cosmoflow::FlowBuilder;
+
+    // Create a workflow using FlowBuilder with custom action routing
+    let mut workflow = FlowBuilder::<SimpleStorage>::new()
+        .start_node("decision")
+        .node("decision", DecisionNode)
+        .node("success_path", SuccessNode)
+        .node("error_path", ErrorNode)
+        .node("final", FinalNode)
+        .route("decision", "default", "success_path")
+        .route("decision", "error", "error_path")
+        .route("success_path", "continue", "final")
+        .route("error_path", "continue", "final")
+        .terminal_route("final", "complete")
+        .build();
 
     let mut store = SimpleStorage::new();
     let result = workflow.execute(&mut store).await?;

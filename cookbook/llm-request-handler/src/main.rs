@@ -18,7 +18,7 @@ use async_trait::async_trait;
 use cosmoflow::flow::errors::FlowError;
 use cosmoflow::prelude::*;
 use cosmoflow::shared_store::backends::MemoryStorage;
-use serde_json::{Value, json};
+use serde_json::{json, Value};
 use std::collections::HashMap;
 use std::env;
 

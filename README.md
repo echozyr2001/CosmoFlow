@@ -23,7 +23,8 @@ with clean abstractions and excellent performance. It is:
 
 [Guides](./docs/getting-started.md) |
 [API Docs](https://docs.rs/cosmoflow/latest/cosmoflow) |
-[Examples](./examples/)
+[Examples](./cosmoflow/examples/) |
+[Cookbook](./cookbook/)
 
 ## Overview
 
@@ -90,6 +91,38 @@ question. You can also ask your question on [the discussions page][discussions].
 [API documentation]: https://docs.rs/cosmoflow/latest/cosmoflow
 [Chat]: https://discord.gg/cosmoflow
 [discussions]: https://github.com/echozyr2001/CosmoFlow/discussions
+
+## Project Structure
+
+This workspace contains:
+
+### Core Library
+- **`cosmoflow/`** - The main CosmoFlow library with modular features
+  - **`cosmoflow/examples/`** - Simple feature demonstrations and basic usage patterns
+
+### Cookbook  
+- **`cookbook/`** - Production-ready examples and real-world solutions
+  - **`chat-assistant/`** - Complete chat assistant implementation
+  - **`llm-request-handler/`** - Efficient LLM request handling patterns  
+  - **`unified-workflow/`** - Advanced workflow composition examples
+
+### Quick Start
+
+**Basic Examples (Learning)**:
+```bash
+cd cosmoflow/
+cargo run --example hello_world_sync
+cargo run --example simple_loops --features async
+```
+
+**Production Examples (Real Use Cases)**:
+```bash
+cd cookbook/chat-assistant/
+cargo run
+
+cd cookbook/unified-workflow/
+cargo run
+```
 
 ## Core Modules
 

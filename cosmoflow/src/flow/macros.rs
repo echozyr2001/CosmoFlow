@@ -216,22 +216,45 @@ macro_rules! flow {
         } $(,)?
     ) => {
         {
-            let mut builder = $crate::flow::FlowBuilder::<$storage>::new()
-                .start_node($start);
+            #[cfg(not(feature = "async"))]
+            {
+                let mut builder = $crate::flow::FlowBuilder::<$storage>::new()
+                    .start_node($start);
 
-            $(
-                builder = builder.node($id, $backend);
-            )*
+                $(
+                    builder = builder.node($id, $backend);
+                )*
 
-            $(
-                builder = builder.route($from, $action, $to);
-            )*
+                $(
+                    builder = builder.route($from, $action, $to);
+                )*
 
-            $(
-                builder = builder.terminal_route($term_from, $term_action);
-            )*
+                $(
+                    builder = builder.terminal_route($term_from, $term_action);
+                )*
 
-            builder.build()
+                builder.build()
+            }
+
+            #[cfg(feature = "async")]
+            {
+                let mut builder = $crate::flow::r#async::FlowBuilder::<$storage>::new()
+                    .start_node($start);
+
+                $(
+                    builder = builder.node($id, $backend);
+                )*
+
+                $(
+                    builder = builder.route($from, $action, $to);
+                )*
+
+                $(
+                    builder = builder.terminal_route($term_from, $term_action);
+                )*
+
+                builder.build()
+            }
         }
     };
 
@@ -251,18 +274,37 @@ macro_rules! flow {
         } $(,)?
     ) => {
         {
-            let mut builder = $crate::flow::FlowBuilder::<$storage>::new()
-                .start_node($start);
+            #[cfg(not(feature = "async"))]
+            {
+                let mut builder = $crate::flow::FlowBuilder::<$storage>::new()
+                    .start_node($start);
 
-            $(
-                builder = builder.node($id, $backend);
-            )*
+                $(
+                    builder = builder.node($id, $backend);
+                )*
 
-            $(
-                builder = builder.route($from, $action, $to);
-            )*
+                $(
+                    builder = builder.route($from, $action, $to);
+                )*
 
-            builder.build()
+                builder.build()
+            }
+
+            #[cfg(feature = "async")]
+            {
+                let mut builder = $crate::flow::r#async::FlowBuilder::<$storage>::new()
+                    .start_node($start);
+
+                $(
+                    builder = builder.node($id, $backend);
+                )*
+
+                $(
+                    builder = builder.route($from, $action, $to);
+                )*
+
+                builder.build()
+            }
         }
     };
 }
@@ -274,161 +316,335 @@ pub use flow;
 mod tests {
     use super::*;
     use crate::action::Action;
-    use crate::flow::{FlowBackend, FlowBuilder};
-    use crate::node::Node;
     use crate::shared_store::SharedStore;
     use crate::shared_store::backends::MemoryStorage;
 
-    // Test node implementations
-    struct TestStartNode;
+    // Import the correct Node trait based on features
+    #[cfg(not(feature = "async"))]
+    use crate::node::Node;
+    #[cfg(feature = "async")]
+    use crate::node::r#async::Node;
 
-    #[async_trait::async_trait]
-    impl<S: SharedStore + Send + Sync> Node<S> for TestStartNode {
-        type PrepResult = ();
-        type ExecResult = ();
-        type Error = crate::node::NodeError;
+    #[cfg(not(feature = "async"))]
+    use crate::flow::{FlowBackend, FlowBuilder};
 
-        async fn prep(
-            &mut self,
-            _: &S,
-            _: &crate::node::ExecutionContext,
-        ) -> Result<(), Self::Error> {
-            Ok(())
+    #[cfg(feature = "async")]
+    use crate::flow::r#async::{FlowBackend, FlowBuilder};
+
+    // Test node implementations - sync version
+    #[cfg(not(feature = "async"))]
+    mod sync_nodes {
+        use super::*;
+
+        pub struct TestStartNode;
+
+        impl<S: SharedStore> Node<S> for TestStartNode {
+            type PrepResult = ();
+            type ExecResult = ();
+            type Error = crate::node::NodeError;
+
+            fn prep(
+                &mut self,
+                _: &S,
+                _: &crate::node::ExecutionContext,
+            ) -> Result<(), Self::Error> {
+                Ok(())
+            }
+
+            fn exec(
+                &mut self,
+                _: (),
+                _: &crate::node::ExecutionContext,
+            ) -> Result<(), Self::Error> {
+                Ok(())
+            }
+
+            fn post(
+                &mut self,
+                _: &mut S,
+                _: (),
+                _: (),
+                _: &crate::node::ExecutionContext,
+            ) -> Result<Action, Self::Error> {
+                Ok(Action::simple("next"))
+            }
         }
 
-        async fn exec(
-            &mut self,
-            _: (),
-            _: &crate::node::ExecutionContext,
-        ) -> Result<(), Self::Error> {
-            Ok(())
+        pub struct TestProcessNode;
+
+        impl<S: SharedStore> Node<S> for TestProcessNode {
+            type PrepResult = ();
+            type ExecResult = ();
+            type Error = crate::node::NodeError;
+
+            fn prep(
+                &mut self,
+                _: &S,
+                _: &crate::node::ExecutionContext,
+            ) -> Result<(), Self::Error> {
+                Ok(())
+            }
+
+            fn exec(
+                &mut self,
+                _: (),
+                _: &crate::node::ExecutionContext,
+            ) -> Result<(), Self::Error> {
+                Ok(())
+            }
+
+            fn post(
+                &mut self,
+                _: &mut S,
+                _: (),
+                _: (),
+                _: &crate::node::ExecutionContext,
+            ) -> Result<Action, Self::Error> {
+                Ok(Action::simple("next"))
+            }
         }
 
-        async fn post(
-            &mut self,
-            _: &mut S,
-            _: (),
-            _: (),
-            _: &crate::node::ExecutionContext,
-        ) -> Result<Action, Self::Error> {
-            Ok(Action::simple("next"))
-        }
-    }
+        pub struct TestEndNode;
 
-    struct TestProcessNode;
+        impl<S: SharedStore> Node<S> for TestEndNode {
+            type PrepResult = ();
+            type ExecResult = ();
+            type Error = crate::node::NodeError;
 
-    #[async_trait::async_trait]
-    impl<S: SharedStore + Send + Sync> Node<S> for TestProcessNode {
-        type PrepResult = ();
-        type ExecResult = ();
-        type Error = crate::node::NodeError;
+            fn prep(
+                &mut self,
+                _: &S,
+                _: &crate::node::ExecutionContext,
+            ) -> Result<(), Self::Error> {
+                Ok(())
+            }
 
-        async fn prep(
-            &mut self,
-            _: &S,
-            _: &crate::node::ExecutionContext,
-        ) -> Result<(), Self::Error> {
-            Ok(())
-        }
+            fn exec(
+                &mut self,
+                _: (),
+                _: &crate::node::ExecutionContext,
+            ) -> Result<(), Self::Error> {
+                Ok(())
+            }
 
-        async fn exec(
-            &mut self,
-            _: (),
-            _: &crate::node::ExecutionContext,
-        ) -> Result<(), Self::Error> {
-            Ok(())
-        }
-
-        async fn post(
-            &mut self,
-            _: &mut S,
-            _: (),
-            _: (),
-            _: &crate::node::ExecutionContext,
-        ) -> Result<Action, Self::Error> {
-            Ok(Action::simple("next"))
-        }
-    }
-
-    struct TestEndNode;
-
-    #[async_trait::async_trait]
-    impl<S: SharedStore + Send + Sync> Node<S> for TestEndNode {
-        type PrepResult = ();
-        type ExecResult = ();
-        type Error = crate::node::NodeError;
-
-        async fn prep(
-            &mut self,
-            _: &S,
-            _: &crate::node::ExecutionContext,
-        ) -> Result<(), Self::Error> {
-            Ok(())
+            fn post(
+                &mut self,
+                _: &mut S,
+                _: (),
+                _: (),
+                _: &crate::node::ExecutionContext,
+            ) -> Result<Action, Self::Error> {
+                Ok(Action::simple("complete"))
+            }
         }
 
-        async fn exec(
-            &mut self,
-            _: (),
-            _: &crate::node::ExecutionContext,
-        ) -> Result<(), Self::Error> {
-            Ok(())
+        pub struct TestCustomNode {
+            pub action: String,
         }
 
-        async fn post(
-            &mut self,
-            _: &mut S,
-            _: (),
-            _: (),
-            _: &crate::node::ExecutionContext,
-        ) -> Result<Action, Self::Error> {
-            Ok(Action::simple("complete"))
+        impl TestCustomNode {
+            pub fn new(action: impl Into<String>) -> Self {
+                Self {
+                    action: action.into(),
+                }
+            }
         }
-    }
 
-    struct TestCustomNode {
-        action: String,
-    }
+        impl<S: SharedStore> Node<S> for TestCustomNode {
+            type PrepResult = ();
+            type ExecResult = ();
+            type Error = crate::node::NodeError;
 
-    impl TestCustomNode {
-        fn new(action: impl Into<String>) -> Self {
-            Self {
-                action: action.into(),
+            fn prep(
+                &mut self,
+                _: &S,
+                _: &crate::node::ExecutionContext,
+            ) -> Result<(), Self::Error> {
+                Ok(())
+            }
+
+            fn exec(
+                &mut self,
+                _: (),
+                _: &crate::node::ExecutionContext,
+            ) -> Result<(), Self::Error> {
+                Ok(())
+            }
+
+            fn post(
+                &mut self,
+                _: &mut S,
+                _: (),
+                _: (),
+                _: &crate::node::ExecutionContext,
+            ) -> Result<Action, Self::Error> {
+                Ok(Action::simple(&self.action))
             }
         }
     }
 
-    #[async_trait::async_trait]
-    impl<S: SharedStore + Send + Sync> Node<S> for TestCustomNode {
-        type PrepResult = ();
-        type ExecResult = ();
-        type Error = crate::node::NodeError;
+    // Test node implementations - async version
+    #[cfg(feature = "async")]
+    mod async_nodes {
+        use super::*;
+        use async_trait::async_trait;
 
-        async fn prep(
-            &mut self,
-            _: &S,
-            _: &crate::node::ExecutionContext,
-        ) -> Result<(), Self::Error> {
-            Ok(())
+        pub struct TestStartNode;
+
+        #[async_trait]
+        impl<S: SharedStore + Send + Sync> Node<S> for TestStartNode {
+            type PrepResult = ();
+            type ExecResult = ();
+            type Error = crate::node::NodeError;
+
+            async fn prep(
+                &mut self,
+                _: &S,
+                _: &crate::node::ExecutionContext,
+            ) -> Result<(), Self::Error> {
+                Ok(())
+            }
+
+            async fn exec(
+                &mut self,
+                _: (),
+                _: &crate::node::ExecutionContext,
+            ) -> Result<(), Self::Error> {
+                Ok(())
+            }
+
+            async fn post(
+                &mut self,
+                _: &mut S,
+                _: (),
+                _: (),
+                _: &crate::node::ExecutionContext,
+            ) -> Result<Action, Self::Error> {
+                Ok(Action::simple("next"))
+            }
         }
 
-        async fn exec(
-            &mut self,
-            _: (),
-            _: &crate::node::ExecutionContext,
-        ) -> Result<(), Self::Error> {
-            Ok(())
+        pub struct TestProcessNode;
+
+        #[async_trait]
+        impl<S: SharedStore + Send + Sync> Node<S> for TestProcessNode {
+            type PrepResult = ();
+            type ExecResult = ();
+            type Error = crate::node::NodeError;
+
+            async fn prep(
+                &mut self,
+                _: &S,
+                _: &crate::node::ExecutionContext,
+            ) -> Result<(), Self::Error> {
+                Ok(())
+            }
+
+            async fn exec(
+                &mut self,
+                _: (),
+                _: &crate::node::ExecutionContext,
+            ) -> Result<(), Self::Error> {
+                Ok(())
+            }
+
+            async fn post(
+                &mut self,
+                _: &mut S,
+                _: (),
+                _: (),
+                _: &crate::node::ExecutionContext,
+            ) -> Result<Action, Self::Error> {
+                Ok(Action::simple("next"))
+            }
         }
 
-        async fn post(
-            &mut self,
-            _: &mut S,
-            _: (),
-            _: (),
-            _: &crate::node::ExecutionContext,
-        ) -> Result<Action, Self::Error> {
-            Ok(Action::simple(&self.action))
+        pub struct TestEndNode;
+
+        #[async_trait]
+        impl<S: SharedStore + Send + Sync> Node<S> for TestEndNode {
+            type PrepResult = ();
+            type ExecResult = ();
+            type Error = crate::node::NodeError;
+
+            async fn prep(
+                &mut self,
+                _: &S,
+                _: &crate::node::ExecutionContext,
+            ) -> Result<(), Self::Error> {
+                Ok(())
+            }
+
+            async fn exec(
+                &mut self,
+                _: (),
+                _: &crate::node::ExecutionContext,
+            ) -> Result<(), Self::Error> {
+                Ok(())
+            }
+
+            async fn post(
+                &mut self,
+                _: &mut S,
+                _: (),
+                _: (),
+                _: &crate::node::ExecutionContext,
+            ) -> Result<Action, Self::Error> {
+                Ok(Action::simple("complete"))
+            }
+        }
+
+        pub struct TestCustomNode {
+            pub action: String,
+        }
+
+        impl TestCustomNode {
+            pub fn new(action: impl Into<String>) -> Self {
+                Self {
+                    action: action.into(),
+                }
+            }
+        }
+
+        #[async_trait]
+        impl<S: SharedStore + Send + Sync> Node<S> for TestCustomNode {
+            type PrepResult = ();
+            type ExecResult = ();
+            type Error = crate::node::NodeError;
+
+            async fn prep(
+                &mut self,
+                _: &S,
+                _: &crate::node::ExecutionContext,
+            ) -> Result<(), Self::Error> {
+                Ok(())
+            }
+
+            async fn exec(
+                &mut self,
+                _: (),
+                _: &crate::node::ExecutionContext,
+            ) -> Result<(), Self::Error> {
+                Ok(())
+            }
+
+            async fn post(
+                &mut self,
+                _: &mut S,
+                _: (),
+                _: (),
+                _: &crate::node::ExecutionContext,
+            ) -> Result<Action, Self::Error> {
+                Ok(Action::simple(&self.action))
+            }
         }
     }
+
+    // Use appropriate node implementations based on feature
+    #[cfg(feature = "async")]
+    use async_nodes::*;
+    #[cfg(not(feature = "async"))]
+    use sync_nodes::*;
 
     // Test: Structured syntax with explicit terminal routes
     #[test]
@@ -476,98 +692,199 @@ mod tests {
         // Test legacy syntax for backward compatibility
     }
 
-    // Test: New macro with terminal routes execution
-    #[tokio::test]
-    async fn test_flow_macro_with_terminal_routes_execution() {
-        let mut workflow = flow! {
-            storage: MemoryStorage,
-            start: "entry",
-            nodes: {
-                "entry": TestCustomNode::new("default"),
-                "process": TestCustomNode::new("continue"),
-                "end": TestEndNode,
-            },
-            routes: {
-                "entry" - "default" => "process",
-                "process" - "continue" => "end",
-            },
-            terminals: {
-                "end" - "complete",
-            }
-        };
+    // Sync execution tests
+    #[cfg(not(feature = "async"))]
+    mod sync_tests {
+        use super::*;
 
-        let mut store = MemoryStorage::new();
-        let result = workflow.execute(&mut store).await;
+        #[test]
+        fn test_flow_macro_with_terminal_routes_execution() {
+            let mut workflow = flow! {
+                storage: MemoryStorage,
+                start: "entry",
+                nodes: {
+                    "entry": TestCustomNode::new("default"),
+                    "process": TestCustomNode::new("continue"),
+                    "end": TestEndNode,
+                },
+                routes: {
+                    "entry" - "default" => "process",
+                    "process" - "continue" => "end",
+                },
+                terminals: {
+                    "end" - "complete",
+                }
+            };
 
-        assert!(result.is_ok(), "Flow macro execution should succeed");
-        let execution_result = result.unwrap();
-        assert!(execution_result.success);
-        assert_eq!(execution_result.steps_executed, 3);
-        assert_eq!(
-            execution_result.execution_path,
-            vec!["entry", "process", "end"]
-        );
+            let mut store = MemoryStorage::new();
+            let result = workflow.execute(&mut store);
+
+            assert!(result.is_ok(), "Flow macro execution should succeed");
+            let execution_result = result.unwrap();
+            assert!(execution_result.success);
+            assert_eq!(execution_result.steps_executed, 3);
+            assert_eq!(
+                execution_result.execution_path,
+                vec!["entry", "process", "end"]
+            );
+        }
+
+        #[test]
+        fn test_flow_macro_legacy_execution() {
+            let mut workflow = FlowBuilder::new()
+                .start_node("entry")
+                .node("entry", TestCustomNode::new("default"))
+                .node("process", TestCustomNode::new("continue"))
+                .node("end", TestEndNode)
+                .route("entry", "default", "process")
+                .route("process", "continue", "end")
+                .terminal_route("end", "complete")
+                .build();
+
+            let mut store = MemoryStorage::new();
+            let result = workflow.execute(&mut store);
+
+            assert!(result.is_ok(), "Legacy flow execution should succeed");
+            let execution_result = result.unwrap();
+            assert!(execution_result.success);
+            assert_eq!(execution_result.steps_executed, 3);
+            assert_eq!(
+                execution_result.execution_path,
+                vec!["entry", "process", "end"]
+            );
+        }
+
+        #[test]
+        fn test_flow_macro_multiple_terminal_routes() {
+            let mut success_workflow = flow! {
+                storage: MemoryStorage,
+                start: "check",
+                nodes: {
+                    "check": TestCustomNode::new("success"),
+                    "success_handler": TestEndNode,
+                    "error_handler": TestEndNode,
+                },
+                routes: {
+                    "check" - "success" => "success_handler",
+                    "check" - "error" => "error_handler",
+                },
+                terminals: {
+                    "success_handler" - "complete",
+                    "error_handler" - "failed",
+                }
+            };
+
+            let mut store = MemoryStorage::new();
+            let result = success_workflow.execute(&mut store);
+
+            assert!(
+                result.is_ok(),
+                "Multiple terminal routes workflow should succeed"
+            );
+            let execution_result = result.unwrap();
+            assert!(execution_result.success);
+            assert_eq!(
+                execution_result.execution_path,
+                vec!["check", "success_handler"]
+            );
+        }
     }
 
-    // Test: Legacy execution test (updated to use explicit terminal routes)
-    #[tokio::test]
-    async fn test_flow_macro_legacy_execution() {
-        let mut workflow = FlowBuilder::new()
-            .start_node("entry")
-            .node("entry", TestCustomNode::new("default"))
-            .node("process", TestCustomNode::new("continue"))
-            .node("end", TestEndNode)
-            .route("entry", "default", "process")
-            .route("process", "continue", "end")
-            .terminal_route("end", "complete")
-            .build();
+    // Async execution tests
+    #[cfg(feature = "async")]
+    mod async_tests {
+        use super::*;
 
-        let mut store = MemoryStorage::new();
-        let result = workflow.execute(&mut store).await;
+        #[tokio::test]
+        async fn test_flow_macro_with_terminal_routes_execution() {
+            let mut workflow = flow! {
+                storage: MemoryStorage,
+                start: "entry",
+                nodes: {
+                    "entry": TestCustomNode::new("default"),
+                    "process": TestCustomNode::new("continue"),
+                    "end": TestEndNode,
+                },
+                routes: {
+                    "entry" - "default" => "process",
+                    "process" - "continue" => "end",
+                },
+                terminals: {
+                    "end" - "complete",
+                }
+            };
 
-        assert!(result.is_ok(), "Legacy flow execution should succeed");
-        let execution_result = result.unwrap();
-        assert!(execution_result.success);
-        assert_eq!(execution_result.steps_executed, 3);
-        assert_eq!(
-            execution_result.execution_path,
-            vec!["entry", "process", "end"]
-        );
-    }
+            let mut store = MemoryStorage::new();
+            let result = workflow.execute(&mut store).await;
 
-    // Test: Multiple terminal routes
-    #[tokio::test]
-    async fn test_flow_macro_multiple_terminal_routes() {
-        let mut success_workflow = flow! {
-            storage: MemoryStorage,
-            start: "check",
-            nodes: {
-                "check": TestCustomNode::new("success"),
-                "success_handler": TestEndNode,
-                "error_handler": TestEndNode,
-            },
-            routes: {
-                "check" - "success" => "success_handler",
-                "check" - "error" => "error_handler",
-            },
-            terminals: {
-                "success_handler" - "complete",
-                "error_handler" - "failed",
-            }
-        };
+            assert!(result.is_ok(), "Flow macro execution should succeed");
+            let execution_result = result.unwrap();
+            assert!(execution_result.success);
+            assert_eq!(execution_result.steps_executed, 3);
+            assert_eq!(
+                execution_result.execution_path,
+                vec!["entry", "process", "end"]
+            );
+        }
 
-        let mut store = MemoryStorage::new();
-        let result = success_workflow.execute(&mut store).await;
+        #[tokio::test]
+        async fn test_flow_macro_legacy_execution() {
+            let mut workflow = FlowBuilder::new()
+                .start_node("entry")
+                .node("entry", TestCustomNode::new("default"))
+                .node("process", TestCustomNode::new("continue"))
+                .node("end", TestEndNode)
+                .route("entry", "default", "process")
+                .route("process", "continue", "end")
+                .terminal_route("end", "complete")
+                .build();
 
-        assert!(
-            result.is_ok(),
-            "Multiple terminal routes workflow should succeed"
-        );
-        let execution_result = result.unwrap();
-        assert!(execution_result.success);
-        assert_eq!(
-            execution_result.execution_path,
-            vec!["check", "success_handler"]
-        );
+            let mut store = MemoryStorage::new();
+            let result = workflow.execute(&mut store).await;
+
+            assert!(result.is_ok(), "Legacy flow execution should succeed");
+            let execution_result = result.unwrap();
+            assert!(execution_result.success);
+            assert_eq!(execution_result.steps_executed, 3);
+            assert_eq!(
+                execution_result.execution_path,
+                vec!["entry", "process", "end"]
+            );
+        }
+
+        #[tokio::test]
+        async fn test_flow_macro_multiple_terminal_routes() {
+            let mut success_workflow = flow! {
+                storage: MemoryStorage,
+                start: "check",
+                nodes: {
+                    "check": TestCustomNode::new("success"),
+                    "success_handler": TestEndNode,
+                    "error_handler": TestEndNode,
+                },
+                routes: {
+                    "check" - "success" => "success_handler",
+                    "check" - "error" => "error_handler",
+                },
+                terminals: {
+                    "success_handler" - "complete",
+                    "error_handler" - "failed",
+                }
+            };
+
+            let mut store = MemoryStorage::new();
+            let result = success_workflow.execute(&mut store).await;
+
+            assert!(
+                result.is_ok(),
+                "Multiple terminal routes workflow should succeed"
+            );
+            let execution_result = result.unwrap();
+            assert!(execution_result.success);
+            assert_eq!(
+                execution_result.execution_path,
+                vec!["check", "success_handler"]
+            );
+        }
     }
 }

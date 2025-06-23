@@ -1,0 +1,13 @@
+[package]
+name = "async-workflows"
+version = "0.1.0"
+edition = "2021"
+description = "Advanced async workflow patterns using CosmoFlow"
+
+[dependencies]
+cosmoflow = { workspace = true, features = ["async", "storage-memory"] }
+tokio = { workspace = true }
+serde = { workspace = true }
+serde_json = { workspace = true }
+async-trait = { workspace = true }
+thiserror = { workspace = true }
