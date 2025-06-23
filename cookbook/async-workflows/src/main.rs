@@ -39,97 +39,8 @@
 //! cd cookbook/async-workflows && cargo run
 //! ```
 
-use std::collections::HashMap;
-
+use cosmoflow::shared_store::backends::MemoryStorage;
 use cosmoflow::{FlowBackend, SharedStore};
-use serde::{de::DeserializeOwned, Serialize};
-
-/// A simple in-memory storage implementation for the workflow
-///
-/// This storage backend provides JSON-based serialization and maintains
-/// all data in memory using a HashMap. It implements the complete
-/// SharedStore trait required by CosmoFlow.
-#[derive(Debug, Clone)]
-pub struct SimpleStorage {
-    /// Internal data store using JSON values for flexible data types
-    data: HashMap<String, serde_json::Value>,
-}
-
-impl SimpleStorage {
-    /// Creates a new empty storage instance
-    pub fn new() -> Self {
-        Self {
-            data: HashMap::new(),
-        }
-    }
-}
-
-impl Default for SimpleStorage {
-    fn default() -> Self {
-        Self::new()
-    }
-}
-
-impl SharedStore for SimpleStorage {
-    type Error = SimpleStorageError;
-
-    fn get<T: DeserializeOwned>(&self, key: &str) -> Result<Option<T>, Self::Error> {
-        match self.data.get(key) {
-            Some(value) => {
-                let deserialized = serde_json::from_value(value.clone())
-                    .map_err(|e| SimpleStorageError::DeserializationError(e.to_string()))?;
-                Ok(Some(deserialized))
-            }
-            None => Ok(None),
-        }
-    }
-
-    fn set<T: Serialize>(&mut self, key: String, value: T) -> Result<(), Self::Error> {
-        let json_value = serde_json::to_value(value)
-            .map_err(|e| SimpleStorageError::SerializationError(e.to_string()))?;
-        self.data.insert(key, json_value);
-        Ok(())
-    }
-
-    fn remove<T: DeserializeOwned>(&mut self, key: &str) -> Result<Option<T>, Self::Error> {
-        match self.data.remove(key) {
-            Some(value) => {
-                let deserialized = serde_json::from_value(value)
-                    .map_err(|e| SimpleStorageError::DeserializationError(e.to_string()))?;
-                Ok(Some(deserialized))
-            }
-            None => Ok(None),
-        }
-    }
-
-    fn contains_key(&self, key: &str) -> Result<bool, Self::Error> {
-        Ok(self.data.contains_key(key))
-    }
-
-    fn keys(&self) -> Result<Vec<String>, Self::Error> {
-        Ok(self.data.keys().cloned().collect())
-    }
-
-    fn clear(&mut self) -> Result<(), Self::Error> {
-        self.data.clear();
-        Ok(())
-    }
-
-    fn len(&self) -> Result<usize, Self::Error> {
-        Ok(self.data.len())
-    }
-}
-
-/// Error types for the simple storage implementation
-#[derive(Debug, thiserror::Error)]
-pub enum SimpleStorageError {
-    /// Error during JSON serialization
-    #[error("Serialization error: {0}")]
-    SerializationError(String),
-    /// Error during JSON deserialization
-    #[error("Deserialization error: {0}")]
-    DeserializationError(String),
-}
 
 /// Decision node that evaluates conditions and chooses execution paths
 ///
@@ -311,7 +222,7 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
     use cosmoflow::FlowBuilder;
 
     // Create a workflow using FlowBuilder with custom action routing
-    let mut workflow = FlowBuilder::<SimpleStorage>::new()
+    let mut workflow = FlowBuilder::<MemoryStorage>::new()
         .start_node("decision")
         .node("decision", DecisionNode)
         .node("success_path", SuccessNode)
@@ -324,7 +235,7 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
         .terminal_route("final", "complete")
         .build();
 
-    let mut store = SimpleStorage::new();
+    let mut store = MemoryStorage::new();
     let result = workflow.execute(&mut store).await?;
 
     println!("Workflow execution completed!");

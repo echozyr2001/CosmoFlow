@@ -4,7 +4,7 @@ Advanced asynchronous workflow patterns using CosmoFlow with async/await.
 
 ## Examples
 
-- **Flow Builder Example**: Demonstrates declarative workflow construction with custom action routing using conditional paths, error handling, and convergence patterns. Built with FlowBuilder for maximum compatibility.
+- **Flow Builder Example**: Demonstrates declarative workflow construction with custom action routing using conditional paths, error handling, and convergence patterns. Uses CosmoFlow's built-in MemoryStorage for optimal performance.
 
 ## Features Demonstrated
 
@@ -12,7 +12,7 @@ Advanced asynchronous workflow patterns using CosmoFlow with async/await.
 - **Custom Action Routing**: Named actions like "default", "error", "continue" for explicit control flow
 - **Decision-Based Routing**: Conditional workflow paths based on business logic
 - **Path Convergence**: Multiple execution paths that merge at common endpoints
-- **Custom Storage Backend**: Complete implementation with JSON serialization
+- **Built-in MemoryStorage**: High-performance in-memory storage with automatic JSON serialization
 - **Error Handling**: Comprehensive error management in async contexts
 
 ## Running Examples

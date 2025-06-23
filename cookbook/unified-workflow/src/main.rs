@@ -19,145 +19,13 @@
 //! Run with: `cargo run --bin unified_hello_world`
 
 use async_trait::async_trait;
-use cosmoflow::prelude::*;
-use cosmoflow::shared_store::SharedStore;
-use serde::{de::DeserializeOwned, Serialize};
-use std::{collections::HashMap, time::Duration};
-
-/// A simple in-memory storage implementation for demonstration purposes.
-///
-/// This storage backend uses a HashMap to store JSON values and provides
-/// all the required operations for CosmoFlow workflows. It demonstrates
-/// how to implement a custom storage backend from scratch.
-///
-/// ## Features:
-/// - JSON serialization/deserialization for type safety
-/// - Error handling for serialization failures
-/// - Complete SharedStore trait implementation
-/// - Thread-safe operations (when wrapped appropriately)
-#[derive(Debug, Clone)]
-pub struct SimpleStorage {
-    /// Internal data store using JSON values for flexibility
-    data: HashMap<String, serde_json::Value>,
-}
-
-impl SimpleStorage {
-    /// Creates a new empty storage instance.
-    ///
-    /// This initializes the internal HashMap that will store all data
-    /// as JSON values, allowing for flexible type storage and retrieval.
-    pub fn new() -> Self {
-        Self {
-            data: HashMap::new(),
-        }
-    }
-}
-
-impl Default for SimpleStorage {
-    fn default() -> Self {
-        Self::new()
-    }
-}
-
-impl SharedStore for SimpleStorage {
-    type Error = SimpleStorageError;
-
-    /// Retrieves a value from storage and deserializes it to the requested type.
-    ///
-    /// # Arguments
-    /// * `key` - The key to look up in storage
-    ///
-    /// # Returns
-    /// * `Ok(Some(T))` - If the key exists and can be deserialized to type T
-    /// * `Ok(None)` - If the key doesn't exist
-    /// * `Err(SimpleStorageError)` - If deserialization fails
-    fn get<T: DeserializeOwned>(&self, key: &str) -> Result<Option<T>, Self::Error> {
-        match self.data.get(key) {
-            Some(value) => {
-                let deserialized = serde_json::from_value(value.clone())
-                    .map_err(|e| SimpleStorageError::DeserializationError(e.to_string()))?;
-                Ok(Some(deserialized))
-            }
-            None => Ok(None),
-        }
-    }
-
-    /// Stores a value in the storage after serializing it to JSON.
-    ///
-    /// # Arguments
-    /// * `key` - The key to store the value under
-    /// * `value` - The value to store (must be serializable)
-    ///
-    /// # Returns
-    /// * `Ok(())` - If the value was successfully stored
-    /// * `Err(SimpleStorageError)` - If serialization fails
-    fn set<T: Serialize>(&mut self, key: String, value: T) -> Result<(), Self::Error> {
-        let json_value = serde_json::to_value(value)
-            .map_err(|e| SimpleStorageError::SerializationError(e.to_string()))?;
-        self.data.insert(key, json_value);
-        Ok(())
-    }
-
-    /// Removes a value from storage and returns it if it existed.
-    ///
-    /// # Arguments
-    /// * `key` - The key to remove from storage
-    ///
-    /// # Returns
-    /// * `Ok(Some(T))` - If the key existed and could be deserialized
-    /// * `Ok(None)` - If the key didn't exist
-    /// * `Err(SimpleStorageError)` - If deserialization fails
-    fn remove<T: DeserializeOwned>(&mut self, key: &str) -> Result<Option<T>, Self::Error> {
-        match self.data.remove(key) {
-            Some(value) => {
-                let deserialized = serde_json::from_value(value)
-                    .map_err(|e| SimpleStorageError::DeserializationError(e.to_string()))?;
-                Ok(Some(deserialized))
-            }
-            None => Ok(None),
-        }
-    }
-
-    /// Checks if a key exists in storage.
-    fn contains_key(&self, key: &str) -> Result<bool, Self::Error> {
-        Ok(self.data.contains_key(key))
-    }
-
-    /// Returns all keys currently stored.
-    fn keys(&self) -> Result<Vec<String>, Self::Error> {
-        Ok(self.data.keys().cloned().collect())
-    }
-
-    /// Clears all data from storage.
-    fn clear(&mut self) -> Result<(), Self::Error> {
-        self.data.clear();
-        Ok(())
-    }
-
-    /// Returns the number of items in storage.
-    fn len(&self) -> Result<usize, Self::Error> {
-        Ok(self.data.len())
-    }
-
-    /// Checks if storage is empty.
-    fn is_empty(&self) -> Result<bool, Self::Error> {
-        Ok(self.data.is_empty())
-    }
-}
-
-/// Error types for SimpleStorage operations.
-///
-/// This enum covers the two main categories of errors that can occur
-/// when working with JSON serialization/deserialization in storage operations.
-#[derive(Debug, thiserror::Error)]
-pub enum SimpleStorageError {
-    /// Error occurred during serialization to JSON
-    #[error("Serialization error: {0}")]
-    SerializationError(String),
-    /// Error occurred during deserialization from JSON
-    #[error("Deserialization error: {0}")]
-    DeserializationError(String),
-}
+use cosmoflow::{
+    action::Action,
+    node::{ExecutionContext, NodeError},
+    shared_store::{backends::MemoryStorage, SharedStore},
+    FlowBackend, FlowBuilder, Node,
+};
+use std::time::Duration;
 
 /// A simple greeting node that demonstrates the unified Node trait.
 ///
@@ -189,7 +57,7 @@ impl HelloNode {
 }
 
 #[async_trait]
-impl Node<SimpleStorage> for HelloNode {
+impl Node<MemoryStorage> for HelloNode {
     /// Preparation phase returns unit type (no data needed for execution)
     type PrepResult = ();
     /// Execution phase returns the generated greeting string
@@ -211,7 +79,7 @@ impl Node<SimpleStorage> for HelloNode {
     /// * `Ok(())` - Always succeeds in this example
     async fn prep(
         &mut self,
-        _store: &SimpleStorage,
+        _store: &MemoryStorage,
         _context: &ExecutionContext,
     ) -> Result<Self::PrepResult, Self::Error> {
         println!("Preparing HelloNode...");
@@ -259,7 +127,7 @@ impl Node<SimpleStorage> for HelloNode {
     /// * `Err(NodeError)` - If storage operations fail
     async fn post(
         &mut self,
-        store: &mut SimpleStorage,
+        store: &mut MemoryStorage,
         _prep_result: Self::PrepResult,
         exec_result: Self::ExecResult,
         _context: &ExecutionContext,
@@ -311,8 +179,8 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
     println!("🚀 CosmoFlow Unified Node Trait Example");
     println!("========================================");
 
-    // Create shared storage with our custom SimpleStorage backend
-    let mut store = SimpleStorage::new();
+    // Create shared storage with MemoryStorage backend
+    let mut store = MemoryStorage::new();
 
     // Build the workflow using the new unified API
     // - start_with() creates the starting node and sets it as the entry point

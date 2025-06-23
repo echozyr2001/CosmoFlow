@@ -111,8 +111,8 @@
 //!
 //! ### Convenience Features
 //!
-//! *   `minimal`: Just the core engine (bring your own storage) - sync only.
-//! *   `basic`: Core + memory storage - sync only.
+//! *   `minimal`: Core engine only (bring your own storage).
+//! *   `basic`: Basic usable configuration with memory storage.
 //! *   `standard`: Core + memory storage + async support.
 //! *   `full`: All storage backends + async support enabled.
 //!

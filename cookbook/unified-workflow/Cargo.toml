@@ -2,7 +2,7 @@
 name = "unified-workflow"
 version = "0.1.0"
 edition = "2021"
-description = "Advanced workflow composition and unified sync/async patterns"
+description = "Advanced async workflow patterns: multi-node composition, state management, and unified Node trait usage"
 
 [dependencies]
 cosmoflow = { workspace = true, features = ["async", "storage-memory"] }
@@ -12,3 +12,15 @@ serde_json = { workspace = true }
 async-trait = { workspace = true }
 rand = "0.8"
 thiserror = { workspace = true }
+
+[[bin]]
+name = "unified-workflow"
+path = "src/main.rs"
+
+[[bin]]
+name = "unified_counter"
+path = "src/unified_counter.rs"
+
+[[bin]]
+name = "unified_shared_store"
+path = "src/unified_shared_store.rs"

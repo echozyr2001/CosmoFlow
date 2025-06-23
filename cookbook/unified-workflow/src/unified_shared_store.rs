@@ -1,85 +1,5 @@
-use std::collections::HashMap;
-
-use cosmoflow::shared_store::SharedStore;
-use serde::{Deserialize, Serialize, de::DeserializeOwned};
-
-/// A simple in-memory storage implementation
-#[derive(Debug, Clone)]
-pub struct SimpleStorage {
-    data: HashMap<String, serde_json::Value>,
-}
-
-impl SimpleStorage {
-    pub fn new() -> Self {
-        Self {
-            data: HashMap::new(),
-        }
-    }
-}
-
-impl Default for SimpleStorage {
-    fn default() -> Self {
-        Self::new()
-    }
-}
-
-impl SharedStore for SimpleStorage {
-    type Error = SimpleStorageError;
-
-    fn get<T: DeserializeOwned>(&self, key: &str) -> Result<Option<T>, Self::Error> {
-        match self.data.get(key) {
-            Some(value) => {
-                let deserialized = serde_json::from_value(value.clone())
-                    .map_err(|e| SimpleStorageError::DeserializationError(e.to_string()))?;
-                Ok(Some(deserialized))
-            }
-            None => Ok(None),
-        }
-    }
-
-    fn set<T: Serialize>(&mut self, key: String, value: T) -> Result<(), Self::Error> {
-        let json_value = serde_json::to_value(value)
-            .map_err(|e| SimpleStorageError::SerializationError(e.to_string()))?;
-        self.data.insert(key, json_value);
-        Ok(())
-    }
-
-    fn remove<T: DeserializeOwned>(&mut self, key: &str) -> Result<Option<T>, Self::Error> {
-        match self.data.remove(key) {
-            Some(value) => {
-                let deserialized = serde_json::from_value(value)
-                    .map_err(|e| SimpleStorageError::DeserializationError(e.to_string()))?;
-                Ok(Some(deserialized))
-            }
-            None => Ok(None),
-        }
-    }
-
-    fn contains_key(&self, key: &str) -> Result<bool, Self::Error> {
-        Ok(self.data.contains_key(key))
-    }
-
-    fn keys(&self) -> Result<Vec<String>, Self::Error> {
-        Ok(self.data.keys().cloned().collect())
-    }
-
-    fn clear(&mut self) -> Result<(), Self::Error> {
-        self.data.clear();
-        Ok(())
-    }
-
-    fn len(&self) -> Result<usize, Self::Error> {
-        Ok(self.data.len())
-    }
-}
-
-#[derive(Debug, thiserror::Error)]
-pub enum SimpleStorageError {
-    #[error("Serialization error: {0}")]
-    SerializationError(String),
-    #[error("Deserialization error: {0}")]
-    DeserializationError(String),
-}
+use cosmoflow::shared_store::{backends::MemoryStorage, SharedStore};
+use serde::{Deserialize, Serialize};
 
 #[derive(Serialize, Deserialize, Debug, PartialEq)]
 struct UserData {
@@ -91,8 +11,8 @@ struct UserData {
 fn main() -> Result<(), Box<dyn std::error::Error>> {
     println!("=== CosmoFlow: Unified SharedStore Trait Demo ===\n");
 
-    // Create a memory storage that directly implements SharedStore trait
-    let mut store = SimpleStorage::new();
+    // Create shared storage with MemoryStorage backend
+    let mut store = MemoryStorage::new();
 
     // Store different types of data
     println!("1. Storing data using the unified SharedStore trait:");
