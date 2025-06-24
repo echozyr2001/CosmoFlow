@@ -5,6 +5,23 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.5.0] - 2025-06-24
+
+### Added
+- Loop flow support for iterative workflow patterns
+- Enhanced feature configuration system with better granularity
+- New `storage-memory` as default feature for improved usability
+
+### Changed
+- **BREAKING**: Restructured feature flags for better modularity
+- Made async support optional with dedicated `async` feature
+- Improved default configuration to be more user-friendly with `basic` feature set
+- Enhanced storage backend feature organization
+
+### Fixed
+- Improved compile-time dependency management
+- Better feature gate organization for optional dependencies
+
 ## [0.4.0] - 2025-06-20
 
 ### Added
