@@ -5,6 +5,28 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.5.0] - 2025-06-24
+
+### Added
+- Loop flow support for iterative workflow patterns with self-routing capabilities
+- New cookbook directory with production-ready examples and real-world solutions
+- Enhanced feature configuration system with better granularity and modularity
+- Async workflow support as optional feature for better compile-time optimization
+- New convenience feature combinations: `minimal`, `basic`, `standard`, and `full`
+
+### Changed
+- **BREAKING**: Restructured project organization - moved complex examples to `cookbook/`
+- **BREAKING**: Made async support optional with dedicated `async` feature flag
+- **BREAKING**: Changed default features to `basic` (storage-memory only) for better UX
+- Enhanced storage backend feature organization with individual feature flags
+- Improved example structure with separate simple examples and production cookbook
+- Better separation between sync and async APIs for reduced compilation overhead
+
+### Fixed
+- Improved compile-time dependency management with optional features
+- Better feature gate organization for optional dependencies
+- Reduced binary size for applications not using all features
+
 ## [0.4.0] - 2025-06-20
 
 ### Added
