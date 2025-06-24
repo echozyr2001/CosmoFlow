@@ -8,19 +8,24 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ## [0.5.0] - 2025-06-24
 
 ### Added
-- Loop flow support for iterative workflow patterns
-- Enhanced feature configuration system with better granularity
-- New `storage-memory` as default feature for improved usability
+- Loop flow support for iterative workflow patterns with self-routing capabilities
+- New cookbook directory with production-ready examples and real-world solutions
+- Enhanced feature configuration system with better granularity and modularity
+- Async workflow support as optional feature for better compile-time optimization
+- New convenience feature combinations: `minimal`, `basic`, `standard`, and `full`
 
 ### Changed
-- **BREAKING**: Restructured feature flags for better modularity
-- Made async support optional with dedicated `async` feature
-- Improved default configuration to be more user-friendly with `basic` feature set
-- Enhanced storage backend feature organization
+- **BREAKING**: Restructured project organization - moved complex examples to `cookbook/`
+- **BREAKING**: Made async support optional with dedicated `async` feature flag
+- **BREAKING**: Changed default features to `basic` (storage-memory only) for better UX
+- Enhanced storage backend feature organization with individual feature flags
+- Improved example structure with separate simple examples and production cookbook
+- Better separation between sync and async APIs for reduced compilation overhead
 
 ### Fixed
-- Improved compile-time dependency management
+- Improved compile-time dependency management with optional features
 - Better feature gate organization for optional dependencies
+- Reduced binary size for applications not using all features
 
 ## [0.4.0] - 2025-06-20
 
