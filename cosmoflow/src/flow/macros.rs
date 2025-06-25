@@ -216,45 +216,22 @@ macro_rules! flow {
         } $(,)?
     ) => {
         {
-            #[cfg(not(feature = "async"))]
-            {
-                let mut builder = $crate::flow::FlowBuilder::<$storage>::new()
-                    .start_node($start);
+            let mut builder = $crate::FlowBuilder::<$storage>::new()
+                .start_node($start);
 
-                $(
-                    builder = builder.node($id, $backend);
-                )*
+            $(
+                builder = builder.node($id, $backend);
+            )*
 
-                $(
-                    builder = builder.route($from, $action, $to);
-                )*
+            $(
+                builder = builder.route($from, $action, $to);
+            )*
 
-                $(
-                    builder = builder.terminal_route($term_from, $term_action);
-                )*
+            $(
+                builder = builder.terminal_route($term_from, $term_action);
+            )*
 
-                builder.build()
-            }
-
-            #[cfg(feature = "async")]
-            {
-                let mut builder = $crate::flow::r#async::FlowBuilder::<$storage>::new()
-                    .start_node($start);
-
-                $(
-                    builder = builder.node($id, $backend);
-                )*
-
-                $(
-                    builder = builder.route($from, $action, $to);
-                )*
-
-                $(
-                    builder = builder.terminal_route($term_from, $term_action);
-                )*
-
-                builder.build()
-            }
+            builder.build()
         }
     };
 
@@ -274,37 +251,125 @@ macro_rules! flow {
         } $(,)?
     ) => {
         {
-            #[cfg(not(feature = "async"))]
-            {
-                let mut builder = $crate::flow::FlowBuilder::<$storage>::new()
-                    .start_node($start);
+            let mut builder = $crate::FlowBuilder::<$storage>::new()
+                .start_node($start);
 
-                $(
-                    builder = builder.node($id, $backend);
-                )*
+            $(
+                builder = builder.node($id, $backend);
+            )*
 
-                $(
-                    builder = builder.route($from, $action, $to);
-                )*
+            $(
+                builder = builder.route($from, $action, $to);
+            )*
 
-                builder.build()
-            }
+            builder.build()
+        }
+    };
+}
 
-            #[cfg(feature = "async")]
-            {
-                let mut builder = $crate::flow::r#async::FlowBuilder::<$storage>::new()
-                    .start_node($start);
+/// Declarative async workflow construction with explicit terminal routes and type inference.
+///
+/// This macro provides a clean, declarative syntax for building async CosmoFlow workflows.
+/// It automatically handles node registration, routing setup, and explicit terminal route
+/// configuration with the new type-safe termination system.
+///
+/// **Note**: This macro creates async flows. For sync flows, use `flow!` macro.
+/// This macro is only available when the "async" feature is enabled.
+///
+/// # Syntax
+///
+/// Same as `flow!` macro but creates async flows instead of sync flows.
+///
+/// # Example
+///
+/// ```rust,ignore
+/// #[cfg(feature = "async")]
+/// let workflow = async_flow! {
+///     storage: MemoryStorage,
+///     start: "start",
+///     nodes: {
+///         "start": AsyncStartNode,
+///         "end": AsyncEndNode,
+///     },
+///     routes: {
+///         "start" - "next" => "end",
+///     },
+///     terminals: {
+///         "end" - "complete",
+///     }
+/// };
+/// ```
+#[cfg(feature = "async")]
+#[macro_export]
+macro_rules! async_flow {
+    // Structured syntax with explicit terminal routes
+    (
+        storage: $storage:ty,
+        start: $start:expr,
+        nodes: {
+            $(
+                $id:literal : $backend:expr
+            ),* $(,)?
+        },
+        routes: {
+            $(
+                $from:literal - $action:literal => $to:literal
+            ),* $(,)?
+        },
+        terminals: {
+            $(
+                $term_from:literal - $term_action:literal
+            ),* $(,)?
+        } $(,)?
+    ) => {
+        {
+            let mut builder = $crate::flow::r#async::FlowBuilder::<$storage>::new()
+                .start_node($start);
 
-                $(
-                    builder = builder.node($id, $backend);
-                )*
+            $(
+                builder = builder.node($id, $backend);
+            )*
 
-                $(
-                    builder = builder.route($from, $action, $to);
-                )*
+            $(
+                builder = builder.route($from, $action, $to);
+            )*
 
-                builder.build()
-            }
+            $(
+                builder = builder.terminal_route($term_from, $term_action);
+            )*
+
+            builder.build()
+        }
+    };
+
+    // Structured syntax with only routes (no terminal routes - for backward compatibility)
+    (
+        storage: $storage:ty,
+        start: $start:expr,
+        nodes: {
+            $(
+                $id:literal : $backend:expr
+            ),* $(,)?
+        },
+        routes: {
+            $(
+                $from:literal - $action:literal => $to:literal
+            ),* $(,)?
+        } $(,)?
+    ) => {
+        {
+            let mut builder = $crate::flow::r#async::FlowBuilder::<$storage>::new()
+                .start_node($start);
+
+            $(
+                builder = builder.node($id, $backend);
+            )*
+
+            $(
+                builder = builder.route($from, $action, $to);
+            )*
+
+            builder.build()
         }
     };
 }
