@@ -36,7 +36,7 @@ pub fn format_permissions(metadata: &std::fs::Metadata) -> String {
         let other = format!("{}{}", other, if mode & 0o002 != 0 { "w" } else { "-" });
         let other = format!("{}{}", other, if mode & 0o001 != 0 { "x" } else { "-" });
 
-        format!("{}{}{}", user, group, other)
+        format!("{user}{group}{other}")
     }
     #[cfg(not(unix))]
     {

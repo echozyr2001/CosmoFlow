@@ -54,15 +54,13 @@ impl Node<MemoryStorage> for InputNode {
         // Validate that the path exists and is a directory
         if !path.exists() {
             return Err(NodeError::ValidationError(format!(
-                "Path does not exist: {}",
-                target_path
+                "Path does not exist: {target_path}"
             )));
         }
 
         if !path.is_dir() {
             return Err(NodeError::ValidationError(format!(
-                "Path is not a directory: {}",
-                target_path
+                "Path is not a directory: {target_path}"
             )));
         }
 
@@ -121,17 +119,17 @@ impl Node<MemoryStorage> for LsNode {
 
         // Read directory contents
         let entries = fs::read_dir(path)
-            .map_err(|e| NodeError::ExecutionError(format!("Failed to read directory: {}", e)))?;
+            .map_err(|e| NodeError::ExecutionError(format!("Failed to read directory: {e}")))?;
 
         let mut file_entries = Vec::new();
 
         for entry in entries {
             let entry = entry
-                .map_err(|e| NodeError::ExecutionError(format!("Failed to read entry: {}", e)))?;
+                .map_err(|e| NodeError::ExecutionError(format!("Failed to read entry: {e}")))?;
 
-            let metadata = entry.metadata().map_err(|e| {
-                NodeError::ExecutionError(format!("Failed to read metadata: {}", e))
-            })?;
+            let metadata = entry
+                .metadata()
+                .map_err(|e| NodeError::ExecutionError(format!("Failed to read metadata: {e}")))?;
 
             let name = entry.file_name().to_string_lossy().to_string();
 
@@ -327,7 +325,7 @@ impl Node<MemoryStorage> for OutputNode {
             .map_err(|e| NodeError::StorageError(e.to_string()))?;
 
         // Display the formatted output
-        println!("{}", exec_result);
+        println!("{exec_result}");
 
         Ok(Action::simple("complete"))
     }
