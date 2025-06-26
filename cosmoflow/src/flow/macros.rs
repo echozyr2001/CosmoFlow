@@ -1082,8 +1082,11 @@ mod tests {
             let result1 = async_flow_workflow.execute(&mut store1).await;
             let result2 = manual_workflow.execute(&mut store2).await;
 
-            assert!(result1.is_ok() && result2.is_ok(), "Both workflows should succeed");
-            
+            assert!(
+                result1.is_ok() && result2.is_ok(),
+                "Both workflows should succeed"
+            );
+
             let exec1 = result1.unwrap();
             let exec2 = result2.unwrap();
 
