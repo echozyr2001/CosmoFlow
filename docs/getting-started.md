@@ -8,7 +8,7 @@ Add CosmoFlow to your `Cargo.toml`:
 
 ```toml
 [dependencies]
-cosmoflow = { version = "0.5.0", features = ["standard"] }
+cosmoflow = { version = "0.5.1", features = ["standard"] }
 tokio = { version = "1.0", features = ["full"] }
 ```
 

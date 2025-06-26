@@ -7,7 +7,7 @@ This guide covers CosmoFlow's feature system and configuration options.
 ### Minimal Configuration
 ```toml
 [dependencies]
-cosmoflow = { version = "0.5.0", default-features = false, features = ["minimal"] }
+cosmoflow = { version = "0.5.1", default-features = false, features = ["minimal"] }
 ```
 - **Features**: Core engine only
 - **Storage**: No storage backends enabled
@@ -17,9 +17,9 @@ cosmoflow = { version = "0.5.0", default-features = false, features = ["minimal"
 ### Basic Configuration (Default)
 ```toml
 [dependencies]
-cosmoflow = { version = "0.5.0", features = ["basic"] }
+cosmoflow = { version = "0.5.1", features = ["basic"] }
 # or simply
-cosmoflow = "0.5.0"
+cosmoflow = "0.5.1"
 ```
 - **Features**: Memory storage only
 - **Storage**: In-memory storage backend
@@ -29,7 +29,7 @@ cosmoflow = "0.5.0"
 ### Standard Configuration (Recommended)
 ```toml
 [dependencies]
-cosmoflow = { version = "0.5.0", features = ["standard"] }
+cosmoflow = { version = "0.5.1", features = ["standard"] }
 ```
 - **Features**: Memory storage + async support
 - **Storage**: In-memory storage backend
@@ -39,7 +39,7 @@ cosmoflow = { version = "0.5.0", features = ["standard"] }
 ### Full Configuration
 ```toml
 [dependencies]
-cosmoflow = { version = "0.5.0", features = ["full"] }
+cosmoflow = { version = "0.5.1", features = ["full"] }
 ```
 - **Features**: All storage backends + async support
 - **Storage**: Memory, file, and Redis storage
@@ -63,16 +63,16 @@ You can mix and match features for your specific needs:
 
 ```toml
 # Memory storage + async
-cosmoflow = { version = "0.5.0", default-features = false, features = ["storage-memory", "async"] }
+cosmoflow = { version = "0.5.1", default-features = false, features = ["storage-memory", "async"] }
 
 # File storage only
-cosmoflow = { version = "0.5.0", default-features = false, features = ["storage-file"] }
+cosmoflow = { version = "0.5.1", default-features = false, features = ["storage-file"] }
 
 # All storage backends with async
-cosmoflow = { version = "0.5.0", default-features = false, features = ["storage-full", "async"] }
+cosmoflow = { version = "0.5.1", default-features = false, features = ["storage-full", "async"] }
 
 # Redis storage with async
-cosmoflow = { version = "0.5.0", default-features = false, features = ["storage-redis", "async"] }
+cosmoflow = { version = "0.5.1", default-features = false, features = ["storage-redis", "async"] }
 ```
 
 ## 📊 Feature Comparison
