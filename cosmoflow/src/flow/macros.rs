@@ -951,5 +951,145 @@ mod tests {
                 vec!["check", "success_handler"]
             );
         }
+
+        #[tokio::test]
+        async fn test_async_flow_macro_with_terminal_routes_execution() {
+            let mut workflow = async_flow! {
+                storage: MemoryStorage,
+                start: "entry",
+                nodes: {
+                    "entry": TestCustomNode::new("default"),
+                    "process": TestCustomNode::new("continue"),
+                    "end": TestEndNode,
+                },
+                routes: {
+                    "entry" - "default" => "process",
+                    "process" - "continue" => "end",
+                },
+                terminals: {
+                    "end" - "complete",
+                }
+            };
+
+            let mut store = MemoryStorage::new();
+            let result = workflow.execute(&mut store).await;
+
+            assert!(result.is_ok(), "Async flow macro execution should succeed");
+            let execution_result = result.unwrap();
+            assert!(execution_result.success);
+            assert_eq!(execution_result.steps_executed, 3);
+            assert_eq!(
+                execution_result.execution_path,
+                vec!["entry", "process", "end"]
+            );
+        }
+
+        #[tokio::test]
+        async fn test_async_flow_macro_legacy_syntax() {
+            let mut workflow = async_flow! {
+                storage: MemoryStorage,
+                start: "start",
+                nodes: {
+                    "start": TestCustomNode::new("next"),
+                    "end": TestEndNode,
+                },
+                routes: {
+                    "start" - "next" => "end",
+                },
+                terminals: {
+                    "end" - "complete",
+                }
+            };
+
+            let mut store = MemoryStorage::new();
+            let result = workflow.execute(&mut store).await;
+
+            assert!(result.is_ok(), "Async flow macro legacy syntax should work");
+            let execution_result = result.unwrap();
+            assert!(execution_result.success);
+            assert_eq!(execution_result.steps_executed, 2);
+            assert_eq!(execution_result.execution_path, vec!["start", "end"]);
+        }
+
+        #[tokio::test]
+        async fn test_async_flow_macro_multiple_terminal_routes() {
+            let mut success_workflow = async_flow! {
+                storage: MemoryStorage,
+                start: "check",
+                nodes: {
+                    "check": TestCustomNode::new("success"),
+                    "success_handler": TestEndNode,
+                    "error_handler": TestEndNode,
+                },
+                routes: {
+                    "check" - "success" => "success_handler",
+                    "check" - "error" => "error_handler",
+                },
+                terminals: {
+                    "success_handler" - "complete",
+                    "error_handler" - "failed",
+                }
+            };
+
+            let mut store = MemoryStorage::new();
+            let result = success_workflow.execute(&mut store).await;
+
+            assert!(
+                result.is_ok(),
+                "Async flow macro with multiple terminal routes should succeed"
+            );
+            let execution_result = result.unwrap();
+            assert!(execution_result.success);
+            assert_eq!(
+                execution_result.execution_path,
+                vec!["check", "success_handler"]
+            );
+        }
+
+        #[tokio::test]
+        async fn test_async_flow_macro_vs_regular_flow_consistency() {
+            // Test that async_flow! produces the same result as manual FlowBuilder
+            let mut async_flow_workflow = async_flow! {
+                storage: MemoryStorage,
+                start: "start",
+                nodes: {
+                    "start": TestCustomNode::new("proceed"),
+                    "middle": TestCustomNode::new("finish"),
+                    "end": TestEndNode,
+                },
+                routes: {
+                    "start" - "proceed" => "middle",
+                    "middle" - "finish" => "end",
+                },
+                terminals: {
+                    "end" - "complete",
+                }
+            };
+
+            let mut manual_workflow = crate::flow::r#async::FlowBuilder::<MemoryStorage>::new()
+                .start_node("start")
+                .node("start", TestCustomNode::new("proceed"))
+                .node("middle", TestCustomNode::new("finish"))
+                .node("end", TestEndNode)
+                .route("start", "proceed", "middle")
+                .route("middle", "finish", "end")
+                .terminal_route("end", "complete")
+                .build();
+
+            let mut store1 = MemoryStorage::new();
+            let mut store2 = MemoryStorage::new();
+
+            let result1 = async_flow_workflow.execute(&mut store1).await;
+            let result2 = manual_workflow.execute(&mut store2).await;
+
+            assert!(result1.is_ok() && result2.is_ok(), "Both workflows should succeed");
+            
+            let exec1 = result1.unwrap();
+            let exec2 = result2.unwrap();
+
+            assert_eq!(exec1.success, exec2.success);
+            assert_eq!(exec1.steps_executed, exec2.steps_executed);
+            assert_eq!(exec1.execution_path, exec2.execution_path);
+        }
     }
 }
