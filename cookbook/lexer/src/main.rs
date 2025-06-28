@@ -198,24 +198,24 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
     "#;
 
     println!("Tokenizing input:");
-    println!("{}", input);
+    println!("{input}");
     println!("\nTokens:");
 
     let tokens = lexer.tokenize(input)?;
     for (i, token) in tokens.iter().enumerate() {
-        println!("{:3}: {:?}", i, token);
+        println!("{i:3}: {token:?}");
     }
 
     // Test with a more complex example
     let complex_input = "x = y + 42 * (z - 1) // comment";
     println!("\n\nTokenizing complex input:");
-    println!("{}", complex_input);
+    println!("{complex_input}");
     println!("\nTokens:");
 
     let mut lexer2 = CosmoFlowLexer::new();
     let tokens2 = lexer2.tokenize(complex_input)?;
     for (i, token) in tokens2.iter().enumerate() {
-        println!("{:3}: {:?}", i, token);
+        println!("{i:3}: {token:?}");
     }
 
     Ok(())

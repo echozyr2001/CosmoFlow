@@ -335,7 +335,7 @@ impl<S: SharedStore> Node<S> for OperatorCollectorNode {
 
             // Handle two-character operators
             if let Some(next_ch) = lexer_ctx.current_char() {
-                let two_char = format!("{}{}", ch, next_ch);
+                let two_char = format!("{ch}{next_ch}");
                 match two_char.as_str() {
                     "==" | "!=" | "<=" | ">=" | "++" | "--" | "&&" | "||" => {
                         lexeme.push(next_ch);

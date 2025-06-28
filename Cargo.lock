@@ -809,7 +809,7 @@ dependencies = [
 name = "lexer"
 version = "0.1.0"
 dependencies = [
- "cosmoflow 0.5.1",
+ "cosmoflow 0.5.1 (registry+https://github.com/rust-lang/crates.io-index)",
  "serde",
  "serde_json",
 ]
