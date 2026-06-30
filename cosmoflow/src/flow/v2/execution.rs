@@ -1,9 +1,9 @@
 use crate::action::v2::Action;
 use crate::node::v2::NodeId;
 
-/// Result of a successful v2 flow run.
+/// Summary of one successful v2 flow execution.
 #[derive(Debug, Clone, PartialEq)]
-pub struct FlowRun {
+pub struct FlowExecution {
     /// Final action returned by the last executed node.
     pub final_action: Action,
     /// Last executed node id.

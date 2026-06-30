@@ -1,4 +1,4 @@
-use super::{FlowAnalysis, FlowError, FlowRun, Route};
+use super::{FlowAnalysis, FlowError, FlowExecution, Route};
 use crate::action::v2::{Action, ActionName};
 use crate::node::v2::{DynNode, Node, NodeId};
 use crate::shared_store::SharedStore;
@@ -130,8 +130,13 @@ impl<S: SharedStore> Flow<S> {
         &self.routes
     }
 
-    /// Run the flow until the current action has no matching route.
-    pub fn run(&mut self, state: &mut S) -> Result<FlowRun, FlowError> {
+    /// Run the flow and return the final action.
+    pub fn run(&mut self, state: &mut S) -> Result<Action, FlowError> {
+        Ok(self.run_recorded(state)?.final_action)
+    }
+
+    /// Run the flow and return an execution summary.
+    pub fn run_recorded(&mut self, state: &mut S) -> Result<FlowExecution, FlowError> {
         let mut current_node_id = self.start.clone();
         let mut path = Vec::new();
 
@@ -150,7 +155,7 @@ impl<S: SharedStore> Flow<S> {
                 continue;
             }
 
-            return Ok(FlowRun {
+            return Ok(FlowExecution {
                 final_action: action,
                 last_node_id: current_node_id,
                 steps: path.len(),
@@ -257,13 +262,26 @@ mod tests {
             .unwrap();
         let mut state = MemoryStorage::new();
 
-        let run = flow.run(&mut state).unwrap();
+        let execution = flow.run_recorded(&mut state).unwrap();
 
         assert_eq!(flow.start().as_str(), "start");
-        assert_eq!(run.final_action, Action::new("done"));
-        assert_eq!(run.last_node_id.as_str(), "start");
-        assert_eq!(run.steps, 1);
-        assert_eq!(run.path, vec![NodeId::new("start")]);
+        assert_eq!(execution.final_action, Action::new("done"));
+        assert_eq!(execution.last_node_id.as_str(), "start");
+        assert_eq!(execution.steps, 1);
+        assert_eq!(execution.path, vec![NodeId::new("start")]);
+    }
+
+    #[test]
+    fn run_returns_final_action() {
+        let mut flow = FlowBuilder::new()
+            .node("start", StaticNode::new("done"))
+            .build()
+            .unwrap();
+        let mut state = MemoryStorage::new();
+
+        let action = flow.run(&mut state).unwrap();
+
+        assert_eq!(action, Action::new("done"));
     }
 
     #[test]
@@ -289,11 +307,14 @@ mod tests {
             .unwrap();
         let mut state = MemoryStorage::new();
 
-        let run = flow.run(&mut state).unwrap();
+        let execution = flow.run_recorded(&mut state).unwrap();
 
         assert_eq!(flow.start().as_str(), "second");
-        assert_eq!(run.path, vec![NodeId::new("second"), NodeId::new("first")]);
-        assert_eq!(run.final_action, Action::new("done"));
+        assert_eq!(
+            execution.path,
+            vec![NodeId::new("second"), NodeId::new("first")]
+        );
+        assert_eq!(execution.final_action, Action::new("done"));
     }
 
     #[test]
@@ -306,9 +327,12 @@ mod tests {
             .unwrap();
         let mut state = MemoryStorage::new();
 
-        let run = flow.run(&mut state).unwrap();
+        let execution = flow.run_recorded(&mut state).unwrap();
 
-        assert_eq!(run.path, vec![NodeId::new("first"), NodeId::new("second")]);
+        assert_eq!(
+            execution.path,
+            vec![NodeId::new("first"), NodeId::new("second")]
+        );
     }
 
     #[test]
@@ -324,9 +348,12 @@ mod tests {
             .unwrap();
         let mut state = MemoryStorage::new();
 
-        let run = flow.run(&mut state).unwrap();
+        let execution = flow.run_recorded(&mut state).unwrap();
 
-        assert_eq!(run.path, vec![NodeId::new("first"), NodeId::new("second")]);
+        assert_eq!(
+            execution.path,
+            vec![NodeId::new("first"), NodeId::new("second")]
+        );
     }
 
     #[test]
@@ -339,10 +366,10 @@ mod tests {
             .unwrap();
         let mut state = MemoryStorage::new();
 
-        let run = flow.run(&mut state).unwrap();
+        let execution = flow.run_recorded(&mut state).unwrap();
 
-        assert_eq!(run.path, vec![NodeId::new("first")]);
-        assert_eq!(run.final_action, Action::new("done"));
+        assert_eq!(execution.path, vec![NodeId::new("first")]);
+        assert_eq!(execution.final_action, Action::new("done"));
     }
 
     #[test]

@@ -6,8 +6,8 @@
 
 mod analysis;
 mod error;
+mod execution;
 mod route;
-mod run;
 
 #[cfg(feature = "async")]
 mod r#async;
@@ -16,8 +16,8 @@ mod sync;
 
 pub use analysis::FlowAnalysis;
 pub use error::FlowError;
+pub use execution::FlowExecution;
 pub use route::Route;
-pub use run::FlowRun;
 
 #[cfg(feature = "async")]
 pub use r#async::{Flow, FlowBuilder};
