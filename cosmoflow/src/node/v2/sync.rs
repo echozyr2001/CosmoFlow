@@ -2,7 +2,7 @@ use super::{NodeContext, NodeError, NodeId, NodePhase};
 use crate::action::v2::Action;
 use crate::shared_store::SharedStore;
 
-/// Node trait for the v2 synchronous single-run execution model.
+/// Node trait for the v2 synchronous `prep -> exec -> post` model.
 pub trait Node<S: SharedStore>: Send + Sync {
     /// Result type produced by the preparation phase.
     type Prep: Send + Sync + 'static;
@@ -51,17 +51,47 @@ pub trait Node<S: SharedStore>: Send + Sync {
     }
 }
 
-pub(crate) trait DynNode<S: SharedStore>: Send + Sync {
-    fn run_node(&mut self, state: &mut S, node_id: &NodeId) -> Result<Action, NodeError>;
+/// Adapter trait used by v2 flow internals to execute nodes and nested flows.
+#[doc(hidden)]
+pub trait NodeAdapter<S: SharedStore>: Send + Sync {
+    /// Run this object as a flow node.
+    fn run(&mut self, state: &mut S, node_id: &NodeId) -> Result<Action, NodeError>;
 }
 
-impl<T, S> DynNode<S> for T
+/// Marker for direct v2 node inputs.
+#[doc(hidden)]
+pub struct NodeInput;
+
+/// Marker for nested v2 flow inputs.
+#[doc(hidden)]
+pub struct FlowInput;
+
+/// Convert flow builder inputs into the internal adapter interface.
+#[doc(hidden)]
+pub trait IntoNodeAdapter<S: SharedStore, Kind> {
+    /// Convert this input into a boxed node adapter.
+    fn into_node_adapter(self) -> Box<dyn NodeAdapter<S>>;
+}
+
+struct NodeAdapterImpl<N>(N);
+
+impl<N, S> NodeAdapter<S> for NodeAdapterImpl<N>
 where
-    T: Node<S> + Send + Sync,
+    N: Node<S>,
     S: SharedStore,
 {
-    fn run_node(&mut self, state: &mut S, node_id: &NodeId) -> Result<Action, NodeError> {
-        Node::run(self, state, NodeContext::new(node_id.clone()))
+    fn run(&mut self, state: &mut S, node_id: &NodeId) -> Result<Action, NodeError> {
+        self.0.run(state, NodeContext::new(node_id.clone()))
+    }
+}
+
+impl<N, S> IntoNodeAdapter<S, NodeInput> for N
+where
+    N: Node<S> + 'static,
+    S: SharedStore,
+{
+    fn into_node_adapter(self) -> Box<dyn NodeAdapter<S>> {
+        Box::new(NodeAdapterImpl(self))
     }
 }
 

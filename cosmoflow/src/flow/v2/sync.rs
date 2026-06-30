@@ -1,13 +1,13 @@
 use super::{FlowAnalysis, FlowError, FlowExecution, Route};
 use crate::action::v2::{Action, ActionName};
-use crate::node::v2::{DynNode, Node, NodeId};
+use crate::node::v2::{FlowInput, IntoNodeAdapter, NodeAdapter, NodeError, NodeId, NodePhase};
 use crate::shared_store::SharedStore;
 use std::collections::HashMap;
 use std::fmt;
 
 /// Builder for a v2 synchronous flow.
 pub struct FlowBuilder<S: SharedStore> {
-    nodes: HashMap<NodeId, Box<dyn DynNode<S>>>,
+    nodes: HashMap<NodeId, Box<dyn NodeAdapter<S>>>,
     node_order: Vec<NodeId>,
     routes: Vec<Route>,
     start: Option<NodeId>,
@@ -33,9 +33,9 @@ impl<S: SharedStore> FlowBuilder<S> {
     }
 
     /// Add a node to the flow.
-    pub fn node<N>(mut self, id: impl Into<NodeId>, node: N) -> Self
+    pub fn node<N, K>(mut self, id: impl Into<NodeId>, node: N) -> Self
     where
-        N: Node<S> + Send + Sync + 'static,
+        N: IntoNodeAdapter<S, K>,
     {
         let id = id.into();
         if self.nodes.contains_key(&id) {
@@ -47,7 +47,7 @@ impl<S: SharedStore> FlowBuilder<S> {
             self.start = Some(id.clone());
         }
         self.node_order.push(id.clone());
-        self.nodes.insert(id, Box::new(node));
+        self.nodes.insert(id, node.into_node_adapter());
         self
     }
 
@@ -91,7 +91,7 @@ impl<S: SharedStore> FlowBuilder<S> {
 
 /// A v2 synchronous flow.
 pub struct Flow<S: SharedStore> {
-    nodes: HashMap<NodeId, Box<dyn DynNode<S>>>,
+    nodes: HashMap<NodeId, Box<dyn NodeAdapter<S>>>,
     node_order: Vec<NodeId>,
     routes: Vec<Route>,
     start: NodeId,
@@ -145,9 +145,7 @@ impl<S: SharedStore> Flow<S> {
                 .nodes
                 .get_mut(&current_node_id)
                 .ok_or_else(|| FlowError::NodeNotFound(current_node_id.clone()))?;
-            let action = node
-                .run_node(state, &current_node_id)
-                .map_err(FlowError::from)?;
+            let action = node.run(state, &current_node_id).map_err(FlowError::from)?;
             path.push(current_node_id.clone());
 
             if let Some(next_node_id) = self.next_node(&current_node_id, &action) {
@@ -174,11 +172,30 @@ impl<S: SharedStore> Flow<S> {
     }
 }
 
+impl<S> NodeAdapter<S> for Flow<S>
+where
+    S: SharedStore + Send + Sync,
+{
+    fn run(&mut self, state: &mut S, node_id: &NodeId) -> Result<Action, NodeError> {
+        Flow::run(self, state)
+            .map_err(|error| NodeError::new(NodePhase::Exec, node_id.clone(), error.to_string()))
+    }
+}
+
+impl<S> IntoNodeAdapter<S, FlowInput> for Flow<S>
+where
+    S: SharedStore + Send + Sync + 'static,
+{
+    fn into_node_adapter(self) -> Box<dyn NodeAdapter<S>> {
+        Box::new(self)
+    }
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
     use crate::SharedStore;
-    use crate::node::v2::NodeContext;
+    use crate::node::v2::{Node, NodeContext};
     use crate::shared_store::backends::MemoryStorage;
     use serde_json::json;
     use std::error::Error;
@@ -499,6 +516,53 @@ mod tests {
                 assert_eq!(node_error.message, "node failed");
             }
             other => panic!("expected node error, got {other:?}"),
+        }
+    }
+
+    #[test]
+    fn nested_flow_runs_as_one_parent_node_and_returns_final_action() {
+        let flow_a = FlowBuilder::new()
+            .node("inner_start", StaticNode::new("next"))
+            .node("inner_end", StaticNode::new("inner_done"))
+            .route("inner_start", "next", "inner_end")
+            .build()
+            .unwrap();
+        let mut flow_b = FlowBuilder::new().node("nested", flow_a).build().unwrap();
+        let mut state = MemoryStorage::new();
+
+        let execution = flow_b.run_recorded(&mut state).unwrap();
+
+        assert_eq!(execution.final_action, Action::new("inner_done"));
+        assert_eq!(execution.path, vec![NodeId::new("nested")]);
+        assert_eq!(
+            state.get::<bool>("visited:inner_start").unwrap(),
+            Some(true)
+        );
+        assert_eq!(state.get::<bool>("visited:inner_end").unwrap(), Some(true));
+    }
+
+    #[test]
+    fn nested_flow_error_is_reported_as_parent_node_exec_error() {
+        let flow_a = FlowBuilder::new()
+            .node("inner", StaticNode::failing())
+            .build()
+            .unwrap();
+        let mut flow_b = FlowBuilder::new().node("nested", flow_a).build().unwrap();
+        let mut state = MemoryStorage::new();
+
+        let error = flow_b.run(&mut state).unwrap_err();
+
+        match error {
+            FlowError::NodeError(node_error) => {
+                assert_eq!(node_error.phase, NodePhase::Exec);
+                assert_eq!(node_error.node_id.as_str(), "nested");
+                assert!(
+                    node_error.message.contains("node execution error"),
+                    "message was: {}",
+                    node_error.message
+                );
+            }
+            other => panic!("expected parent node error, got {other:?}"),
         }
     }
 }

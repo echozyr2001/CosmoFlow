@@ -3,7 +3,7 @@ use crate::action::v2::Action;
 use crate::shared_store::SharedStore;
 use async_trait::async_trait;
 
-/// Node trait for the v2 asynchronous single-run execution model.
+/// Node trait for the v2 asynchronous `prep -> exec -> post` model.
 #[async_trait]
 pub trait Node<S: SharedStore>: Send + Sync {
     /// Result type produced by the preparation phase.
@@ -55,19 +55,49 @@ pub trait Node<S: SharedStore>: Send + Sync {
     }
 }
 
+/// Adapter trait used by v2 flow internals to execute nodes and nested flows.
 #[async_trait]
-pub(crate) trait DynNode<S: SharedStore>: Send + Sync {
-    async fn run_node(&mut self, state: &mut S, node_id: &NodeId) -> Result<Action, NodeError>;
+#[doc(hidden)]
+pub trait NodeAdapter<S: SharedStore>: Send + Sync {
+    /// Run this object as a flow node.
+    async fn run(&mut self, state: &mut S, node_id: &NodeId) -> Result<Action, NodeError>;
 }
 
+/// Marker for direct v2 node inputs.
+#[doc(hidden)]
+pub struct NodeInput;
+
+/// Marker for nested v2 flow inputs.
+#[doc(hidden)]
+pub struct FlowInput;
+
+/// Convert flow builder inputs into the internal adapter interface.
+#[doc(hidden)]
+pub trait IntoNodeAdapter<S: SharedStore, Kind> {
+    /// Convert this input into a boxed node adapter.
+    fn into_node_adapter(self) -> Box<dyn NodeAdapter<S>>;
+}
+
+struct NodeAdapterImpl<N>(N);
+
 #[async_trait]
-impl<T, S> DynNode<S> for T
+impl<N, S> NodeAdapter<S> for NodeAdapterImpl<N>
 where
-    T: Node<S> + Send + Sync,
+    N: Node<S>,
     S: SharedStore + Send + Sync,
 {
-    async fn run_node(&mut self, state: &mut S, node_id: &NodeId) -> Result<Action, NodeError> {
-        Node::run(self, state, NodeContext::new(node_id.clone())).await
+    async fn run(&mut self, state: &mut S, node_id: &NodeId) -> Result<Action, NodeError> {
+        self.0.run(state, NodeContext::new(node_id.clone())).await
+    }
+}
+
+impl<N, S> IntoNodeAdapter<S, NodeInput> for N
+where
+    N: Node<S> + 'static,
+    S: SharedStore + Send + Sync,
+{
+    fn into_node_adapter(self) -> Box<dyn NodeAdapter<S>> {
+        Box::new(NodeAdapterImpl(self))
     }
 }
 
