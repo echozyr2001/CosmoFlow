@@ -23,6 +23,10 @@ pub use error::NodeError;
 pub use phase::NodePhase;
 
 #[cfg(feature = "async")]
+pub(crate) use r#async::DynNode;
+#[cfg(feature = "async")]
 pub use r#async::Node;
+#[cfg(not(feature = "async"))]
+pub(crate) use sync::DynNode;
 #[cfg(not(feature = "async"))]
 pub use sync::Node;

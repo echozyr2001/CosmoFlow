@@ -1,4 +1,4 @@
-use super::{NodeContext, NodeError, NodePhase};
+use super::{NodeContext, NodeError, NodeId, NodePhase};
 use crate::action::v2::Action;
 use crate::shared_store::SharedStore;
 
@@ -48,6 +48,20 @@ pub trait Node<S: SharedStore>: Send + Sync {
         self.post(state, prep, output, &context).map_err(|error| {
             NodeError::new(NodePhase::Post, context.node_id.clone(), error.to_string())
         })
+    }
+}
+
+pub(crate) trait DynNode<S: SharedStore>: Send + Sync {
+    fn run_node(&mut self, state: &mut S, node_id: &NodeId) -> Result<Action, NodeError>;
+}
+
+impl<T, S> DynNode<S> for T
+where
+    T: Node<S> + Send + Sync,
+    S: SharedStore,
+{
+    fn run_node(&mut self, state: &mut S, node_id: &NodeId) -> Result<Action, NodeError> {
+        Node::run(self, state, NodeContext::new(node_id.clone()))
     }
 }
 

@@ -76,6 +76,8 @@ pub mod errors;
 pub mod macros;
 /// The route module contains the `Route` struct and `RouteCondition` enum.
 pub mod route;
+/// Experimental v2 flow API.
+pub mod v2;
 
 /// Async-specific implementations (only available with "async" feature)
 #[cfg(feature = "async")]
