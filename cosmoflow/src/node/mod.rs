@@ -137,6 +137,9 @@
 /// The errors module contains the error types for the node crate.
 pub mod errors;
 
+/// Experimental v2 node API with a minimal single-run execution model.
+pub mod v2;
+
 /// Async node implementation (available when async feature is enabled)
 #[cfg(feature = "async")]
 pub mod r#async;
