@@ -379,7 +379,6 @@ pub use flow;
 
 #[cfg(all(test, feature = "storage-memory"))]
 mod tests {
-    use super::*;
     use crate::action::Action;
     use crate::shared_store::SharedStore;
     use crate::shared_store::backends::MemoryStorage;

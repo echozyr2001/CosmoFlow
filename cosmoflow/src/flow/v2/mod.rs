@@ -7,6 +7,8 @@
 mod analysis;
 mod error;
 mod execution;
+/// Declarative construction macro for v2 flows.
+pub mod macros;
 mod route;
 
 #[cfg(feature = "async")]
@@ -17,6 +19,7 @@ mod sync;
 pub use analysis::FlowAnalysis;
 pub use error::FlowError;
 pub use execution::FlowExecution;
+pub use macros::flow;
 pub use route::Route;
 
 #[cfg(feature = "async")]
