@@ -1,5 +1,5 @@
 use super::{NodeContext, NodeError, NodePhase};
-use crate::action::Action;
+use crate::action::v2::Action;
 use crate::shared_store::SharedStore;
 use async_trait::async_trait;
 
@@ -164,7 +164,7 @@ mod tests {
             state
                 .set("async_result".to_string(), output)
                 .map_err(|_| TestError("storage failed"))?;
-            Ok(Action::simple("complete"))
+            Ok(Action::new("complete"))
         }
     }
 
@@ -178,7 +178,8 @@ mod tests {
         let action = node.run(&mut state, context).await.unwrap();
         let stored: Option<String> = state.get("async_result").unwrap();
 
-        assert_eq!(action, Action::simple("complete"));
+        assert_eq!(action, Action::new("complete"));
+        assert_eq!(action.as_str(), "complete");
         assert_eq!(stored, Some("output".to_string()));
         assert_eq!(calls.snapshot(), vec!["prep", "exec", "post"]);
         assert_eq!(node.exec_calls, 1);

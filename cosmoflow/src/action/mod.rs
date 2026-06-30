@@ -72,4 +72,7 @@ pub mod action_core;
 #[cfg(test)]
 pub mod tests;
 
+/// v2 action API.
+pub mod v2;
+
 pub use action_core::Action;

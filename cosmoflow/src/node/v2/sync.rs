@@ -1,5 +1,5 @@
 use super::{NodeContext, NodeError, NodePhase};
-use crate::action::Action;
+use crate::action::v2::Action;
 use crate::shared_store::SharedStore;
 
 /// Node trait for the v2 synchronous single-run execution model.
@@ -159,7 +159,7 @@ mod tests {
             state
                 .set("sync_result".to_string(), output)
                 .map_err(|_| TestError("storage failed"))?;
-            Ok(Action::simple("complete"))
+            Ok(Action::new("complete"))
         }
     }
 
@@ -173,7 +173,8 @@ mod tests {
         let action = node.run(&mut state, context).unwrap();
         let stored: Option<String> = state.get("sync_result").unwrap();
 
-        assert_eq!(action, Action::simple("complete"));
+        assert_eq!(action, Action::new("complete"));
+        assert_eq!(action.as_str(), "complete");
         assert_eq!(stored, Some("output".to_string()));
         assert_eq!(calls.snapshot(), vec!["prep", "exec", "post"]);
         assert_eq!(node.exec_calls, 1);
