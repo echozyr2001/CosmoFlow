@@ -2,7 +2,7 @@ use super::context::NodeId;
 use super::phase::NodePhase;
 use std::fmt;
 
-/// Error produced by the v2 node executor.
+/// Error produced by the node executor.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct NodeError {
     /// Execution phase where the error occurred.

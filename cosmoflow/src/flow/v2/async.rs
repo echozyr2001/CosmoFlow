@@ -5,7 +5,7 @@ use async_trait::async_trait;
 use std::collections::HashMap;
 use std::fmt;
 
-/// Builder for a v2 asynchronous flow.
+/// Builder for an asynchronous flow.
 pub struct FlowBuilder<S: Send + Sync> {
     nodes: HashMap<NodeId, Box<dyn NodeAdapter<S>>>,
     node_order: Vec<NodeId>,
@@ -89,7 +89,7 @@ impl<S: Send + Sync> FlowBuilder<S> {
     }
 }
 
-/// A v2 asynchronous flow.
+/// An asynchronous state-machine graph and executor.
 pub struct Flow<S: Send + Sync> {
     nodes: HashMap<NodeId, Box<dyn NodeAdapter<S>>>,
     node_order: Vec<NodeId>,
@@ -181,6 +181,8 @@ where
     S: Send + Sync,
 {
     async fn run(&mut self, state: &mut S, node_id: &NodeId) -> Result<Action, NodeError> {
+        // A nested flow is one parent node. Its internal failure is reported as
+        // an exec-phase error for that parent node.
         Flow::run(self, state)
             .await
             .map_err(|error| NodeError::new(NodePhase::Exec, node_id.clone(), error.to_string()))

@@ -1,101 +1,82 @@
 #![deny(missing_docs)]
 //! # CosmoFlow
 //!
-//! A lightweight, type-safe workflow engine for Rust, optimized for LLM applications.
+//! A lightweight framework for modeling workflows as state machines.
 //!
-//! CosmoFlow provides a minimal yet powerful framework for building complex workflows
-//! with clean abstractions and excellent performance.
+//! CosmoFlow core follows two principles:
+//!
+//! *   Every program can be modeled as a state machine.
+//! *   The framework core should stay small; retry, fallback, timeout, LLM/tool
+//!     integration, memory, and tracing belong in user composition or optional
+//!     extensions.
 //!
 //! ## Core Concepts
 //!
-//! *   **Flow**: A collection of nodes and the routes between them, representing a
-//!     complete workflow.
-//! *   **Node**: A single unit of work in a workflow.
-//! *   **Action**: The result of a node's execution, used to determine the next
-//!     step in the flow.
-//! *   **Shared Store**: A key-value store used to share data between nodes.
-//! *   **Storage Backend**: A pluggable storage mechanism for the shared store.
+//! *   **Action**: A state transition signal. Its name is the routing identity,
+//!     and parameters are optional carried data.
+//! *   **Node**: A user-defined `prep -> exec -> post` behavior unit.
+//! *   **Flow**: A state-machine graph with build-time validation and a single
+//!     sequential executor.
+//! *   **State**: The runtime state value `S` passed through node and flow
+//!     execution. It may be a strong typed struct or a shared store.
+//! *   **Shared Store**: An optional key-value state model with memory, file, and
+//!     Redis backends.
+//!
+//! ## API Promotion Note
+//!
+//! The current core model is available under the `action::v2`, `node::v2`, and
+//! `flow::v2` modules. The crate root and legacy module exports are intentionally
+//! not changed in this documentation-only pass.
 //!
 //! # Quick Start
 //!
-//! ## Synchronous Usage (default)
+//! This example shows the intended main API after the current core model is
+//! promoted from the v2 modules.
 //!
-//! ```rust,no_run
-//! # #[cfg(all(feature = "storage-memory", not(feature = "async")))]
-//! # fn example() -> Result<(), Box<dyn std::error::Error>> {
-//! use cosmoflow::prelude::*;
+//! ```rust,ignore
+//! use cosmoflow::action::Action;
+//! use cosmoflow::flow::FlowBuilder;
+//! use cosmoflow::node::{Node, NodeContext};
 //!
-//! // Create a shared store with memory backend
-//! let mut store = MemoryStorage::new();
+//! #[derive(Default)]
+//! struct AppState {
+//!     visits: Vec<String>,
+//! }
 //!
-//! // Define a simple node
 //! struct MyNode;
-//! impl<S: SharedStore> Node<S> for MyNode {
-//!     type PrepResult = String;
-//!     type ExecResult = ();
-//!     type Error = NodeError;
-//!     fn prep(&mut self, _store: &S, _context: &ExecutionContext) -> Result<String, Self::Error> {
-//!         Ok("prepared".to_string())
-//!     }
-//!     fn exec(&mut self, _prep_result: String, _context: &ExecutionContext) -> Result<(), Self::Error> {
+//!
+//! impl Node<AppState> for MyNode {
+//!     type Prep = ();
+//!     type Output = ();
+//!     type Error = std::convert::Infallible;
+//!
+//!     fn prep(&mut self, _state: &AppState, _ctx: &NodeContext) -> Result<Self::Prep, Self::Error> {
 //!         Ok(())
 //!     }
-//!     fn post(&mut self, _store: &mut S, _prep_result: String, _exec_result: (), _context: &ExecutionContext) -> Result<Action, Self::Error> {
-//!         Ok(Action::simple("complete"))
+//!
+//!     fn exec(&mut self, _prep: &Self::Prep, _ctx: &NodeContext) -> Result<Self::Output, Self::Error> {
+//!         Ok(())
+//!     }
+//!
+//!     fn post(
+//!         &mut self,
+//!         state: &mut AppState,
+//!         _prep: Self::Prep,
+//!         _output: Self::Output,
+//!         ctx: &NodeContext,
+//!     ) -> Result<Action, Self::Error> {
+//!         state.visits.push(ctx.node_id.as_str().to_string());
+//!         Ok(Action::new("done"))
 //!     }
 //! }
 //!
-//! // Create a flow
 //! let mut flow = FlowBuilder::new()
 //!     .node("start", MyNode)
-//!     .terminal_route("start", "complete")
-//!     .build();
+//!     .build()?;
 //!
-//! // Execute the flow
-//! let result = flow.execute(&mut store)?;
-//! # Ok(())
-//! # }
-//! ```
-//!
-//! ## Asynchronous Usage (with async feature)
-//!
-//! ```rust,no_run
-//! # #[cfg(all(feature = "async", feature = "storage-memory"))]
-//! # async fn example() -> Result<(), Box<dyn std::error::Error>> {
-//! use cosmoflow::prelude::*;
-//! use async_trait::async_trait;
-//!
-//! // Create a shared store with memory backend
-//! let mut store = MemoryStorage::new();
-//!
-//! // Define a simple node
-//! struct MyNode;
-//! #[async_trait]
-//! impl<S: SharedStore> Node<S> for MyNode {
-//!     type PrepResult = String;
-//!     type ExecResult = ();
-//!     type Error = NodeError;
-//!     async fn prep(&mut self, _store: &S, _context: &ExecutionContext) -> Result<String, Self::Error> {
-//!         Ok("prepared".to_string())
-//!     }
-//!     async fn exec(&mut self, _prep_result: String, _context: &ExecutionContext) -> Result<(), Self::Error> {
-//!         Ok(())
-//!     }
-//!     async fn post(&mut self, _store: &mut S, _prep_result: String, _exec_result: (), _context: &ExecutionContext) -> Result<Action, Self::Error> {
-//!         Ok(Action::simple("complete"))
-//!     }
-//! }
-//!
-//! // Create a flow
-//! let mut flow = FlowBuilder::new()
-//!     .node("start", MyNode)
-//!     .terminal_route("start", "complete")
-//!     .build();
-//!
-//! // Execute the flow
-//! let result = flow.execute(&mut store).await?;
-//! # Ok(())
-//! # }
+//! let mut state = AppState::default();
+//! let action = flow.run(&mut state)?;
+//! assert_eq!(action.as_str(), "done");
 //! ```
 //!
 //! ## Feature Flags
@@ -125,15 +106,15 @@
 // CORE EXPORTS
 // ============================================================================
 
-/// Shared store for data communication between workflow nodes
+/// Optional key-value state model for dynamic workflow context.
 pub mod shared_store;
 pub use shared_store::SharedStore;
 
-/// Action definition and condition evaluation
+/// Action types for workflow transition signals.
 pub mod action;
 pub use action::Action;
 
-/// Flow definition and execution
+/// Flow graph definition and execution.
 pub mod flow;
 
 // Sync exports
@@ -152,7 +133,7 @@ pub use flow::{
     route::Route,
 };
 
-/// Node execution system and traits
+/// Node execution traits and context types.
 pub mod node;
 
 // Sync Node exports

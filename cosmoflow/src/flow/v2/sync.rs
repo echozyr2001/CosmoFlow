@@ -4,7 +4,7 @@ use crate::node::v2::{FlowInput, IntoNodeAdapter, NodeAdapter, NodeError, NodeId
 use std::collections::HashMap;
 use std::fmt;
 
-/// Builder for a v2 synchronous flow.
+/// Builder for a synchronous flow.
 pub struct FlowBuilder<S> {
     nodes: HashMap<NodeId, Box<dyn NodeAdapter<S>>>,
     node_order: Vec<NodeId>,
@@ -88,7 +88,7 @@ impl<S> FlowBuilder<S> {
     }
 }
 
-/// A v2 synchronous flow.
+/// A synchronous state-machine graph and executor.
 pub struct Flow<S> {
     nodes: HashMap<NodeId, Box<dyn NodeAdapter<S>>>,
     node_order: Vec<NodeId>,
@@ -173,6 +173,8 @@ impl<S> Flow<S> {
 
 impl<S> NodeAdapter<S> for Flow<S> {
     fn run(&mut self, state: &mut S, node_id: &NodeId) -> Result<Action, NodeError> {
+        // A nested flow is one parent node. Its internal failure is reported as
+        // an exec-phase error for that parent node.
         Flow::run(self, state)
             .map_err(|error| NodeError::new(NodePhase::Exec, node_id.clone(), error.to_string()))
     }

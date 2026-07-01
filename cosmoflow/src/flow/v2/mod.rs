@@ -1,13 +1,13 @@
-//! Experimental v2 flow API.
+//! Flow API.
 //!
-//! Flow v2 models a flow as a small state-machine graph over v2 nodes and
-//! v2 actions. It validates graph structure at build time and executes nodes
-//! sequentially until an action has no matching route.
+//! A flow is a small state-machine graph over nodes and actions. It validates
+//! graph structure at build time and executes nodes sequentially until an
+//! action has no matching route.
 
 mod analysis;
 mod error;
 mod execution;
-/// Declarative construction macro for v2 flows.
+/// Declarative construction macro for flows.
 pub mod macros;
 mod route;
 

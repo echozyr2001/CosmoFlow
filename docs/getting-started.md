@@ -1,224 +1,214 @@
-# Getting Started with CosmoFlow
+# Getting Started
 
-This guide will help you get up and running with CosmoFlow quickly.
+This guide introduces the CosmoFlow core model: typed state, nodes, actions,
+and flows. The examples use the intended main API names. Until the current core
+model is promoted from the v2 modules, use the equivalent `::v2` paths in local
+code.
 
 ## Installation
 
-Add CosmoFlow to your `Cargo.toml`:
+```toml
+[dependencies]
+cosmoflow = { version = "0.5.1", features = ["basic"] }
+```
+
+Use the `async` feature when node execution should be asynchronous:
 
 ```toml
 [dependencies]
 cosmoflow = { version = "0.5.1", features = ["standard"] }
-tokio = { version = "1.0", features = ["full"] }
+async-trait = "0.1"
 ```
 
-## Your First Workflow
+## Your First Flow
 
-Here's a simple example to get you started:
+A flow runs against a user-provided state value. That state can be a plain Rust
+struct:
 
 ```rust
-use cosmoflow::prelude::*;
-use std::time::Duration;
-
-#[tokio::main]
-async fn main() -> Result<(), Box<dyn std::error::Error>> {
-    // 1. Create a memory-backed storage
-    let mut store = MemoryStorage::new();
-    
-    // 2. Build your workflow
-    let mut flow = Flow::builder()
-        .start_node("greeting")
-        .max_steps(10)
-        .terminal_action("complete")
-        .build();
-    
-    // 3. Add nodes to the workflow
-    flow.add_node("greeting", log("Hello, CosmoFlow!"));
-    flow.add_node("processing", log("Processing data..."));
-    flow.add_node("farewell", log("Workflow complete!"));
-    
-    // 4. Define routing between nodes
-    flow.add_route("greeting", Action::simple("next"), "processing");
-    flow.add_route("processing", Action::simple("done"), "farewell");
-    flow.add_route("farewell", Action::simple("complete"), "");
-    
-    // 5. Execute the workflow
-    let result = flow.execute(&mut store).await?;
-    
-    // 6. Check results
-    println!("Workflow Status: {}", if result.success { "SUCCESS" } else { "FAILED" });
-    println!("Steps Executed: {}", result.steps_executed);
-    println!("Execution Path: {:?}", result.execution_path);
-    
-    Ok(())
+#[derive(Default)]
+struct AppState {
+    loaded_user: Option<String>,
+    visits: Vec<String>,
 }
 ```
 
-## Building Custom Nodes
-
-Create powerful custom nodes with the three-phase execution model:
-
-```rust
-use cosmoflow::prelude::*;
-use serde::{Serialize, Deserialize};
-
-#[derive(Debug, Serialize, Deserialize)]
-struct UserData {
-    name: String,
-    email: String,
-}
-
-struct UserValidationNode {
-    name: String,
-}
-
-#[async_trait::async_trait]
-impl<S: SharedStore> Node<S> for UserValidationNode {
-    type PrepResult = UserData;
-    type ExecResult = bool;
-    type Error = Box<dyn std::error::Error + Send + Sync>;
-
-    fn name(&self) -> &str { &self.name }
-
-    // PREP: Load and validate input data
-    async fn prep(&mut self, store: &S, _ctx: &ExecutionContext) 
-        -> Result<Self::PrepResult, Self::Error> {
-        let user: UserData = store
-            .get("user_data")?
-            .ok_or("Missing user data")?;
-        Ok(user)
-    }
-
-    // EXEC: Perform validation logic
-    async fn exec(&mut self, user: Self::PrepResult, _ctx: &ExecutionContext) 
-        -> Result<Self::ExecResult, Self::Error> {
-        let is_valid = !user.name.is_empty() && user.email.contains("@");
-        Ok(is_valid)
-    }
-
-    // POST: Store results and determine next action
-    async fn post(&mut self, store: &mut S, _user: Self::PrepResult, 
-                  is_valid: Self::ExecResult, _ctx: &ExecutionContext) 
-        -> Result<Action, Self::Error> {
-        store.set("validation_result".to_string(), is_valid)?;
-        
-        if is_valid {
-            Ok(Action::simple("user_valid"))
-        } else {
-            Ok(Action::simple("user_invalid"))
-        }
-    }
-}
-```
-
-## Robust Error Handling
-
-CosmoFlow provides comprehensive error handling patterns:
-
-```rust
-use cosmoflow::flow::errors::FlowError;
-
-match flow.execute(&mut store).await {
-    Ok(result) if result.success => {
-        println!("Workflow completed successfully!");
-        println!("Executed {} steps in {:?}", 
-                 result.steps_executed, result.execution_time);
-    }
-    
-    Ok(result) => {
-        println!("Workflow terminated early at: {}", result.last_node_id);
-        println!("Final action: {:?}", result.final_action);
-    }
-    
-    Err(FlowError::NodeNotFound(node_id)) => {
-        eprintln!("Missing node: '{}'", node_id);
-        // Handle missing node configuration
-    }
-    
-    Err(FlowError::MaxStepsExceeded(limit)) => {
-        eprintln!("Workflow exceeded {} steps - possible infinite loop", limit);
-        // Handle runaway workflows
-    }
-    
-    Err(FlowError::NodeError(msg)) => {
-        eprintln!("Node execution failed: {}", msg);
-        // Handle node-specific errors
-    }
-    
-    Err(e) => {
-        eprintln!("Unexpected error: {}", e);
-        // Handle other errors
-    }
-}
-```
-
-## Advanced Patterns
-
-### Conditional Routing
+A node implements `prep -> exec -> post`:
 
 ```rust
 use cosmoflow::action::Action;
-use serde_json::json;
-use std::collections::HashMap;
+use cosmoflow::node::{Node, NodeContext};
 
-// For conditional routing, use parameterized actions
-let mut params = HashMap::new();
-params.insert("condition_key".to_string(), json!("user_score"));
-params.insert("condition_value".to_string(), json!(80));
-params.insert("true_action".to_string(), json!("high_score_path"));
-params.insert("false_action".to_string(), json!("low_score_path"));
+struct LoadUser;
 
-let conditional_action = Action::with_params("conditional", params);
+impl Node<AppState> for LoadUser {
+    type Prep = ();
+    type Output = String;
+    type Error = std::convert::Infallible;
 
-// Note: For complex conditional logic (greater-than, less-than, etc.),
-// use ConditionalNode with closure functions for more flexibility.
+    fn prep(&mut self, _state: &AppState, _ctx: &NodeContext) -> Result<Self::Prep, Self::Error> {
+        Ok(())
+    }
+
+    fn exec(&mut self, _prep: &Self::Prep, _ctx: &NodeContext) -> Result<Self::Output, Self::Error> {
+        Ok("ada".to_string())
+    }
+
+    fn post(
+        &mut self,
+        state: &mut AppState,
+        _prep: Self::Prep,
+        user: Self::Output,
+        ctx: &NodeContext,
+    ) -> Result<Action, Self::Error> {
+        state.visits.push(ctx.node_id.as_str().to_string());
+        state.loaded_user = Some(user);
+        Ok(Action::new("score"))
+    }
+}
 ```
 
-### Data Communication
+The returned `Action` is the state transition signal. Its name is used for
+routing:
 
 ```rust
-// Store structured data
-#[derive(Serialize, Deserialize)]
-struct ProcessingConfig {
-    threshold: f64,
-    max_iterations: usize,
-    algorithm: String,
+use cosmoflow::action::Action;
+use cosmoflow::node::{Node, NodeContext};
+
+struct ScoreUser;
+
+impl Node<AppState> for ScoreUser {
+    type Prep = String;
+    type Output = u32;
+    type Error = &'static str;
+
+    fn prep(&mut self, state: &AppState, _ctx: &NodeContext) -> Result<Self::Prep, Self::Error> {
+        state.loaded_user.clone().ok_or("missing loaded user")
+    }
+
+    fn exec(&mut self, user: &Self::Prep, _ctx: &NodeContext) -> Result<Self::Output, Self::Error> {
+        Ok((user.len() as u32) * 10)
+    }
+
+    fn post(
+        &mut self,
+        state: &mut AppState,
+        _user: Self::Prep,
+        score: Self::Output,
+        ctx: &NodeContext,
+    ) -> Result<Action, Self::Error> {
+        state.visits.push(ctx.node_id.as_str().to_string());
+        Ok(Action::with_param("done", "score", serde_json::json!(score)))
+    }
 }
-
-let config = ProcessingConfig {
-    threshold: 0.95,
-    max_iterations: 100,
-    algorithm: "advanced".to_string(),
-};
-
-store.set("config".to_string(), config)?;
-
-// Retrieve with type safety
-let config: ProcessingConfig = store
-    .get("config")?
-    .ok_or("Configuration not found")?;
 ```
 
-## Next Steps
+Build and run the flow:
 
-Now that you have the basics, explore these advanced topics:
+```rust
+use cosmoflow::flow::FlowBuilder;
 
-### Architecture Deep Dive
-- **[Architecture Guide](architecture.md)**: Understanding CosmoFlow's design
-- **[Performance Tuning](features.md)**: Optimizing for your use case
+let mut flow = FlowBuilder::new()
+    .node("load", LoadUser)
+    .node("score", ScoreUser)
+    .route("load", "score", "score")
+    .build()?;
 
-### Advanced Features
-- **[Built-in Nodes](https://docs.rs/cosmoflow/latest/cosmoflow/builtin/)**: Ready-to-use components
-- **[Storage Backends](https://docs.rs/cosmoflow/latest/cosmoflow/storage/)**: Persistent data solutions
-- **[LLM Integration](https://docs.rs/cosmoflow/latest/cosmoflow/builtin/llm/)**: AI-powered workflows
+let mut state = AppState::default();
+let action = flow.run(&mut state)?;
 
-### Community Resources
-- **[API Reference](https://docs.rs/cosmoflow)**: Complete API documentation
-- **[Examples Repository](../examples/)**: Real-world implementations
-- **[Contributing Guide](../CONTRIBUTING.md)**: Join the development
+assert_eq!(action.as_str(), "done");
+assert_eq!(state.visits, vec!["load", "score"]);
+```
 
-## You're Ready!
+The first registered node is the default start node. Use `.start(id)` only when
+the start node should be different.
 
-Congratulations! You now have everything you need to build powerful, type-safe workflows with CosmoFlow. Start with simple nodes and gradually build up to complex, production-ready applications.
+## Natural Termination
 
-Happy workflow building! 🚀
+Flows do not need terminal routes. After a node returns an action, the flow
+looks for a route from the current node using that action name. If no route
+matches, execution stops and the action becomes the final action.
+
+Action parameters do not participate in routing. They are carried data for the
+caller or later nodes.
+
+## Nested Flows
+
+A built flow can be inserted as a node in another flow:
+
+```rust
+let child = FlowBuilder::new()
+    .node("load", LoadUser)
+    .node("score", ScoreUser)
+    .route("load", "score", "score")
+    .build()?;
+
+let mut parent = FlowBuilder::new()
+    .node("user_pipeline", child)
+    .build()?;
+
+let final_action = parent.run(&mut AppState::default())?;
+```
+
+The parent flow sees only the child flow's final action. The child's internal
+path remains internal to the child flow.
+
+## Optional Shared Store
+
+Use a strong typed state struct when the workflow has a stable domain model.
+Use `SharedStore` when dynamic key-value sharing, serialization, or a storage
+backend is a better fit.
+
+```rust
+use cosmoflow::shared_store::SharedStore;
+use cosmoflow::shared_store::backends::MemoryStorage;
+
+let mut store = MemoryStorage::new();
+store.set("user_id".to_string(), "ada".to_string())?;
+let user_id: Option<String> = store.get("user_id")?;
+```
+
+`SharedStore` is a supported state model, not a requirement for `Node<S>` or
+`Flow<S>`.
+
+## Async Mode
+
+With the `async` feature, the same model is available with async node phases and
+async flow execution:
+
+```rust
+use async_trait::async_trait;
+use cosmoflow::action::Action;
+use cosmoflow::node::{Node, NodeContext};
+
+struct AsyncNode;
+
+#[async_trait]
+impl Node<AppState> for AsyncNode {
+    type Prep = ();
+    type Output = ();
+    type Error = std::convert::Infallible;
+
+    async fn prep(&mut self, _state: &AppState, _ctx: &NodeContext) -> Result<Self::Prep, Self::Error> {
+        Ok(())
+    }
+
+    async fn exec(&mut self, _prep: &Self::Prep, _ctx: &NodeContext) -> Result<Self::Output, Self::Error> {
+        Ok(())
+    }
+
+    async fn post(
+        &mut self,
+        _state: &mut AppState,
+        _prep: Self::Prep,
+        _output: Self::Output,
+        _ctx: &NodeContext,
+    ) -> Result<Action, Self::Error> {
+        Ok(Action::new("done"))
+    }
+}
+```
+
+Async state types must satisfy `Send + Sync` so generated futures can be moved
+safely. This is not a shared-store requirement.

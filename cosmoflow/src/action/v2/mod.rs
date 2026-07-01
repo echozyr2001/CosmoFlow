@@ -1,4 +1,4 @@
-//! v2 action API.
+//! Action API.
 //!
 //! This module provides the minimal action model for state-machine transitions:
 //! an action has a routing identity and optional parameters.

@@ -3,7 +3,7 @@ use crate::action::v2::ActionName;
 use crate::node::v2::NodeId;
 use std::collections::{HashMap, HashSet, VecDeque};
 
-/// Static graph analysis for a v2 flow.
+/// Static graph analysis for a flow.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct FlowAnalysis {
     /// Nodes reachable from the configured start node, in discovery order.

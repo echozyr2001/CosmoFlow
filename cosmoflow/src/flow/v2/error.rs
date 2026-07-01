@@ -2,7 +2,7 @@ use crate::action::v2::ActionName;
 use crate::node::v2::{NodeError, NodeId};
 use thiserror::Error;
 
-/// Errors produced while building or running a v2 flow.
+/// Errors produced while building or running a flow.
 #[derive(Debug, Clone, PartialEq, Eq, Error)]
 pub enum FlowError {
     /// Flow contains no nodes.

@@ -1,7 +1,7 @@
 use super::{NodeContext, NodeError, NodeId, NodePhase};
 use crate::action::v2::Action;
 
-/// Node trait for the v2 synchronous `prep -> exec -> post` model.
+/// Node trait for the synchronous `prep -> exec -> post` model.
 pub trait Node<S>: Send + Sync {
     /// Result type produced by the preparation phase.
     type Prep: Send + Sync + 'static;
@@ -50,18 +50,18 @@ pub trait Node<S>: Send + Sync {
     }
 }
 
-/// Adapter trait used by v2 flow internals to execute nodes and nested flows.
+/// Flow-internal object-safe execution interface for nodes and nested flows.
 #[doc(hidden)]
 pub trait NodeAdapter<S>: Send + Sync {
     /// Run this object as a flow node.
     fn run(&mut self, state: &mut S, node_id: &NodeId) -> Result<Action, NodeError>;
 }
 
-/// Marker for direct v2 node inputs.
+/// Marker for direct node inputs.
 #[doc(hidden)]
 pub struct NodeInput;
 
-/// Marker for nested v2 flow inputs.
+/// Marker for nested flow inputs.
 #[doc(hidden)]
 pub struct FlowInput;
 
@@ -74,6 +74,8 @@ pub trait IntoNodeAdapter<S, Kind> {
 
 struct NodeAdapterImpl<N>(N);
 
+// This wrapper erases each node's associated Prep/Output/Error types so a flow
+// can store heterogeneous nodes behind one internal execution interface.
 impl<N, S> NodeAdapter<S> for NodeAdapterImpl<N>
 where
     N: Node<S>,

@@ -1,6 +1,6 @@
-//! Macros for the experimental v2 flow API.
+//! Macros for declarative flow construction.
 
-/// Declarative v2 flow construction.
+/// Declarative flow construction.
 ///
 /// This macro expands to [`FlowBuilder`](super::FlowBuilder). It only supports
 /// identifier node ids and action names; use `FlowBuilder` directly for string

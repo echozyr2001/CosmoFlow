@@ -7,7 +7,7 @@ fn no_params(params: &ActionParams) -> bool {
     params.is_empty()
 }
 
-/// State transition signal returned by v2 nodes and flows.
+/// State transition signal returned by nodes and flows.
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
 pub struct Action {
     name: ActionName,

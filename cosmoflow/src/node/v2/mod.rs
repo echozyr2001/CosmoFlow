@@ -1,4 +1,4 @@
-//! Experimental v2 node API.
+//! Node API.
 //!
 //! This module keeps the node core deliberately small: a node prepares input,
 //! executes once, writes post-processing state, and returns an action. It does
@@ -12,10 +12,10 @@ pub mod error;
 pub mod phase;
 
 #[cfg(feature = "async")]
-/// Async v2 node execution API.
+/// Async node execution API.
 pub mod r#async;
 #[cfg(not(feature = "async"))]
-/// Sync v2 node execution API.
+/// Sync node execution API.
 pub mod sync;
 
 pub use context::{ExecutionId, NodeContext, NodeId};

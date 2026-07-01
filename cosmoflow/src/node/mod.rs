@@ -1,143 +1,19 @@
 #![deny(missing_docs)]
-//! # Node - CosmoFlow Node Execution System
+//! Node APIs.
 //!
-//! This crate provides the core execution system for CosmoFlow workflows. It defines the
-//! unified `Node` trait and execution infrastructure that enables workflows to run individual
-//! processing units with proper error handling, retry logic, and execution context management.
+//! A node is a user-defined behavior unit that runs once through
+//! `prep -> exec -> post` and returns an action. Core node execution is
+//! deliberately small: it does not include retry, fallback, timeout, agent,
+//! tool, or LLM policy.
 //!
-//! ## Key Features
-//!
-//! - **Unified Node Trait**: Single trait combining all node functionality
-//! - **Type Safety**: Associated types provide compile-time guarantees
-//! - **Execution Support**: Both async and sync execution modes (configurable via features)
-//! - **Retry Logic**: Built-in retry mechanisms with configurable policies
-//! - **Error Handling**: Comprehensive error types and propagation
-//! - **Execution Context**: Rich context information for node execution
-//! - **Automatic Integration**: Seamless integration with the flow system
-//!
-//! ## Feature Flags
-//!
-//! - `async` (default): Enables async/await support with tokio runtime
-//! - Without `async`: Provides synchronous execution for minimal compilation
-//!
-//! ## Node Trait Design
-//!
-//! The Node trait provides a comprehensive interface that includes:
-//! - Core execution methods (prep/exec/post) with associated types
-//! - Configuration methods with sensible defaults
-//! - Built-in retry logic and error handling
-//! - Seamless integration with the flow system
-//!
-//! ## Quick Start
-//!
-//! ### Async Implementation (default)
-//!
-//! ```rust
-//! # #[cfg(feature = "async")]
-//! # {
-//! use cosmoflow::node::{Node, ExecutionContext, NodeError};
-//! use cosmoflow::shared_store::SharedStore;
-//! use cosmoflow::action::Action;
-//! use async_trait::async_trait;
-//!
-//! struct MyCustomNode {
-//!     name: String,
-//! }
-//!
-//! #[async_trait]
-//! impl<S> Node<S> for MyCustomNode
-//! where
-//!     S: SharedStore + Send + Sync
-//! {
-//!     type PrepResult = String;
-//!     type ExecResult = String;
-//!     type Error = NodeError;
-//!
-//!     async fn prep(
-//!         &mut self,
-//!         _store: &S,
-//!         _context: &ExecutionContext,
-//!     ) -> Result<Self::PrepResult, Self::Error> {
-//!         Ok(format!("Preparing: {}", self.name))
-//!     }
-//!
-//!     async fn exec(
-//!         &mut self,
-//!         prep_result: Self::PrepResult,
-//!         _context: &ExecutionContext,
-//!     ) -> Result<Self::ExecResult, Self::Error> {
-//!         Ok(format!("Executed: {}", prep_result))
-//!     }
-//!
-//!     async fn post(
-//!         &mut self,
-//!         _store: &mut S,
-//!         _prep_result: Self::PrepResult,
-//!         exec_result: Self::ExecResult,
-//!         _context: &ExecutionContext,
-//!     ) -> Result<Action, Self::Error> {
-//!         println!("{}", exec_result);
-//!         Ok(Action::simple("complete"))
-//!     }
-//! }
-//! # }
-//! ```
-//!
-//! ### Sync Implementation (with --no-default-features)
-//!
-//! ```rust
-//! # #[cfg(not(feature = "async"))]
-//! # {
-//! use cosmoflow::node::{Node, ExecutionContext, NodeError};
-//! use cosmoflow::shared_store::SharedStore;
-//! use cosmoflow::action::Action;
-//!
-//! struct MyCustomNode {
-//!     name: String,
-//! }
-//!
-//! impl<S> Node<S> for MyCustomNode
-//! where
-//!     S: SharedStore + Send + Sync
-//! {
-//!     type PrepResult = String;
-//!     type ExecResult = String;
-//!     type Error = NodeError;
-//!
-//!     fn prep(
-//!         &mut self,
-//!         _store: &S,
-//!         _context: &ExecutionContext,
-//!     ) -> Result<Self::PrepResult, Self::Error> {
-//!         Ok(format!("Preparing: {}", self.name))
-//!     }
-//!
-//!     fn exec(
-//!         &mut self,
-//!         prep_result: Self::PrepResult,
-//!         _context: &ExecutionContext,
-//!     ) -> Result<Self::ExecResult, Self::Error> {
-//!         Ok(format!("Executed: {}", prep_result))
-//!     }
-//!
-//!     fn post(
-//!         &mut self,
-//!         _store: &mut S,
-//!         _prep_result: Self::PrepResult,
-//!         exec_result: Self::ExecResult,
-//!         _context: &ExecutionContext,
-//!     ) -> Result<Action, Self::Error> {
-//!         println!("{}", exec_result);
-//!         Ok(Action::simple("complete"))
-//!     }
-//! }
-//! # }
-//! ```
+//! The current minimal core model is available in `v2`. The legacy node API
+//! remains exported from this module until the core API is promoted to the main
+//! module surface.
 
 /// The errors module contains the error types for the node crate.
 pub mod errors;
 
-/// Experimental v2 node API with a minimal single-run execution model.
+/// Node core API under active promotion to the main module surface.
 pub mod v2;
 
 /// Async node implementation (available when async feature is enabled)

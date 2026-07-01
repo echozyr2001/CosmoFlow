@@ -1,74 +1,13 @@
 #![deny(missing_docs)]
-//! # Flow - CosmoFlow Orchestration System
+//! Flow APIs.
 //!
-//! This crate provides the core workflow orchestration system for CosmoFlow. It manages the
-//! execution of interconnected nodes, handles routing between them, and provides comprehensive
-//! error handling and execution tracking.
+//! A flow is a state-machine graph that connects nodes with action-name routes.
+//! The current core model validates graph structure at build time and executes
+//! nodes sequentially until an action has no matching route.
 //!
-//! ## Key Features
-//!
-//! - **Workflow Orchestration**: Execute complex multi-node workflows with different node types
-//! - **Dynamic Routing**: Conditional and parameterized routing between nodes
-//! - **Type Safety**: Compile-time safety with automatic type erasure through NodeRunner
-//! - **Error Handling**: Comprehensive error management and recovery
-//! - **Execution Tracking**: Detailed execution results and performance metrics
-//! - **Retry Logic**: Built-in retry mechanisms for failed operations
-//!
-//! ## Quick Start
-//!
-//! ```rust,no_run
-//! # #[cfg(all(feature = "async", feature = "storage-memory"))]
-//! # async fn example() -> Result<(), Box<dyn std::error::Error>> {
-//! use cosmoflow::{Flow, FlowBuilder, FlowBackend};
-//! use cosmoflow::shared_store::SharedStore;
-//! use cosmoflow::shared_store::backends::MemoryStorage;
-//!
-//! // Create a shared store
-//! let mut store = MemoryStorage::new();
-//!
-//! // Build a flow
-//! let mut flow = FlowBuilder::new()
-//!     .start_node("start")
-//!     .build();
-//!
-//! // Execute the flow
-//! let result = flow.execute(&mut store).await?;
-//! println!("Flow completed with {} steps", result.steps_executed);
-//! # Ok(())
-//! # }
-//! ```
-//!
-//! ## Core Types
-//!
-//! - [`Flow`]: The main workflow execution engine
-//! - [`FlowBuilder`]: Builder pattern for constructing flows
-//! - [`FlowExecutionResult`]: Results and metadata from flow execution
-//! - [`Route`]: Defines routing between nodes in the workflow
-//! - [`NodeRunner`]: Type erasure trait for different node types
-//!
-//! ## Error Handling
-//!
-//! The flow crate provides comprehensive error handling through [`FlowError`]:
-//!
-//! ```rust,no_run
-//! # #[cfg(all(feature = "async", feature = "storage-memory"))]
-//! # async fn example() -> Result<(), Box<dyn std::error::Error>> {
-//! use cosmoflow::{Flow, FlowBackend};
-//! use cosmoflow::flow::errors::FlowError;
-//!
-//! # let mut flow = Flow::new();
-//! # let mut store = cosmoflow::shared_store::backends::MemoryStorage::new();
-//! match flow.execute(&mut store).await {
-//!     Ok(result) => println!("Success: {:?}", result),
-//!     Err(FlowError::NodeNotFound(id)) => eprintln!("Node '{}' not found", id),
-//!     Err(FlowError::NodeError(msg)) => {
-//!         eprintln!("Node execution failed: {}", msg);
-//!     },
-//!     Err(e) => eprintln!("Flow error: {}", e),
-//! }
-//! # Ok(())
-//! # }
-//! ```
+//! The current minimal core model is available in `v2`. The legacy flow API
+//! remains exported from this module until the core API is promoted to the main
+//! module surface.
 
 /// The errors module contains the error types for the flow crate.
 pub mod errors;
@@ -76,7 +15,7 @@ pub mod errors;
 pub mod macros;
 /// The route module contains the `Route` struct and `RouteCondition` enum.
 pub mod route;
-/// Experimental v2 flow API.
+/// Flow core API under active promotion to the main module surface.
 pub mod v2;
 
 /// Async-specific implementations (only available with "async" feature)
@@ -675,7 +614,6 @@ where
     /// };
     /// flow.add_route("source_node".to_string(), route).unwrap();
     /// # }
-    /// ```
     /// ```
     fn add_route(&mut self, from_node_id: String, route: Route) -> Result<(), FlowError> {
         self.routes.entry(from_node_id).or_default().push(route);
