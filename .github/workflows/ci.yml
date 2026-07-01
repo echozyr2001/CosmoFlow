@@ -67,17 +67,24 @@ jobs:
         run: cargo +nightly clippy --all-features --workspace -- -D warnings
 
   test:
-    name: Run Tests
+    name: Run Tests (${{ matrix.name }})
     runs-on: ubuntu-latest
     permissions:
       contents: read
     strategy:
+      fail-fast: false
       matrix:
-        # Test key feature combinations that are most likely to break
-        features:
-          - "--features minimal" # Most restrictive - catches missing feature gates
-          - "--features standard" # Common usage
-          - "--all-features" # Full functionality
+        include:
+          - name: default
+            features: ""
+          - name: async
+            features: "--features async"
+          - name: storage-memory
+            features: "--features storage-memory"
+          - name: async-storage-memory
+            features: "--features async,storage-memory"
+          - name: all-features
+            features: "--all-features"
     steps:
       - name: Install system dependencies
         run: sudo apt-get update && sudo apt-get install -y libsqlite3-dev
@@ -105,16 +112,20 @@ jobs:
         run: cargo test --doc ${{ matrix.features }} --workspace
 
   build:
-    name: Build Check
+    name: Build Check (${{ matrix.name }})
     runs-on: ubuntu-latest
     permissions:
       contents: read
     strategy:
+      fail-fast: false
       matrix:
-        # Test build for different feature sets
-        features:
-          - "--features minimal" # Minimal build
-          - "--all-features" # Full build
+        include:
+          - name: no-default-features
+            features: "--no-default-features"
+          - name: storage-full
+            features: "--features storage-full"
+          - name: all-features
+            features: "--all-features"
     steps:
       - name: Install system dependencies
         run: sudo apt-get update && sudo apt-get install -y libsqlite3-dev
@@ -136,18 +147,30 @@ jobs:
         run: cargo build ${{ matrix.features }} --workspace
 
   feature-gate-check:
-    name: Feature Gate Validation
+    name: Feature Gate Validation (${{ matrix.name }})
     runs-on: ubuntu-latest
     permissions:
       contents: read
     strategy:
+      fail-fast: false
       matrix:
-        features:
-          - "--no-default-features"
-          - "--features minimal"
-          - "--features basic"
-          - "--features standard"
-          - "--all-features"
+        include:
+          - name: no-default-features
+            features: "--no-default-features"
+          - name: async
+            features: "--features async"
+          - name: storage-memory
+            features: "--features storage-memory"
+          - name: storage-file
+            features: "--features storage-file"
+          - name: storage-redis
+            features: "--features storage-redis"
+          - name: storage-full
+            features: "--features storage-full"
+          - name: async-storage-full
+            features: "--features async,storage-full"
+          - name: all-features
+            features: "--all-features"
     steps:
       - name: Install system dependencies
         run: sudo apt-get update && sudo apt-get install -y libsqlite3-dev
