@@ -4,11 +4,11 @@
 //! An action is the state transition signal returned by nodes and flows. Its
 //! name is the routing identity, and parameters are optional carried data.
 
-mod action;
+mod core;
 mod name;
 mod params;
 
-pub use action::Action;
+pub use core::Action;
 pub use name::ActionName;
 pub use params::ActionParams;
 
