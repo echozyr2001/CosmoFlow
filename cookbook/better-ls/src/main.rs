@@ -2,10 +2,7 @@ pub mod nodes;
 pub mod utils;
 
 use clap::Parser;
-use cosmoflow::{
-    flow::{FlowBackend, macros::flow},
-    prelude::MemoryStorage,
-};
+use cosmoflow::{FlowBuilder, prelude::MemoryStorage};
 use serde::Serialize;
 
 use std::time::SystemTime;
@@ -69,39 +66,20 @@ pub struct FileEntry {
     pub is_executable: bool,
 }
 
-fn main() -> Result<(), Box<dyn std::error::Error>> {
+#[tokio::main]
+async fn main() -> Result<(), Box<dyn std::error::Error>> {
     // Create our custom storage
     let mut storage = MemoryStorage::new();
 
-    // Build the enhanced workflow using flow! macro - showcasing CosmoFlow's declarative syntax
-    let mut flow = flow! {
-        storage: MemoryStorage,
-        start: "input",
-        nodes: {
-            "input": InputNode::new(),
-            "ls": LsNode,
-            "output": OutputNode,
-        },
-        routes: {
-            "input" - "list" => "ls",
-            "ls" - "output" => "output",
-        },
-        terminals: {
-            "output" - "complete",
-        }
-    };
+    let mut flow = FlowBuilder::new()
+        .node("input", InputNode::new())
+        .node("ls", LsNode)
+        .node("output", OutputNode)
+        .route("input", "list", "ls")
+        .route("ls", "output", "output")
+        .build()?;
 
-    // Validate the flow - demonstrates CosmoFlow's built-in validation
-    if let Err(e) = flow.validate() {
-        eprintln!("❌ Flow validation failed: {e}");
-        return Err(e.into());
-    }
-
-    // Execute the flow - showcasing CosmoFlow's execution engine
-    if let Err(e) = flow.execute(&mut storage) {
-        eprintln!("❌ Execution failed: {e}");
-        return Err(e.into());
-    }
+    flow.run_recorded(&mut storage).await?;
 
     Ok(())
 }

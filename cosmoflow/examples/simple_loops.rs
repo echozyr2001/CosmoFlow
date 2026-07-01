@@ -1,162 +1,86 @@
-//! A state-machine loop using routes.
+//! Loops as ordinary state-machine routes.
 //!
-//! CosmoFlow core does not impose a step limit. A loop terminates when the
-//! modeled state returns an action without a matching route.
-
-use cosmoflow::action::Action;
-use cosmoflow::flow::FlowBuilder;
-use cosmoflow::node::{Node, NodeContext};
-use cosmoflow::shared_store::SharedStore;
-use cosmoflow::shared_store::backends::MemoryStorage;
-use std::error::Error;
-use std::fmt;
+//! CosmoFlow core does not impose a step limit. A loop continues while the
+//! current action has a matching route.
 
 #[cfg(feature = "async")]
-use async_trait::async_trait;
-
-#[derive(Debug)]
-struct ExampleError(String);
-
-impl ExampleError {
-    fn new(message: impl Into<String>) -> Self {
-        Self(message.into())
-    }
-}
-
-impl fmt::Display for ExampleError {
-    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
-        write!(f, "{}", self.0)
-    }
-}
-
-impl Error for ExampleError {}
-
-struct Counter {
-    limit: i64,
+fn main() {
+    println!("Run `cargo run -p cosmoflow --example async_flow --features async` for async usage.");
 }
 
 #[cfg(not(feature = "async"))]
-impl Node<MemoryStorage> for Counter {
-    type Prep = i64;
-    type Output = i64;
-    type Error = ExampleError;
-
-    fn prep(
-        &mut self,
-        state: &MemoryStorage,
-        _context: &NodeContext,
-    ) -> Result<Self::Prep, Self::Error> {
-        Ok(state
-            .get("count")
-            .map_err(|error| ExampleError::new(error.to_string()))?
-            .unwrap_or(0))
-    }
-
-    fn exec(
-        &mut self,
-        count: &Self::Prep,
-        _context: &NodeContext,
-    ) -> Result<Self::Output, Self::Error> {
-        Ok(*count + 1)
-    }
-
-    fn post(
-        &mut self,
-        state: &mut MemoryStorage,
-        _prep: Self::Prep,
-        next_count: Self::Output,
-        _context: &NodeContext,
-    ) -> Result<Action, Self::Error> {
-        state
-            .set("count".to_string(), next_count)
-            .map_err(|error| ExampleError::new(error.to_string()))?;
-
-        if next_count >= self.limit {
-            Ok(Action::new("done"))
-        } else {
-            Ok(Action::new("again"))
-        }
-    }
-}
-
-#[cfg(feature = "async")]
-#[async_trait]
-impl Node<MemoryStorage> for Counter {
-    type Prep = i64;
-    type Output = i64;
-    type Error = ExampleError;
-
-    async fn prep(
-        &mut self,
-        state: &MemoryStorage,
-        _context: &NodeContext,
-    ) -> Result<Self::Prep, Self::Error> {
-        Ok(state
-            .get("count")
-            .map_err(|error| ExampleError::new(error.to_string()))?
-            .unwrap_or(0))
-    }
-
-    async fn exec(
-        &mut self,
-        count: &Self::Prep,
-        _context: &NodeContext,
-    ) -> Result<Self::Output, Self::Error> {
-        Ok(*count + 1)
-    }
-
-    async fn post(
-        &mut self,
-        state: &mut MemoryStorage,
-        _prep: Self::Prep,
-        next_count: Self::Output,
-        _context: &NodeContext,
-    ) -> Result<Action, Self::Error> {
-        state
-            .set("count".to_string(), next_count)
-            .map_err(|error| ExampleError::new(error.to_string()))?;
-
-        if next_count >= self.limit {
-            Ok(Action::new("done"))
-        } else {
-            Ok(Action::new("again"))
-        }
-    }
+fn main() -> Result<(), Box<dyn std::error::Error>> {
+    sync_example::run()
 }
 
 #[cfg(not(feature = "async"))]
-fn main() -> Result<(), Box<dyn Error>> {
-    let mut state = MemoryStorage::new();
-    let mut flow = FlowBuilder::new()
-        .node("counter", Counter { limit: 3 })
-        .route("counter", "again", "counter")
-        .build()?;
+mod sync_example {
+    use cosmoflow::action::Action;
+    use cosmoflow::flow::FlowBuilder;
+    use cosmoflow::node::{Node, NodeContext};
+    use std::convert::Infallible;
 
-    let execution = flow.run_recorded(&mut state)?;
-    let count = state.get::<i64>("count")?.unwrap_or(0);
+    #[derive(Default)]
+    struct CounterState {
+        count: u32,
+    }
 
-    println!("final action: {}", execution.final_action);
-    println!("steps: {}", execution.steps);
-    println!("path: {:?}", execution.path);
-    println!("count: {count}");
-    Ok(())
-}
+    struct Counter {
+        limit: u32,
+    }
 
-#[cfg(feature = "async")]
-#[tokio::main]
-async fn main() -> Result<(), Box<dyn Error>> {
-    let mut state = MemoryStorage::new();
-    let mut flow = FlowBuilder::new()
-        .node("counter", Counter { limit: 3 })
-        .route("counter", "again", "counter")
-        .build()?;
+    impl Node<CounterState> for Counter {
+        type Prep = u32;
+        type Output = u32;
+        type Error = Infallible;
 
-    let execution = flow.run_recorded(&mut state).await?;
-    let count = state.get::<i64>("count")?.unwrap_or(0);
+        fn prep(
+            &mut self,
+            state: &CounterState,
+            _context: &NodeContext,
+        ) -> Result<Self::Prep, Self::Error> {
+            Ok(state.count)
+        }
 
-    println!("final action: {}", execution.final_action);
-    println!("steps: {}", execution.steps);
-    println!("path: {:?}", execution.path);
-    println!("count: {count}");
-    Ok(())
+        fn exec(
+            &mut self,
+            count: &Self::Prep,
+            _context: &NodeContext,
+        ) -> Result<Self::Output, Self::Error> {
+            Ok(count + 1)
+        }
+
+        fn post(
+            &mut self,
+            state: &mut CounterState,
+            _prep: Self::Prep,
+            next_count: Self::Output,
+            _context: &NodeContext,
+        ) -> Result<Action, Self::Error> {
+            state.count = next_count;
+
+            if next_count >= self.limit {
+                // No route is registered for `done`, so the flow terminates.
+                Ok(Action::new("done"))
+            } else {
+                Ok(Action::new("again"))
+            }
+        }
+    }
+
+    pub fn run() -> Result<(), Box<dyn std::error::Error>> {
+        let mut state = CounterState::default();
+        let mut flow = FlowBuilder::new()
+            .node("counter", Counter { limit: 3 })
+            .route("counter", "again", "counter")
+            .build()?;
+
+        let execution = flow.run_recorded(&mut state)?;
+
+        println!("steps: {}", execution.steps);
+        println!("path: {:?}", execution.path);
+        println!("count: {}", state.count);
+        println!("final action: {}", execution.final_action);
+        Ok(())
+    }
 }

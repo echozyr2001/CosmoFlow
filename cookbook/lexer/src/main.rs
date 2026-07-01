@@ -123,7 +123,6 @@ impl Default for CosmoFlowLexer {
 
         // Build the main flow with dispatcher and sub-flows
         let flow = FlowBuilder::new()
-            .start_node("dispatch")
             .node("dispatch", DispatcherNode)
             .node("end_of_input", EndOfInputNode)
             .node("return_to_dispatcher", ReturnToDispatcherNode)
@@ -157,9 +156,8 @@ impl Default for CosmoFlowLexer {
             .route("unknown_flow", "complete", "return_to_dispatcher")
             // Route from return node back to dispatcher
             .route("return_to_dispatcher", "dispatch", "dispatch")
-            // Terminal route for end of input
-            .terminal_route("end_of_input", "complete")
-            .build();
+            .build()
+            .expect("lexer flow should be valid");
 
         Self { flow }
     }
@@ -170,21 +168,26 @@ impl CosmoFlowLexer {
         Self::default()
     }
 
-    pub fn tokenize(&mut self, input: &str) -> Result<Vec<Token>, Box<dyn std::error::Error>> {
+    pub async fn tokenize(
+        &mut self,
+        input: &str,
+    ) -> Result<Vec<Token>, Box<dyn std::error::Error>> {
         let mut store = MemoryStorage::new();
         let lexer_ctx = LexerContext::new(input.to_string());
-        store.set("lexer_context".to_string(), &lexer_ctx)?;
+        store.set("lexer_context".to_string(), lexer_ctx)?;
 
-        let _result = self.flow.execute(&mut store)?;
+        self.flow.run_recorded(&mut store).await?;
 
         let final_ctx: Option<LexerContext> = store.get("lexer_context")?;
-        let final_ctx = final_ctx.unwrap_or_else(|| LexerContext::new(String::new()));
+        let final_ctx =
+            final_ctx.ok_or_else(|| "lexer_context missing after flow execution".to_string())?;
 
         Ok(final_ctx.tokens)
     }
 }
 
-fn main() -> Result<(), Box<dyn std::error::Error>> {
+#[tokio::main]
+async fn main() -> Result<(), Box<dyn std::error::Error>> {
     let mut lexer = CosmoFlowLexer::new();
 
     // Test the lexer with a simple program
@@ -201,7 +204,7 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
     println!("{input}");
     println!("\nTokens:");
 
-    let tokens = lexer.tokenize(input)?;
+    let tokens = lexer.tokenize(input).await?;
     for (i, token) in tokens.iter().enumerate() {
         println!("{i:3}: {token:?}");
     }
@@ -213,7 +216,7 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
     println!("\nTokens:");
 
     let mut lexer2 = CosmoFlowLexer::new();
-    let tokens2 = lexer2.tokenize(complex_input)?;
+    let tokens2 = lexer2.tokenize(complex_input).await?;
     for (i, token) in tokens2.iter().enumerate() {
         println!("{i:3}: {token:?}");
     }
