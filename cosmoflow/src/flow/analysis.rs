@@ -1,6 +1,6 @@
 use super::{FlowError, Route};
-use crate::action::v2::ActionName;
-use crate::node::v2::NodeId;
+use crate::action::ActionName;
+use crate::node::NodeId;
 use std::collections::{HashMap, HashSet, VecDeque};
 
 /// Static graph analysis for a flow.

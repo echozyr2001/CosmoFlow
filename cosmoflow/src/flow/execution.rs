@@ -1,5 +1,5 @@
-use crate::action::v2::Action;
-use crate::node::v2::NodeId;
+use crate::action::Action;
+use crate::node::NodeId;
 
 /// Summary of one successful flow execution.
 #[derive(Debug, Clone, PartialEq)]

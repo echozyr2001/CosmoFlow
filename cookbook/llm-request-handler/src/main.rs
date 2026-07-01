@@ -15,12 +15,30 @@
 //! - `LLM_MODEL`: Model name (e.g., "gpt-3.5-turbo", "gpt-4")
 
 use async_trait::async_trait;
-use cosmoflow::flow::errors::FlowError;
 use cosmoflow::prelude::*;
 use cosmoflow::shared_store::backends::MemoryStorage;
 use serde_json::{json, Value};
 use std::collections::HashMap;
 use std::env;
+use std::error::Error;
+use std::fmt;
+
+#[derive(Debug)]
+struct WorkflowError(String);
+
+impl WorkflowError {
+    fn new(error: impl fmt::Display) -> Self {
+        Self(error.to_string())
+    }
+}
+
+impl fmt::Display for WorkflowError {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        f.write_str(&self.0)
+    }
+}
+
+impl Error for WorkflowError {}
 
 // ============================================================================
 // LLM INTEGRATION UTILITIES
@@ -149,34 +167,34 @@ impl SimpleLogNode {
 }
 
 #[async_trait]
-impl<S: SharedStore + Send + Sync> Node<S> for SimpleLogNode {
-    type PrepResult = String;
-    type ExecResult = ();
-    type Error = NodeError;
+impl Node<MemoryStorage> for SimpleLogNode {
+    type Prep = String;
+    type Output = ();
+    type Error = WorkflowError;
 
     async fn prep(
         &mut self,
-        _store: &S,
-        _context: &ExecutionContext,
-    ) -> Result<Self::PrepResult, Self::Error> {
+        _store: &MemoryStorage,
+        _context: &NodeContext,
+    ) -> Result<Self::Prep, Self::Error> {
         Ok(self.message.clone())
     }
 
     async fn exec(
         &mut self,
-        prep_result: Self::PrepResult,
-        _context: &ExecutionContext,
-    ) -> Result<Self::ExecResult, Self::Error> {
-        println!("🚀 {}", prep_result);
+        message: &Self::Prep,
+        _context: &NodeContext,
+    ) -> Result<Self::Output, Self::Error> {
+        println!("🚀 {message}");
         Ok(())
     }
 
     async fn post(
         &mut self,
-        _store: &mut S,
-        _prep_result: Self::PrepResult,
-        _exec_result: Self::ExecResult,
-        _context: &ExecutionContext,
+        _store: &mut MemoryStorage,
+        _message: Self::Prep,
+        _output: Self::Output,
+        _context: &NodeContext,
     ) -> Result<Action, Self::Error> {
         Ok(self.next_action.clone())
     }
@@ -199,45 +217,46 @@ impl DataSetupNode {
 }
 
 #[async_trait]
-impl<S: SharedStore + Send + Sync> Node<S> for DataSetupNode {
-    type PrepResult = String;
-    type ExecResult = ();
-    type Error = NodeError;
+impl Node<MemoryStorage> for DataSetupNode {
+    type Prep = String;
+    type Output = ();
+    type Error = WorkflowError;
 
     async fn prep(
         &mut self,
-        _store: &S,
-        _context: &ExecutionContext,
-    ) -> Result<Self::PrepResult, Self::Error> {
+        _store: &MemoryStorage,
+        _context: &NodeContext,
+    ) -> Result<Self::Prep, Self::Error> {
         Ok("Setting up workflow data".to_string())
     }
 
     async fn exec(
         &mut self,
-        prep_result: Self::PrepResult,
-        _context: &ExecutionContext,
-    ) -> Result<Self::ExecResult, Self::Error> {
-        println!("📊 {}", prep_result);
+        message: &Self::Prep,
+        _context: &NodeContext,
+    ) -> Result<Self::Output, Self::Error> {
+        println!("📊 {message}");
         Ok(())
     }
 
     async fn post(
         &mut self,
-        store: &mut S,
-        _prep_result: Self::PrepResult,
-        _exec_result: Self::ExecResult,
-        _context: &ExecutionContext,
+        store: &mut MemoryStorage,
+        _message: Self::Prep,
+        _output: Self::Output,
+        _context: &NodeContext,
     ) -> Result<Action, Self::Error> {
         // Direct store operations - no abstraction needed
         store
             .set("user_prompt".to_string(), "What is the meaning of life?")
-            .unwrap();
+            .map_err(WorkflowError::new)?;
 
         // Load LLM configuration from environment variables
-        let config = LlmConfig::from_env()
-            .map_err(|e| NodeError::ExecutionError(format!("Failed to load LLM config: {e}")))?;
+        let config = LlmConfig::from_env().map_err(WorkflowError::new)?;
 
-        store.set("llm_config".to_string(), config).unwrap();
+        store
+            .set("llm_config".to_string(), config)
+            .map_err(WorkflowError::new)?;
 
         Ok(self.next_action.clone())
     }
@@ -266,27 +285,35 @@ impl LlmNode {
 }
 
 #[async_trait]
-impl<S: SharedStore + Send + Sync> Node<S> for LlmNode {
-    type PrepResult = (String, LlmConfig);
-    type ExecResult = String;
-    type Error = NodeError;
+impl Node<MemoryStorage> for LlmNode {
+    type Prep = (String, LlmConfig);
+    type Output = String;
+    type Error = WorkflowError;
 
     async fn prep(
         &mut self,
-        store: &S,
-        _context: &ExecutionContext,
-    ) -> Result<Self::PrepResult, Self::Error> {
-        let prompt: String = store.get(&self.prompt_key).unwrap().unwrap();
-        let config: LlmConfig = store.get("llm_config").unwrap().unwrap();
+        store: &MemoryStorage,
+        _context: &NodeContext,
+    ) -> Result<Self::Prep, Self::Error> {
+        let prompt = store
+            .get::<String>(&self.prompt_key)
+            .map_err(WorkflowError::new)?
+            .ok_or_else(|| {
+                WorkflowError::new(format!("missing prompt key '{}'", self.prompt_key))
+            })?;
+        let config = store
+            .get::<LlmConfig>("llm_config")
+            .map_err(WorkflowError::new)?
+            .ok_or_else(|| WorkflowError::new("missing llm_config"))?;
         Ok((prompt, config))
     }
 
     async fn exec(
         &mut self,
-        prep_result: Self::PrepResult,
-        _context: &ExecutionContext,
-    ) -> Result<Self::ExecResult, Self::Error> {
-        let (prompt, config) = prep_result;
+        prep: &Self::Prep,
+        _context: &NodeContext,
+    ) -> Result<Self::Output, Self::Error> {
+        let (prompt, config) = prep;
 
         println!("🤖 Processing prompt with {}: {}", config.model, prompt);
 
@@ -303,12 +330,11 @@ impl<S: SharedStore + Send + Sync> Node<S> for LlmNode {
         let response = client
             .post("chat/completions", &request)
             .await
-            .map_err(|e| NodeError::ExecutionError(format!("LLM API request failed: {e}")))?;
+            .map_err(WorkflowError::new)?;
 
         // Extract response content
-        let content = extract_content(&response).ok_or_else(|| {
-            NodeError::ExecutionError("Failed to extract content from LLM response".to_string())
-        })?;
+        let content = extract_content(&response)
+            .ok_or_else(|| WorkflowError::new("failed to extract content from LLM response"))?;
 
         println!("✅ Received response from {}", config.model);
 
@@ -317,13 +343,15 @@ impl<S: SharedStore + Send + Sync> Node<S> for LlmNode {
 
     async fn post(
         &mut self,
-        store: &mut S,
-        _prep_result: Self::PrepResult,
-        exec_result: Self::ExecResult,
-        _context: &ExecutionContext,
+        store: &mut MemoryStorage,
+        _prep: Self::Prep,
+        content: Self::Output,
+        _context: &NodeContext,
     ) -> Result<Action, Self::Error> {
         // Direct store operation - no abstraction layer needed
-        store.set(self.response_key.clone(), exec_result).unwrap();
+        store
+            .set(self.response_key.clone(), content)
+            .map_err(WorkflowError::new)?;
 
         Ok(self.next_action.clone())
     }
@@ -347,38 +375,40 @@ impl ResultDisplayNode {
 }
 
 #[async_trait]
-impl<S: SharedStore + Send + Sync> Node<S> for ResultDisplayNode {
-    type PrepResult = String;
-    type ExecResult = ();
-    type Error = NodeError;
+impl Node<MemoryStorage> for ResultDisplayNode {
+    type Prep = String;
+    type Output = ();
+    type Error = WorkflowError;
 
     async fn prep(
         &mut self,
-        store: &S,
-        _context: &ExecutionContext,
-    ) -> Result<Self::PrepResult, Self::Error> {
-        let data: String = store.get(&self.data_key).unwrap().unwrap();
-        Ok(data)
+        store: &MemoryStorage,
+        _context: &NodeContext,
+    ) -> Result<Self::Prep, Self::Error> {
+        store
+            .get::<String>(&self.data_key)
+            .map_err(WorkflowError::new)?
+            .ok_or_else(|| WorkflowError::new(format!("missing data key '{}'", self.data_key)))
     }
 
     async fn exec(
         &mut self,
-        prep_result: Self::PrepResult,
-        _context: &ExecutionContext,
-    ) -> Result<Self::ExecResult, Self::Error> {
-        println!("✨ AI Response: {}", prep_result);
+        response: &Self::Prep,
+        _context: &NodeContext,
+    ) -> Result<Self::Output, Self::Error> {
+        println!("✨ AI Response: {response}");
         println!("🎉 Workflow completed successfully!");
         Ok(())
     }
 
     async fn post(
         &mut self,
-        _store: &mut S,
-        _prep_result: Self::PrepResult,
-        _exec_result: Self::ExecResult,
-        _context: &ExecutionContext,
+        _store: &mut MemoryStorage,
+        _response: Self::Prep,
+        _output: Self::Output,
+        _context: &NodeContext,
     ) -> Result<Action, Self::Error> {
-        Ok(Action::simple("complete"))
+        Ok(Action::new("complete"))
     }
 
     fn name(&self) -> &str {
@@ -391,7 +421,7 @@ impl<S: SharedStore + Send + Sync> Node<S> for ResultDisplayNode {
 // ============================================================================
 
 #[tokio::main]
-async fn main() -> Result<(), FlowError> {
+async fn main() -> Result<(), Box<dyn std::error::Error>> {
     println!("🌟 CosmoFlow Real LLM Integration Example");
     println!("==========================================");
     println!();
@@ -426,22 +456,21 @@ async fn main() -> Result<(), FlowError> {
     let mut flow = FlowBuilder::new()
         .node(
             "start",
-            SimpleLogNode::new("Starting real LLM workflow", Action::simple("setup")),
+            SimpleLogNode::new("Starting real LLM workflow", Action::new("setup")),
         )
-        .node("setup", DataSetupNode::new(Action::simple("llm")))
+        .node("setup", DataSetupNode::new(Action::new("llm")))
         .node(
             "llm",
-            LlmNode::new("user_prompt", "ai_response", Action::simple("display")),
+            LlmNode::new("user_prompt", "ai_response", Action::new("display")),
         )
         .node("display", ResultDisplayNode::new("ai_response"))
         .route("start", "setup", "setup")
         .route("setup", "llm", "llm")
         .route("llm", "display", "display")
-        .terminal_route("display", "complete") // Explicit termination
-        .build();
+        .build()?;
 
     // Execute workflow
-    let _result = flow.execute(&mut store).await?;
+    let _execution = flow.run_recorded(&mut store).await?;
 
     println!();
     println!("✅ Workflow executed successfully!");

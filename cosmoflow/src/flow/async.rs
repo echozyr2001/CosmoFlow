@@ -1,512 +1,623 @@
-//! Async-specific implementations for CosmoFlow
-//!
-//! This module contains all the async-specific trait implementations and functionality
-//! for the CosmoFlow workflow engine. These are only available when the "async" feature
-//! is enabled.
-
-use std::collections::HashMap;
-use std::time::{Duration, Instant};
-
+use super::{FlowAnalysis, FlowError, FlowExecution, Route};
+use crate::action::{Action, ActionName};
+use crate::node::{FlowInput, IntoNodeAdapter, NodeAdapter, NodeError, NodeId, NodePhase};
 use async_trait::async_trait;
+use std::collections::HashMap;
+use std::fmt;
 
-use crate::action::Action;
-use crate::node::{ExecutionContext, NodeError, r#async::Node};
-use crate::shared_store::SharedStore;
-
-use super::errors::FlowError;
-use super::route::{Route, RouteCondition};
-use super::{FlowConfig, FlowExecutionResult};
-
-/// Node runner trait for workflow execution (async version)
-///
-/// This trait provides a unified interface for executing nodes with different
-/// associated types in the same flow, allowing the flow system to work with
-/// heterogeneous node collections while maintaining type safety.
-#[async_trait]
-pub trait NodeRunner<S: SharedStore>: Send + Sync {
-    /// Execute the node and return the resulting action
-    async fn run(&mut self, store: &mut S) -> Result<Action, NodeError>;
-
-    /// Get the node's name for debugging and logging
-    fn name(&self) -> &str;
+/// Builder for an asynchronous flow.
+pub struct FlowBuilder<S: Send + Sync> {
+    nodes: HashMap<NodeId, Box<dyn NodeAdapter<S>>>,
+    node_order: Vec<NodeId>,
+    routes: Vec<Route>,
+    start: Option<NodeId>,
+    duplicate_nodes: Vec<NodeId>,
 }
 
-/// Implementation of NodeRunner for any Node (async version)
-#[async_trait]
-impl<T, S> NodeRunner<S> for T
-where
-    T: Node<S> + Send + Sync,
-    S: SharedStore + Send + Sync,
-{
-    async fn run(&mut self, store: &mut S) -> Result<Action, NodeError> {
-        Node::run(self, store).await
-    }
-
-    fn name(&self) -> &str {
-        Node::name(self)
+impl<S: Send + Sync> Default for FlowBuilder<S> {
+    fn default() -> Self {
+        Self::new()
     }
 }
 
-/// Trait for implementing flow execution logic (async version)
-#[async_trait]
-pub trait FlowBackend<S: SharedStore> {
-    /// Add a node to the flow
-    fn add_node(&mut self, id: String, node: Box<dyn NodeRunner<S>>) -> Result<(), FlowError>;
-
-    /// Add a route between nodes
-    fn add_route(&mut self, from_node_id: String, route: Route) -> Result<(), FlowError>;
-
-    /// Execute the flow starting from the configured start node
-    async fn execute(&mut self, store: &mut S) -> Result<FlowExecutionResult, FlowError>;
-
-    /// Execute the flow starting from a specific node
-    async fn execute_from(
-        &mut self,
-        store: &mut S,
-        start_node_id: String,
-    ) -> Result<FlowExecutionResult, FlowError>;
-
-    /// Get the current configuration
-    fn config(&self) -> &FlowConfig;
-
-    /// Update the configuration
-    fn set_config(&mut self, config: FlowConfig);
-
-    /// Check if the flow is valid (no orphaned nodes, etc.)
-    fn validate(&self) -> Result<(), FlowError>;
-}
-
-/// The main flow structure (async version)
-pub struct Flow<S: SharedStore> {
-    nodes: HashMap<String, Box<dyn NodeRunner<S>>>,
-    routes: HashMap<String, Vec<Route>>,
-    config: FlowConfig,
-}
-
-impl<S: SharedStore + 'static> Flow<S> {
-    /// Create a new empty flow
+impl<S: Send + Sync> FlowBuilder<S> {
+    /// Create an empty flow builder.
     pub fn new() -> Self {
         Self {
             nodes: HashMap::new(),
-            routes: HashMap::new(),
-            config: FlowConfig::default(),
+            node_order: Vec::new(),
+            routes: Vec::new(),
+            start: None,
+            duplicate_nodes: Vec::new(),
         }
     }
 
-    /// Create a new flow with custom configuration
-    pub fn with_config(config: FlowConfig) -> Self {
-        Self {
-            nodes: HashMap::new(),
-            routes: HashMap::new(),
-            config,
-        }
-    }
-
-    /// Add a node to the flow
-    pub fn add_node<N>(&mut self, id: impl Into<String>, node: N) -> Result<(), FlowError>
+    /// Add a node to the flow.
+    pub fn node<N, K>(mut self, id: impl Into<NodeId>, node: N) -> Self
     where
-        N: Node<S> + Send + Sync + 'static,
+        N: IntoNodeAdapter<S, K>,
     {
         let id = id.into();
         if self.nodes.contains_key(&id) {
-            return Err(FlowError::InvalidConfiguration(format!(
-                "Duplicate node: {id}"
-            )));
-        }
-        self.nodes.insert(id, Box::new(node));
-        Ok(())
-    }
-
-    /// Add a route from one node to another
-    pub fn add_route(
-        &mut self,
-        from_node_id: impl Into<String>,
-        action: impl Into<String>,
-        to_node_id: impl Into<String>,
-    ) -> Result<(), FlowError> {
-        let from_node_id = from_node_id.into();
-        let route = Route {
-            action: action.into(),
-            target_node_id: Some(to_node_id.into()),
-            condition: Some(RouteCondition::Always),
-        };
-
-        // Check for terminal action warning
-        if route.target_node_id.is_none() {
-            eprintln!(
-                "Warning: Adding route with terminal action '{}' from node '{}'. \
-                 Terminal actions typically end workflows and may not route to other nodes.",
-                route.action, from_node_id
-            );
+            self.duplicate_nodes.push(id);
+            return self;
         }
 
-        self.routes.entry(from_node_id).or_default().push(route);
-        Ok(())
+        if self.start.is_none() {
+            self.start = Some(id.clone());
+        }
+        self.node_order.push(id.clone());
+        self.nodes.insert(id, node.into_node_adapter());
+        self
     }
 
-    // Internal helper methods
-    async fn internal_execute(
-        &mut self,
-        store: &mut S,
-        start_node_id: String,
-    ) -> Result<FlowExecutionResult, FlowError> {
-        let _start_time = Instant::now();
-        let mut current_node_id = start_node_id;
-        let mut execution_path = Vec::new();
-        let mut steps_executed = 0;
+    /// Set the start node.
+    pub fn start(mut self, id: impl Into<NodeId>) -> Self {
+        self.start = Some(id.into());
+        self
+    }
+
+    /// Add a route from one node to another for an action name.
+    pub fn route(
+        mut self,
+        from: impl Into<NodeId>,
+        action: impl Into<ActionName>,
+        to: impl Into<NodeId>,
+    ) -> Self {
+        self.routes.push(Route::new(from, action, to));
+        self
+    }
+
+    /// Validate and build the flow.
+    pub fn build(self) -> Result<Flow<S>, FlowError> {
+        let analysis = super::analysis::validate_graph(
+            &self.node_order,
+            &self.routes,
+            self.start.as_ref(),
+            &self.duplicate_nodes,
+        )?;
+
+        Ok(Flow {
+            nodes: self.nodes,
+            node_order: self.node_order,
+            routes: self.routes,
+            start: self
+                .start
+                .expect("validated non-empty flow has a start node"),
+            analysis,
+        })
+    }
+}
+
+/// An asynchronous state-machine graph and executor.
+pub struct Flow<S: Send + Sync> {
+    nodes: HashMap<NodeId, Box<dyn NodeAdapter<S>>>,
+    node_order: Vec<NodeId>,
+    routes: Vec<Route>,
+    start: NodeId,
+    analysis: FlowAnalysis,
+}
+
+impl<S: Send + Sync> fmt::Debug for Flow<S> {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        f.debug_struct("Flow")
+            .field("node_order", &self.node_order)
+            .field("routes", &self.routes)
+            .field("start", &self.start)
+            .field("analysis", &self.analysis)
+            .finish()
+    }
+}
+
+impl<S: Send + Sync> Flow<S> {
+    /// Return static graph analysis computed at build time.
+    pub fn analysis(&self) -> &FlowAnalysis {
+        &self.analysis
+    }
+
+    /// Return the configured start node.
+    pub fn start(&self) -> &NodeId {
+        &self.start
+    }
+
+    /// Return nodes in insertion order.
+    pub fn node_order(&self) -> &[NodeId] {
+        &self.node_order
+    }
+
+    /// Return routes in insertion order.
+    pub fn routes(&self) -> &[Route] {
+        &self.routes
+    }
+
+    /// Run the flow and return the final action.
+    pub async fn run(&mut self, state: &mut S) -> Result<Action, FlowError> {
+        Ok(self.run_recorded(state).await?.final_action)
+    }
+
+    /// Run the flow and return an execution summary.
+    pub async fn run_recorded(&mut self, state: &mut S) -> Result<FlowExecution, FlowError> {
+        let mut current_node_id = self.start.clone();
+        let mut path = Vec::new();
 
         loop {
-            // Check max steps
-            if steps_executed >= self.config.max_steps {
-                return Err(FlowError::MaxStepsExceeded(self.config.max_steps));
-            }
-
-            // Get the current node
             let node = self
                 .nodes
                 .get_mut(&current_node_id)
                 .ok_or_else(|| FlowError::NodeNotFound(current_node_id.clone()))?;
+            let action = node
+                .run(state, &current_node_id)
+                .await
+                .map_err(FlowError::from)?;
+            path.push(current_node_id.clone());
 
-            // Execute the node
-            let _context = ExecutionContext::new(execution_path.len(), Duration::from_secs(30));
-            let action = node.run(store).await?;
-
-            execution_path.push(current_node_id.clone());
-            steps_executed += 1;
-
-            // Check for terminal actions (routes with no target)
-            if (self.find_next_node(&current_node_id, &action, store)?).is_none() {
-                return Ok(FlowExecutionResult {
-                    final_action: action,
-                    last_node_id: current_node_id,
-                    steps_executed,
-                    success: true,
-                    execution_path,
-                });
+            if let Some(next_node_id) = self.next_node(&current_node_id, &action) {
+                current_node_id = next_node_id;
+                continue;
             }
 
-            // Find the next node
-            let routes = self.routes.get(&current_node_id).ok_or_else(|| {
-                FlowError::NoRouteFound(current_node_id.clone(), action.name().to_string())
-            })?;
-
-            let next_node_id = routes
-                .iter()
-                .find(|route| {
-                    route.action == action.name()
-                        && route.condition.as_ref().is_none_or(|c| c.evaluate(store))
-                })
-                .and_then(|route| route.target_node_id.as_ref())
-                .ok_or_else(|| {
-                    FlowError::NoRouteFound(current_node_id, action.name().to_string())
-                })?;
-
-            current_node_id = next_node_id.clone();
+            return Ok(FlowExecution {
+                final_action: action,
+                last_node_id: current_node_id,
+                steps: path.len(),
+                path,
+            });
         }
     }
 
-    fn internal_validate(&self) -> Result<(), FlowError> {
-        // Check if start node exists
-        if !self.nodes.contains_key(&self.config.start_node_id) {
-            return Err(FlowError::InvalidConfiguration(format!(
-                "Start node '{}' not found in flow",
-                self.config.start_node_id
-            )));
-        }
-
-        // Additional validation can be added here
-        Ok(())
-    }
-
-    /// Find the next node to execute based on the current node and action
-    ///
-    /// This method implements the core routing logic of the flow engine. It:
-    /// 1. Checks if the action is a terminal action (ends execution)
-    /// 2. Looks up available routes from the current node
-    /// 3. Evaluates route conditions to find the appropriate next node
-    ///
-    /// # Arguments
-    ///
-    /// * `current_node_id` - ID of the currently executing node
-    /// * `action` - Action returned by the current node
-    /// * `store` - Shared store for condition evaluation
-    ///
-    /// # Returns
-    ///
-    /// * `Ok(Some(String))` - ID of the next node to execute
-    /// * `Ok(None)` - Terminal action, execution should end
-    /// * `Err(FlowError)` - Routing error (no route found, condition evaluation failed)
-    ///
-    /// # Errors
-    ///
-    /// * [`FlowError::NoRouteFound`] - No route exists for the given action
-    /// * [`FlowError::InvalidConfiguration`] - Route condition evaluation failed
-    fn find_next_node(
-        &self,
-        current_node_id: &str,
-        action: &Action,
-        store: &S,
-    ) -> Result<Option<String>, FlowError> {
-        let action_str = action.to_string();
-
-        // Get routes for the current node
-        let routes = self.routes.get(current_node_id).ok_or_else(|| {
-            FlowError::NoRouteFound(current_node_id.to_string(), action_str.clone())
-        })?;
-
-        // Find matching route
-        for route in routes {
-            if route.action == action_str {
-                // Check condition if present - skip route if condition fails
-                if route.condition.as_ref().is_some_and(|c| !c.evaluate(store)) {
-                    continue;
-                }
-                return Ok(route.target_node_id.clone());
-            }
-        }
-
-        Err(FlowError::NoRouteFound(
-            current_node_id.to_string(),
-            action_str,
-        ))
+    fn next_node(&self, current_node_id: &NodeId, action: &Action) -> Option<NodeId> {
+        self.routes
+            .iter()
+            .find(|route| {
+                route.from == *current_node_id && route.action.as_str() == action.as_str()
+            })
+            .map(|route| route.to.clone())
     }
 }
 
 #[async_trait]
-impl<S: SharedStore + Send + Sync + 'static> FlowBackend<S> for Flow<S> {
-    fn add_node(&mut self, id: String, node: Box<dyn NodeRunner<S>>) -> Result<(), FlowError> {
-        if self.nodes.contains_key(&id) {
-            return Err(FlowError::InvalidConfiguration(format!(
-                "Duplicate node: {id}"
-            )));
-        }
-        self.nodes.insert(id, node);
-        Ok(())
-    }
-
-    fn add_route(&mut self, from_node_id: String, route: Route) -> Result<(), FlowError> {
-        self.routes.entry(from_node_id).or_default().push(route);
-        Ok(())
-    }
-
-    async fn execute(&mut self, store: &mut S) -> Result<FlowExecutionResult, FlowError> {
-        self.validate()?;
-        self.internal_execute(store, self.config.start_node_id.clone())
+impl<S> NodeAdapter<S> for Flow<S>
+where
+    S: Send + Sync,
+{
+    async fn run(&mut self, state: &mut S, node_id: &NodeId) -> Result<Action, NodeError> {
+        // A nested flow is one parent node. Its internal failure is reported as
+        // an exec-phase error for that parent node.
+        Flow::run(self, state)
             .await
-    }
-
-    async fn execute_from(
-        &mut self,
-        store: &mut S,
-        start_node_id: String,
-    ) -> Result<FlowExecutionResult, FlowError> {
-        self.internal_execute(store, start_node_id).await
-    }
-
-    fn config(&self) -> &FlowConfig {
-        &self.config
-    }
-
-    fn set_config(&mut self, config: FlowConfig) {
-        self.config = config;
-    }
-
-    fn validate(&self) -> Result<(), FlowError> {
-        self.internal_validate()
+            .map_err(|error| NodeError::new(NodePhase::Exec, node_id.clone(), error.to_string()))
     }
 }
 
-impl<S: SharedStore + 'static> Default for Flow<S> {
-    fn default() -> Self {
-        Self::new()
+impl<S> IntoNodeAdapter<S, FlowInput> for Flow<S>
+where
+    S: Send + Sync + 'static,
+{
+    fn into_node_adapter(self) -> Box<dyn NodeAdapter<S>> {
+        Box::new(self)
     }
 }
 
-// Flow as Node implementation (async version)
-#[async_trait]
-impl<S: SharedStore + Send + Sync + 'static> Node<S> for Flow<S> {
-    type PrepResult = ();
-    type ExecResult = FlowExecutionResult;
-    type Error = NodeError;
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use crate::SharedStore;
+    use crate::node::{Node, NodeContext};
+    use crate::shared_store::backends::MemoryStorage;
+    use async_trait::async_trait;
+    use serde_json::json;
+    use std::error::Error;
+    use std::fmt;
 
-    async fn prep(&mut self, _store: &S, _context: &ExecutionContext) -> Result<(), NodeError> {
-        self.validate()
-            .map_err(|e| NodeError::PreparationError(e.to_string()))?;
-        Ok(())
-    }
+    #[derive(Debug)]
+    struct TestError(&'static str);
 
-    async fn exec(
-        &mut self,
-        _prep_result: (),
-        _context: &ExecutionContext,
-    ) -> Result<FlowExecutionResult, NodeError> {
-        // For now, we can't execute a flow as a node without a store
-        // This would need to be implemented differently
-        Err(NodeError::ExecutionError(
-            "Flow as Node execution not yet implemented".to_string(),
-        ))
-    }
-
-    async fn post(
-        &mut self,
-        _store: &mut S,
-        _prep_result: (),
-        exec_result: FlowExecutionResult,
-        _context: &ExecutionContext,
-    ) -> Result<Action, NodeError> {
-        // Return the final action from the flow execution
-        Ok(exec_result.final_action)
-    }
-
-    fn name(&self) -> &'static str {
-        "Flow"
-    }
-}
-
-/// Builder for creating async flows easily
-pub struct FlowBuilder<S: SharedStore> {
-    nodes: HashMap<String, Box<dyn NodeRunner<S>>>,
-    routes: HashMap<String, Vec<Route>>,
-    config: FlowConfig,
-}
-
-impl<S: SharedStore + Send + Sync + 'static> Default for FlowBuilder<S> {
-    fn default() -> Self {
-        Self::new()
-    }
-}
-
-impl<S: SharedStore + Send + Sync + 'static> FlowBuilder<S> {
-    /// Create a new flow builder
-    pub fn new() -> Self {
-        Self {
-            nodes: HashMap::new(),
-            routes: HashMap::new(),
-            config: FlowConfig::default(),
+    impl fmt::Display for TestError {
+        fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+            f.write_str(self.0)
         }
     }
 
-    /// Set the starting node ID
-    pub fn start_node(mut self, node_id: impl Into<String>) -> Self {
-        self.config.start_node_id = node_id.into();
-        self
+    impl Error for TestError {}
+
+    struct StaticNode {
+        action: Action,
+        fail: bool,
     }
 
-    /// Set maximum execution steps
-    pub fn max_steps(mut self, max_steps: usize) -> Self {
-        self.config.max_steps = max_steps;
-        self
-    }
+    impl StaticNode {
+        fn new(action: impl Into<Action>) -> Self {
+            Self {
+                action: action.into(),
+                fail: false,
+            }
+        }
 
-    /// Add a node to the flow
-    pub fn node<T>(mut self, id: impl Into<String>, node: T) -> Self
-    where
-        T: Node<S> + Send + Sync + 'static,
-    {
-        self.nodes.insert(id.into(), Box::new(node));
-        self
-    }
-
-    /// Convenience method: add a node and set it as the starting node
-    pub fn start_with<T>(mut self, id: impl Into<String>, node: T) -> Self
-    where
-        T: Node<S> + Send + Sync + 'static,
-    {
-        let id = id.into();
-        self.config.start_node_id = id.clone();
-        self.node(id, node)
-    }
-
-    /// Add a simple route (action -> target node)
-    pub fn route(
-        mut self,
-        from: impl Into<String>,
-        action: impl Into<String>,
-        to: impl Into<String>,
-    ) -> Self {
-        let from_id = from.into();
-        let action_str = action.into();
-        let to_id = to.into();
-
-        let route = Route {
-            action: action_str,
-            target_node_id: Some(to_id),
-            condition: None,
-        };
-
-        self.routes.entry(from_id).or_default().push(route);
-        self
-    }
-
-    /// Add a conditional route
-    pub fn conditional_route(
-        mut self,
-        from: impl Into<String>,
-        action: impl Into<String>,
-        to: impl Into<String>,
-        condition: RouteCondition,
-    ) -> Self {
-        let from_id = from.into();
-        let action_str = action.into();
-        let to_id = to.into();
-
-        let route = Route {
-            action: action_str,
-            target_node_id: Some(to_id),
-            condition: Some(condition),
-        };
-
-        self.routes.entry(from_id).or_default().push(route);
-        self
-    }
-
-    /// Add an explicit terminal route that does not target any node
-    pub fn terminal_route(mut self, from: impl Into<String>, action: impl Into<String>) -> Self {
-        let from_id = from.into();
-        let action_str = action.into();
-
-        let route = Route {
-            action: action_str,
-            target_node_id: None, // None indicates termination
-            condition: None,
-        };
-
-        self.routes.entry(from_id).or_default().push(route);
-        self
-    }
-
-    /// Add an explicit conditional terminal route
-    pub fn conditional_terminal_route(
-        mut self,
-        from: impl Into<String>,
-        action: impl Into<String>,
-        condition: RouteCondition,
-    ) -> Self {
-        let from_id = from.into();
-        let action_str = action.into();
-
-        let route = Route {
-            action: action_str,
-            target_node_id: None, // None indicates termination
-            condition: Some(condition),
-        };
-
-        self.routes.entry(from_id).or_default().push(route);
-        self
-    }
-
-    /// Build the flow with the configured settings
-    pub fn build(self) -> Flow<S> {
-        Flow {
-            nodes: self.nodes,
-            routes: self.routes,
-            config: self.config,
+        fn failing() -> Self {
+            Self {
+                action: Action::new("unused"),
+                fail: true,
+            }
         }
     }
 
-    /// Convenience method to create a self-routing loop
-    pub fn self_route(self, node_id: impl Into<String>, action: impl Into<String>) -> Self {
-        let node_id_str = node_id.into();
-        self.route(node_id_str.clone(), action, node_id_str)
+    #[async_trait]
+    impl Node<MemoryStorage> for StaticNode {
+        type Prep = ();
+        type Output = ();
+        type Error = TestError;
+
+        async fn prep(
+            &mut self,
+            _state: &MemoryStorage,
+            _context: &NodeContext,
+        ) -> Result<Self::Prep, Self::Error> {
+            if self.fail {
+                return Err(TestError("node failed"));
+            }
+            Ok(())
+        }
+
+        async fn exec(
+            &mut self,
+            _prep: &Self::Prep,
+            _context: &NodeContext,
+        ) -> Result<Self::Output, Self::Error> {
+            Ok(())
+        }
+
+        async fn post(
+            &mut self,
+            state: &mut MemoryStorage,
+            _prep: Self::Prep,
+            _output: Self::Output,
+            context: &NodeContext,
+        ) -> Result<Action, Self::Error> {
+            state
+                .set(format!("visited:{}", context.node_id.as_str()), true)
+                .map_err(|_| TestError("storage failed"))?;
+            Ok(self.action.clone())
+        }
+    }
+
+    #[derive(Default)]
+    struct TypedState {
+        visits: Vec<String>,
+        value: Option<String>,
+    }
+
+    struct TypedNode {
+        action: Action,
+    }
+
+    impl TypedNode {
+        fn new(action: impl Into<Action>) -> Self {
+            Self {
+                action: action.into(),
+            }
+        }
+    }
+
+    #[async_trait]
+    impl Node<TypedState> for TypedNode {
+        type Prep = ();
+        type Output = ();
+        type Error = TestError;
+
+        async fn prep(
+            &mut self,
+            _state: &TypedState,
+            _context: &NodeContext,
+        ) -> Result<Self::Prep, Self::Error> {
+            Ok(())
+        }
+
+        async fn exec(
+            &mut self,
+            _prep: &Self::Prep,
+            _context: &NodeContext,
+        ) -> Result<Self::Output, Self::Error> {
+            Ok(())
+        }
+
+        async fn post(
+            &mut self,
+            state: &mut TypedState,
+            _prep: Self::Prep,
+            _output: Self::Output,
+            context: &NodeContext,
+        ) -> Result<Action, Self::Error> {
+            state.visits.push(context.node_id.as_str().to_string());
+            state.value = Some(self.action.as_str().to_string());
+            Ok(self.action.clone())
+        }
+    }
+
+    #[tokio::test]
+    async fn single_node_flow_uses_default_start_and_naturally_terminates() {
+        let mut flow = FlowBuilder::new()
+            .node("start", StaticNode::new("done"))
+            .build()
+            .unwrap();
+        let mut state = MemoryStorage::new();
+
+        let execution = flow.run_recorded(&mut state).await.unwrap();
+
+        assert_eq!(flow.start().as_str(), "start");
+        assert_eq!(execution.final_action, Action::new("done"));
+        assert_eq!(execution.last_node_id.as_str(), "start");
+        assert_eq!(execution.steps, 1);
+        assert_eq!(execution.path, vec![NodeId::new("start")]);
+    }
+
+    #[tokio::test]
+    async fn flow_runs_with_plain_typed_state() {
+        let mut flow = FlowBuilder::new()
+            .node("first", TypedNode::new("next"))
+            .node("second", TypedNode::new("done"))
+            .route("first", "next", "second")
+            .build()
+            .unwrap();
+        let mut state = TypedState::default();
+
+        let execution = flow.run_recorded(&mut state).await.unwrap();
+
+        assert_eq!(execution.final_action, Action::new("done"));
+        assert_eq!(
+            execution.path,
+            vec![NodeId::new("first"), NodeId::new("second")]
+        );
+        assert_eq!(state.visits, vec!["first", "second"]);
+        assert_eq!(state.value, Some("done".to_string()));
+    }
+
+    #[tokio::test]
+    async fn nested_flow_runs_with_plain_typed_state() {
+        let flow_a = FlowBuilder::new()
+            .node("inner_start", TypedNode::new("next"))
+            .node("inner_end", TypedNode::new("inner_done"))
+            .route("inner_start", "next", "inner_end")
+            .build()
+            .unwrap();
+        let mut flow_b = FlowBuilder::new().node("nested", flow_a).build().unwrap();
+        let mut state = TypedState::default();
+
+        let execution = flow_b.run_recorded(&mut state).await.unwrap();
+
+        assert_eq!(execution.final_action, Action::new("inner_done"));
+        assert_eq!(execution.path, vec![NodeId::new("nested")]);
+        assert_eq!(state.visits, vec!["inner_start", "inner_end"]);
+        assert_eq!(state.value, Some("inner_done".to_string()));
+    }
+
+    #[tokio::test]
+    async fn run_returns_final_action() {
+        let mut flow = FlowBuilder::new()
+            .node("start", StaticNode::new("done"))
+            .build()
+            .unwrap();
+        let mut state = MemoryStorage::new();
+
+        let action = flow.run(&mut state).await.unwrap();
+
+        assert_eq!(action, Action::new("done"));
+    }
+
+    #[tokio::test]
+    async fn explicit_start_overrides_default_start() {
+        let mut flow = FlowBuilder::new()
+            .node("first", StaticNode::new("done"))
+            .node("second", StaticNode::new("next"))
+            .start("second")
+            .route("second", "next", "first")
+            .build()
+            .unwrap();
+        let mut state = MemoryStorage::new();
+
+        let execution = flow.run_recorded(&mut state).await.unwrap();
+
+        assert_eq!(flow.start().as_str(), "second");
+        assert_eq!(
+            execution.path,
+            vec![NodeId::new("second"), NodeId::new("first")]
+        );
+        assert_eq!(execution.final_action, Action::new("done"));
+    }
+
+    #[tokio::test]
+    async fn action_params_do_not_affect_routing() {
+        let mut flow = FlowBuilder::new()
+            .node(
+                "first",
+                StaticNode::new(Action::with_param("next", "payload", json!(1))),
+            )
+            .node("second", StaticNode::new("done"))
+            .route("first", "next", "second")
+            .build()
+            .unwrap();
+        let mut state = MemoryStorage::new();
+
+        let execution = flow.run_recorded(&mut state).await.unwrap();
+
+        assert_eq!(
+            execution.path,
+            vec![NodeId::new("first"), NodeId::new("second")]
+        );
+    }
+
+    #[tokio::test]
+    async fn no_matching_route_naturally_terminates() {
+        let mut flow = FlowBuilder::new()
+            .node("first", StaticNode::new("done"))
+            .node("second", StaticNode::new("unused"))
+            .route("first", "other", "second")
+            .build()
+            .unwrap();
+        let mut state = MemoryStorage::new();
+
+        let execution = flow.run_recorded(&mut state).await.unwrap();
+
+        assert_eq!(execution.path, vec![NodeId::new("first")]);
+        assert_eq!(execution.final_action, Action::new("done"));
+    }
+
+    #[test]
+    fn build_fails_for_invalid_graphs() {
+        assert_eq!(
+            FlowBuilder::<MemoryStorage>::new().build().unwrap_err(),
+            FlowError::EmptyFlow
+        );
+
+        assert_eq!(
+            FlowBuilder::new()
+                .node("node", StaticNode::new("done"))
+                .node("node", StaticNode::new("done"))
+                .build()
+                .unwrap_err(),
+            FlowError::DuplicateNode(NodeId::new("node"))
+        );
+
+        assert_eq!(
+            FlowBuilder::new()
+                .node("node", StaticNode::new("done"))
+                .start("missing")
+                .build()
+                .unwrap_err(),
+            FlowError::MissingStart(NodeId::new("missing"))
+        );
+
+        assert_eq!(
+            FlowBuilder::new()
+                .node("node", StaticNode::new("done"))
+                .route("missing", "next", "node")
+                .build()
+                .unwrap_err(),
+            FlowError::MissingRouteSource(NodeId::new("missing"))
+        );
+
+        assert_eq!(
+            FlowBuilder::new()
+                .node("node", StaticNode::new("next"))
+                .route("node", "next", "missing")
+                .build()
+                .unwrap_err(),
+            FlowError::MissingRouteTarget(NodeId::new("missing"))
+        );
+
+        assert_eq!(
+            FlowBuilder::new()
+                .node("first", StaticNode::new("next"))
+                .node("second", StaticNode::new("done"))
+                .route("first", "next", "second")
+                .route("first", "next", "second")
+                .build()
+                .unwrap_err(),
+            FlowError::DuplicateRoute {
+                from: NodeId::new("first"),
+                action: ActionName::new("next")
+            }
+        );
+
+        assert_eq!(
+            FlowBuilder::new()
+                .node("first", StaticNode::new("done"))
+                .node("second", StaticNode::new("done"))
+                .build()
+                .unwrap_err(),
+            FlowError::UnreachableNode(NodeId::new("second"))
+        );
+    }
+
+    #[test]
+    fn graph_analysis_reports_cycle_and_dag() {
+        let cycle = FlowBuilder::new()
+            .node("first", StaticNode::new("next"))
+            .node("second", StaticNode::new("back"))
+            .route("first", "next", "second")
+            .route("second", "back", "first")
+            .build()
+            .unwrap();
+
+        assert!(!cycle.analysis().is_dag);
+        assert_eq!(cycle.analysis().topological_order, None);
+
+        let dag = FlowBuilder::new()
+            .node("first", StaticNode::new("next"))
+            .node("second", StaticNode::new("done"))
+            .route("first", "next", "second")
+            .build()
+            .unwrap();
+
+        assert!(dag.analysis().is_dag);
+        assert_eq!(
+            dag.analysis().topological_order,
+            Some(vec![NodeId::new("first"), NodeId::new("second")])
+        );
+    }
+
+    #[tokio::test]
+    async fn node_error_is_wrapped_as_flow_error() {
+        let mut flow = FlowBuilder::new()
+            .node("start", StaticNode::failing())
+            .build()
+            .unwrap();
+        let mut state = MemoryStorage::new();
+
+        let error = flow.run(&mut state).await.unwrap_err();
+
+        match error {
+            FlowError::NodeError(node_error) => {
+                assert_eq!(node_error.node_id.as_str(), "start");
+                assert_eq!(node_error.message, "node failed");
+            }
+            other => panic!("expected node error, got {other:?}"),
+        }
+    }
+
+    #[tokio::test]
+    async fn nested_flow_runs_as_one_parent_node_and_returns_final_action() {
+        let flow_a = FlowBuilder::new()
+            .node("inner_start", StaticNode::new("next"))
+            .node("inner_end", StaticNode::new("inner_done"))
+            .route("inner_start", "next", "inner_end")
+            .build()
+            .unwrap();
+        let mut flow_b = FlowBuilder::new().node("nested", flow_a).build().unwrap();
+        let mut state = MemoryStorage::new();
+
+        let execution = flow_b.run_recorded(&mut state).await.unwrap();
+
+        assert_eq!(execution.final_action, Action::new("inner_done"));
+        assert_eq!(execution.path, vec![NodeId::new("nested")]);
+        assert_eq!(
+            state.get::<bool>("visited:inner_start").unwrap(),
+            Some(true)
+        );
+        assert_eq!(state.get::<bool>("visited:inner_end").unwrap(), Some(true));
+    }
+
+    #[tokio::test]
+    async fn nested_flow_error_is_reported_as_parent_node_exec_error() {
+        let flow_a = FlowBuilder::new()
+            .node("inner", StaticNode::failing())
+            .build()
+            .unwrap();
+        let mut flow_b = FlowBuilder::new().node("nested", flow_a).build().unwrap();
+        let mut state = MemoryStorage::new();
+
+        let error = flow_b.run(&mut state).await.unwrap_err();
+
+        match error {
+            FlowError::NodeError(node_error) => {
+                assert_eq!(node_error.phase, NodePhase::Exec);
+                assert_eq!(node_error.node_id.as_str(), "nested");
+                assert!(
+                    node_error.message.contains("node execution error"),
+                    "message was: {}",
+                    node_error.message
+                );
+            }
+            other => panic!("expected parent node error, got {other:?}"),
+        }
     }
 }

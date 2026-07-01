@@ -1,53 +1,28 @@
-use crate::shared_store::SharedStore;
-use serde_json::Value;
+use crate::action::ActionName;
+use crate::node::NodeId;
 
-/// Represents a route from one node to another based on an action
-#[derive(Debug, Clone)]
+/// Directed transition between two nodes for one action name.
+#[derive(Debug, Clone, PartialEq, Eq, Hash)]
 pub struct Route {
-    /// The action that triggers this route
-    pub action: String,
-    /// The target node ID, or None for terminal routes
-    pub target_node_id: Option<String>,
-    /// Optional condition that must be met for this route to be taken
-    pub condition: Option<RouteCondition>,
+    /// Source node id.
+    pub from: NodeId,
+    /// Action name that triggers this route.
+    pub action: ActionName,
+    /// Target node id.
+    pub to: NodeId,
 }
 
-/// Conditions for route evaluation
-#[derive(Debug)]
-pub enum RouteCondition {
-    /// Always true
-    Always,
-    /// Check if a key exists in the shared store
-    KeyExists(String),
-    /// Check if a key equals a specific value
-    KeyEquals(String, Value),
-}
-
-impl Clone for RouteCondition {
-    fn clone(&self) -> Self {
-        match self {
-            RouteCondition::Always => RouteCondition::Always,
-            RouteCondition::KeyExists(key) => RouteCondition::KeyExists(key.clone()),
-            RouteCondition::KeyEquals(key, value) => {
-                RouteCondition::KeyEquals(key.clone(), value.clone())
-            }
-        }
-    }
-}
-
-impl RouteCondition {
-    /// Evaluate the condition against the shared store
-    pub fn evaluate<S: SharedStore>(&self, store: &S) -> bool {
-        match self {
-            RouteCondition::Always => true,
-            RouteCondition::KeyExists(key) => store.contains_key(key).unwrap_or(false),
-            RouteCondition::KeyEquals(key, expected_value) => {
-                if let Ok(Some(actual_value)) = store.get::<Value>(key) {
-                    &actual_value == expected_value
-                } else {
-                    false
-                }
-            }
+impl Route {
+    /// Create a route from one node to another.
+    pub fn new(
+        from: impl Into<NodeId>,
+        action: impl Into<ActionName>,
+        to: impl Into<NodeId>,
+    ) -> Self {
+        Self {
+            from: from.into(),
+            action: action.into(),
+            to: to.into(),
         }
     }
 }

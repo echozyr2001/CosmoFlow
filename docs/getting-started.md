@@ -1,9 +1,7 @@
 # Getting Started
 
 This guide introduces the CosmoFlow core model: typed state, nodes, actions,
-and flows. The examples use the intended main API names. Until the current core
-model is promoted from the v2 modules, use the equivalent `::v2` paths in local
-code.
+and flows.
 
 ## Installation
 

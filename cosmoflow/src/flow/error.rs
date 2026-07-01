@@ -1,5 +1,5 @@
-use crate::action::v2::ActionName;
-use crate::node::v2::{NodeError, NodeId};
+use crate::action::ActionName;
+use crate::node::{NodeError, NodeId};
 use thiserror::Error;
 
 /// Errors produced while building or running a flow.

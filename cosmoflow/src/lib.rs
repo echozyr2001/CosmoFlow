@@ -22,18 +22,11 @@
 //! *   **Shared Store**: An optional key-value state model with memory, file, and
 //!     Redis backends.
 //!
-//! ## API Promotion Note
-//!
-//! The current core model is available under the `action::v2`, `node::v2`, and
-//! `flow::v2` modules. The crate root and legacy module exports are intentionally
-//! not changed in this documentation-only pass.
-//!
 //! # Quick Start
 //!
-//! This example shows the intended main API after the current core model is
-//! promoted from the v2 modules.
-//!
-//! ```rust,ignore
+//! ```rust
+//! # #[cfg(not(feature = "async"))]
+//! # fn main() -> std::result::Result<(), Box<dyn std::error::Error>> {
 //! use cosmoflow::action::Action;
 //! use cosmoflow::flow::FlowBuilder;
 //! use cosmoflow::node::{Node, NodeContext};
@@ -77,6 +70,10 @@
 //! let mut state = AppState::default();
 //! let action = flow.run(&mut state)?;
 //! assert_eq!(action.as_str(), "done");
+//! # Ok(())
+//! # }
+//! # #[cfg(feature = "async")]
+//! # fn main() {}
 //! ```
 //!
 //! ## Feature Flags
@@ -112,37 +109,15 @@ pub use shared_store::SharedStore;
 
 /// Action types for workflow transition signals.
 pub mod action;
-pub use action::Action;
+pub use action::{Action, ActionName, ActionParams};
 
 /// Flow graph definition and execution.
 pub mod flow;
-
-// Sync exports
-#[cfg(not(feature = "async"))]
-pub use flow::{
-    Flow, FlowBackend, FlowBuilder, FlowConfig, FlowExecutionResult, errors::FlowError,
-    route::Route,
-};
-
-// Async exports
-#[cfg(feature = "async")]
-pub use flow::{
-    FlowConfig, FlowExecutionResult,
-    r#async::{Flow, FlowBackend, FlowBuilder},
-    errors::FlowError,
-    route::Route,
-};
+pub use flow::{Flow, FlowAnalysis, FlowBuilder, FlowError, FlowExecution, Route};
 
 /// Node execution traits and context types.
 pub mod node;
-
-// Sync Node exports
-#[cfg(not(feature = "async"))]
-pub use node::{ExecutionContext, Node, NodeError};
-
-// Async Node exports
-#[cfg(feature = "async")]
-pub use node::{ExecutionContext, NodeError, r#async::Node};
+pub use node::{ExecutionId, Node, NodeContext, NodeError, NodeId, NodePhase};
 
 // ============================================================================
 // CONVENIENCE TYPE ALIAS
@@ -165,10 +140,13 @@ pub type Result<T> = std::result::Result<T, FlowError>;
 /// ```
 pub mod prelude {
     // Core types (always available)
-    pub use crate::{Action, ExecutionContext, Node, NodeError, SharedStore};
+    pub use crate::{
+        Action, ActionName, ActionParams, ExecutionId, Node, NodeContext, NodeError, NodeId,
+        NodePhase, SharedStore,
+    };
 
     // Flow types (always available)
-    pub use crate::{Flow, FlowBackend, FlowBuilder, FlowConfig, FlowExecutionResult};
+    pub use crate::{Flow, FlowAnalysis, FlowBuilder, FlowError, FlowExecution, Route};
 
     // Re-export async_trait when async feature is enabled
     #[cfg(feature = "async")]

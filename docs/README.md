@@ -19,9 +19,7 @@ work, and flows connect nodes into validated graphs.
   timeout, agent/tool/LLM integration, memory, and tracing should be composed
   above the core or provided by optional extensions.
 
-## Current API Note
+## API
 
-These guides describe the intended main API after the current core model is
-promoted from the v2 modules. Until that promotion is complete, the same model
-is available under `cosmoflow::action::v2`, `cosmoflow::node::v2`, and
-`cosmoflow::flow::v2`.
+The core API is exposed through `cosmoflow::action`, `cosmoflow::node`, and
+`cosmoflow::flow`, with commonly used types re-exported from the crate root.

@@ -25,10 +25,6 @@ sharing is the right model.
 
 ## Quick Start
 
-The final main API is planned to expose the current core model directly through
-`cosmoflow::action`, `cosmoflow::node`, and `cosmoflow::flow`. Until that
-promotion is complete, the same model is available under the current v2 modules.
-
 ```rust
 use cosmoflow::action::Action;
 use cosmoflow::flow::FlowBuilder;

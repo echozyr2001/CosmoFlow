@@ -1,12 +1,11 @@
 use super::{FlowAnalysis, FlowError, FlowExecution, Route};
-use crate::action::v2::{Action, ActionName};
-use crate::node::v2::{FlowInput, IntoNodeAdapter, NodeAdapter, NodeError, NodeId, NodePhase};
-use async_trait::async_trait;
+use crate::action::{Action, ActionName};
+use crate::node::{FlowInput, IntoNodeAdapter, NodeAdapter, NodeError, NodeId, NodePhase};
 use std::collections::HashMap;
 use std::fmt;
 
-/// Builder for an asynchronous flow.
-pub struct FlowBuilder<S: Send + Sync> {
+/// Builder for a synchronous flow.
+pub struct FlowBuilder<S> {
     nodes: HashMap<NodeId, Box<dyn NodeAdapter<S>>>,
     node_order: Vec<NodeId>,
     routes: Vec<Route>,
@@ -14,13 +13,13 @@ pub struct FlowBuilder<S: Send + Sync> {
     duplicate_nodes: Vec<NodeId>,
 }
 
-impl<S: Send + Sync> Default for FlowBuilder<S> {
+impl<S> Default for FlowBuilder<S> {
     fn default() -> Self {
         Self::new()
     }
 }
 
-impl<S: Send + Sync> FlowBuilder<S> {
+impl<S> FlowBuilder<S> {
     /// Create an empty flow builder.
     pub fn new() -> Self {
         Self {
@@ -89,8 +88,8 @@ impl<S: Send + Sync> FlowBuilder<S> {
     }
 }
 
-/// An asynchronous state-machine graph and executor.
-pub struct Flow<S: Send + Sync> {
+/// A synchronous state-machine graph and executor.
+pub struct Flow<S> {
     nodes: HashMap<NodeId, Box<dyn NodeAdapter<S>>>,
     node_order: Vec<NodeId>,
     routes: Vec<Route>,
@@ -98,7 +97,7 @@ pub struct Flow<S: Send + Sync> {
     analysis: FlowAnalysis,
 }
 
-impl<S: Send + Sync> fmt::Debug for Flow<S> {
+impl<S> fmt::Debug for Flow<S> {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         f.debug_struct("Flow")
             .field("node_order", &self.node_order)
@@ -109,7 +108,7 @@ impl<S: Send + Sync> fmt::Debug for Flow<S> {
     }
 }
 
-impl<S: Send + Sync> Flow<S> {
+impl<S> Flow<S> {
     /// Return static graph analysis computed at build time.
     pub fn analysis(&self) -> &FlowAnalysis {
         &self.analysis
@@ -131,12 +130,12 @@ impl<S: Send + Sync> Flow<S> {
     }
 
     /// Run the flow and return the final action.
-    pub async fn run(&mut self, state: &mut S) -> Result<Action, FlowError> {
-        Ok(self.run_recorded(state).await?.final_action)
+    pub fn run(&mut self, state: &mut S) -> Result<Action, FlowError> {
+        Ok(self.run_recorded(state)?.final_action)
     }
 
     /// Run the flow and return an execution summary.
-    pub async fn run_recorded(&mut self, state: &mut S) -> Result<FlowExecution, FlowError> {
+    pub fn run_recorded(&mut self, state: &mut S) -> Result<FlowExecution, FlowError> {
         let mut current_node_id = self.start.clone();
         let mut path = Vec::new();
 
@@ -145,10 +144,7 @@ impl<S: Send + Sync> Flow<S> {
                 .nodes
                 .get_mut(&current_node_id)
                 .ok_or_else(|| FlowError::NodeNotFound(current_node_id.clone()))?;
-            let action = node
-                .run(state, &current_node_id)
-                .await
-                .map_err(FlowError::from)?;
+            let action = node.run(state, &current_node_id).map_err(FlowError::from)?;
             path.push(current_node_id.clone());
 
             if let Some(next_node_id) = self.next_node(&current_node_id, &action) {
@@ -175,23 +171,18 @@ impl<S: Send + Sync> Flow<S> {
     }
 }
 
-#[async_trait]
-impl<S> NodeAdapter<S> for Flow<S>
-where
-    S: Send + Sync,
-{
-    async fn run(&mut self, state: &mut S, node_id: &NodeId) -> Result<Action, NodeError> {
+impl<S> NodeAdapter<S> for Flow<S> {
+    fn run(&mut self, state: &mut S, node_id: &NodeId) -> Result<Action, NodeError> {
         // A nested flow is one parent node. Its internal failure is reported as
         // an exec-phase error for that parent node.
         Flow::run(self, state)
-            .await
             .map_err(|error| NodeError::new(NodePhase::Exec, node_id.clone(), error.to_string()))
     }
 }
 
 impl<S> IntoNodeAdapter<S, FlowInput> for Flow<S>
 where
-    S: Send + Sync + 'static,
+    S: 'static,
 {
     fn into_node_adapter(self) -> Box<dyn NodeAdapter<S>> {
         Box::new(self)
@@ -202,9 +193,8 @@ where
 mod tests {
     use super::*;
     use crate::SharedStore;
-    use crate::node::v2::{Node, NodeContext};
+    use crate::node::{Node, NodeContext};
     use crate::shared_store::backends::MemoryStorage;
-    use async_trait::async_trait;
     use serde_json::json;
     use std::error::Error;
     use std::fmt;
@@ -241,13 +231,12 @@ mod tests {
         }
     }
 
-    #[async_trait]
     impl Node<MemoryStorage> for StaticNode {
         type Prep = ();
         type Output = ();
         type Error = TestError;
 
-        async fn prep(
+        fn prep(
             &mut self,
             _state: &MemoryStorage,
             _context: &NodeContext,
@@ -258,7 +247,7 @@ mod tests {
             Ok(())
         }
 
-        async fn exec(
+        fn exec(
             &mut self,
             _prep: &Self::Prep,
             _context: &NodeContext,
@@ -266,7 +255,7 @@ mod tests {
             Ok(())
         }
 
-        async fn post(
+        fn post(
             &mut self,
             state: &mut MemoryStorage,
             _prep: Self::Prep,
@@ -298,13 +287,12 @@ mod tests {
         }
     }
 
-    #[async_trait]
     impl Node<TypedState> for TypedNode {
         type Prep = ();
         type Output = ();
         type Error = TestError;
 
-        async fn prep(
+        fn prep(
             &mut self,
             _state: &TypedState,
             _context: &NodeContext,
@@ -312,7 +300,7 @@ mod tests {
             Ok(())
         }
 
-        async fn exec(
+        fn exec(
             &mut self,
             _prep: &Self::Prep,
             _context: &NodeContext,
@@ -320,7 +308,7 @@ mod tests {
             Ok(())
         }
 
-        async fn post(
+        fn post(
             &mut self,
             state: &mut TypedState,
             _prep: Self::Prep,
@@ -333,15 +321,15 @@ mod tests {
         }
     }
 
-    #[tokio::test]
-    async fn single_node_flow_uses_default_start_and_naturally_terminates() {
+    #[test]
+    fn single_node_flow_uses_default_start_and_naturally_terminates() {
         let mut flow = FlowBuilder::new()
             .node("start", StaticNode::new("done"))
             .build()
             .unwrap();
         let mut state = MemoryStorage::new();
 
-        let execution = flow.run_recorded(&mut state).await.unwrap();
+        let execution = flow.run_recorded(&mut state).unwrap();
 
         assert_eq!(flow.start().as_str(), "start");
         assert_eq!(execution.final_action, Action::new("done"));
@@ -350,8 +338,8 @@ mod tests {
         assert_eq!(execution.path, vec![NodeId::new("start")]);
     }
 
-    #[tokio::test]
-    async fn flow_runs_with_plain_typed_state() {
+    #[test]
+    fn flow_runs_with_plain_typed_state() {
         let mut flow = FlowBuilder::new()
             .node("first", TypedNode::new("next"))
             .node("second", TypedNode::new("done"))
@@ -360,7 +348,7 @@ mod tests {
             .unwrap();
         let mut state = TypedState::default();
 
-        let execution = flow.run_recorded(&mut state).await.unwrap();
+        let execution = flow.run_recorded(&mut state).unwrap();
 
         assert_eq!(execution.final_action, Action::new("done"));
         assert_eq!(
@@ -371,8 +359,8 @@ mod tests {
         assert_eq!(state.value, Some("done".to_string()));
     }
 
-    #[tokio::test]
-    async fn nested_flow_runs_with_plain_typed_state() {
+    #[test]
+    fn nested_flow_runs_with_plain_typed_state() {
         let flow_a = FlowBuilder::new()
             .node("inner_start", TypedNode::new("next"))
             .node("inner_end", TypedNode::new("inner_done"))
@@ -382,7 +370,7 @@ mod tests {
         let mut flow_b = FlowBuilder::new().node("nested", flow_a).build().unwrap();
         let mut state = TypedState::default();
 
-        let execution = flow_b.run_recorded(&mut state).await.unwrap();
+        let execution = flow_b.run_recorded(&mut state).unwrap();
 
         assert_eq!(execution.final_action, Action::new("inner_done"));
         assert_eq!(execution.path, vec![NodeId::new("nested")]);
@@ -390,21 +378,33 @@ mod tests {
         assert_eq!(state.value, Some("inner_done".to_string()));
     }
 
-    #[tokio::test]
-    async fn run_returns_final_action() {
+    #[test]
+    fn run_returns_final_action() {
         let mut flow = FlowBuilder::new()
             .node("start", StaticNode::new("done"))
             .build()
             .unwrap();
         let mut state = MemoryStorage::new();
 
-        let action = flow.run(&mut state).await.unwrap();
+        let action = flow.run(&mut state).unwrap();
 
         assert_eq!(action, Action::new("done"));
     }
 
-    #[tokio::test]
-    async fn explicit_start_overrides_default_start() {
+    #[test]
+    fn first_added_node_becomes_start() {
+        let flow = FlowBuilder::new()
+            .node("first", StaticNode::new("next"))
+            .node("second", StaticNode::new("done"))
+            .route("first", "next", "second")
+            .build()
+            .unwrap();
+
+        assert_eq!(flow.start().as_str(), "first");
+    }
+
+    #[test]
+    fn explicit_start_overrides_default_start() {
         let mut flow = FlowBuilder::new()
             .node("first", StaticNode::new("done"))
             .node("second", StaticNode::new("next"))
@@ -414,7 +414,7 @@ mod tests {
             .unwrap();
         let mut state = MemoryStorage::new();
 
-        let execution = flow.run_recorded(&mut state).await.unwrap();
+        let execution = flow.run_recorded(&mut state).unwrap();
 
         assert_eq!(flow.start().as_str(), "second");
         assert_eq!(
@@ -424,8 +424,26 @@ mod tests {
         assert_eq!(execution.final_action, Action::new("done"));
     }
 
-    #[tokio::test]
-    async fn action_params_do_not_affect_routing() {
+    #[test]
+    fn routes_by_action_name() {
+        let mut flow = FlowBuilder::new()
+            .node("first", StaticNode::new("next"))
+            .node("second", StaticNode::new("done"))
+            .route("first", "next", "second")
+            .build()
+            .unwrap();
+        let mut state = MemoryStorage::new();
+
+        let execution = flow.run_recorded(&mut state).unwrap();
+
+        assert_eq!(
+            execution.path,
+            vec![NodeId::new("first"), NodeId::new("second")]
+        );
+    }
+
+    #[test]
+    fn action_params_do_not_affect_routing() {
         let mut flow = FlowBuilder::new()
             .node(
                 "first",
@@ -437,7 +455,7 @@ mod tests {
             .unwrap();
         let mut state = MemoryStorage::new();
 
-        let execution = flow.run_recorded(&mut state).await.unwrap();
+        let execution = flow.run_recorded(&mut state).unwrap();
 
         assert_eq!(
             execution.path,
@@ -445,8 +463,8 @@ mod tests {
         );
     }
 
-    #[tokio::test]
-    async fn no_matching_route_naturally_terminates() {
+    #[test]
+    fn no_matching_route_naturally_terminates() {
         let mut flow = FlowBuilder::new()
             .node("first", StaticNode::new("done"))
             .node("second", StaticNode::new("unused"))
@@ -455,82 +473,96 @@ mod tests {
             .unwrap();
         let mut state = MemoryStorage::new();
 
-        let execution = flow.run_recorded(&mut state).await.unwrap();
+        let execution = flow.run_recorded(&mut state).unwrap();
 
         assert_eq!(execution.path, vec![NodeId::new("first")]);
         assert_eq!(execution.final_action, Action::new("done"));
     }
 
     #[test]
-    fn build_fails_for_invalid_graphs() {
-        assert_eq!(
-            FlowBuilder::<MemoryStorage>::new().build().unwrap_err(),
-            FlowError::EmptyFlow
-        );
+    fn build_fails_for_empty_flow() {
+        let error = FlowBuilder::<MemoryStorage>::new().build().unwrap_err();
+
+        assert_eq!(error, FlowError::EmptyFlow);
+    }
+
+    #[test]
+    fn build_fails_for_duplicate_node() {
+        let error = FlowBuilder::new()
+            .node("node", StaticNode::new("done"))
+            .node("node", StaticNode::new("done"))
+            .build()
+            .unwrap_err();
+
+        assert_eq!(error, FlowError::DuplicateNode(NodeId::new("node")));
+    }
+
+    #[test]
+    fn build_fails_for_missing_start() {
+        let error = FlowBuilder::new()
+            .node("node", StaticNode::new("done"))
+            .start("missing")
+            .build()
+            .unwrap_err();
+
+        assert_eq!(error, FlowError::MissingStart(NodeId::new("missing")));
+    }
+
+    #[test]
+    fn build_fails_for_missing_route_source() {
+        let error = FlowBuilder::new()
+            .node("node", StaticNode::new("done"))
+            .route("missing", "next", "node")
+            .build()
+            .unwrap_err();
+
+        assert_eq!(error, FlowError::MissingRouteSource(NodeId::new("missing")));
+    }
+
+    #[test]
+    fn build_fails_for_missing_route_target() {
+        let error = FlowBuilder::new()
+            .node("node", StaticNode::new("next"))
+            .route("node", "next", "missing")
+            .build()
+            .unwrap_err();
+
+        assert_eq!(error, FlowError::MissingRouteTarget(NodeId::new("missing")));
+    }
+
+    #[test]
+    fn build_fails_for_duplicate_route() {
+        let error = FlowBuilder::new()
+            .node("first", StaticNode::new("next"))
+            .node("second", StaticNode::new("done"))
+            .route("first", "next", "second")
+            .route("first", "next", "second")
+            .build()
+            .unwrap_err();
 
         assert_eq!(
-            FlowBuilder::new()
-                .node("node", StaticNode::new("done"))
-                .node("node", StaticNode::new("done"))
-                .build()
-                .unwrap_err(),
-            FlowError::DuplicateNode(NodeId::new("node"))
-        );
-
-        assert_eq!(
-            FlowBuilder::new()
-                .node("node", StaticNode::new("done"))
-                .start("missing")
-                .build()
-                .unwrap_err(),
-            FlowError::MissingStart(NodeId::new("missing"))
-        );
-
-        assert_eq!(
-            FlowBuilder::new()
-                .node("node", StaticNode::new("done"))
-                .route("missing", "next", "node")
-                .build()
-                .unwrap_err(),
-            FlowError::MissingRouteSource(NodeId::new("missing"))
-        );
-
-        assert_eq!(
-            FlowBuilder::new()
-                .node("node", StaticNode::new("next"))
-                .route("node", "next", "missing")
-                .build()
-                .unwrap_err(),
-            FlowError::MissingRouteTarget(NodeId::new("missing"))
-        );
-
-        assert_eq!(
-            FlowBuilder::new()
-                .node("first", StaticNode::new("next"))
-                .node("second", StaticNode::new("done"))
-                .route("first", "next", "second")
-                .route("first", "next", "second")
-                .build()
-                .unwrap_err(),
+            error,
             FlowError::DuplicateRoute {
                 from: NodeId::new("first"),
                 action: ActionName::new("next")
             }
         );
-
-        assert_eq!(
-            FlowBuilder::new()
-                .node("first", StaticNode::new("done"))
-                .node("second", StaticNode::new("done"))
-                .build()
-                .unwrap_err(),
-            FlowError::UnreachableNode(NodeId::new("second"))
-        );
     }
 
     #[test]
-    fn graph_analysis_reports_cycle_and_dag() {
-        let cycle = FlowBuilder::new()
+    fn build_fails_for_unreachable_node() {
+        let error = FlowBuilder::new()
+            .node("first", StaticNode::new("done"))
+            .node("second", StaticNode::new("done"))
+            .build()
+            .unwrap_err();
+
+        assert_eq!(error, FlowError::UnreachableNode(NodeId::new("second")));
+    }
+
+    #[test]
+    fn cycle_builds_and_analysis_reports_non_dag() {
+        let flow = FlowBuilder::new()
             .node("first", StaticNode::new("next"))
             .node("second", StaticNode::new("back"))
             .route("first", "next", "second")
@@ -538,32 +570,35 @@ mod tests {
             .build()
             .unwrap();
 
-        assert!(!cycle.analysis().is_dag);
-        assert_eq!(cycle.analysis().topological_order, None);
+        assert!(!flow.analysis().is_dag);
+        assert_eq!(flow.analysis().topological_order, None);
+    }
 
-        let dag = FlowBuilder::new()
+    #[test]
+    fn dag_analysis_returns_topological_order() {
+        let flow = FlowBuilder::new()
             .node("first", StaticNode::new("next"))
             .node("second", StaticNode::new("done"))
             .route("first", "next", "second")
             .build()
             .unwrap();
 
-        assert!(dag.analysis().is_dag);
+        assert!(flow.analysis().is_dag);
         assert_eq!(
-            dag.analysis().topological_order,
+            flow.analysis().topological_order,
             Some(vec![NodeId::new("first"), NodeId::new("second")])
         );
     }
 
-    #[tokio::test]
-    async fn node_error_is_wrapped_as_flow_error() {
+    #[test]
+    fn node_error_is_wrapped_as_flow_error() {
         let mut flow = FlowBuilder::new()
             .node("start", StaticNode::failing())
             .build()
             .unwrap();
         let mut state = MemoryStorage::new();
 
-        let error = flow.run(&mut state).await.unwrap_err();
+        let error = flow.run(&mut state).unwrap_err();
 
         match error {
             FlowError::NodeError(node_error) => {
@@ -574,8 +609,8 @@ mod tests {
         }
     }
 
-    #[tokio::test]
-    async fn nested_flow_runs_as_one_parent_node_and_returns_final_action() {
+    #[test]
+    fn nested_flow_runs_as_one_parent_node_and_returns_final_action() {
         let flow_a = FlowBuilder::new()
             .node("inner_start", StaticNode::new("next"))
             .node("inner_end", StaticNode::new("inner_done"))
@@ -585,7 +620,7 @@ mod tests {
         let mut flow_b = FlowBuilder::new().node("nested", flow_a).build().unwrap();
         let mut state = MemoryStorage::new();
 
-        let execution = flow_b.run_recorded(&mut state).await.unwrap();
+        let execution = flow_b.run_recorded(&mut state).unwrap();
 
         assert_eq!(execution.final_action, Action::new("inner_done"));
         assert_eq!(execution.path, vec![NodeId::new("nested")]);
@@ -596,8 +631,8 @@ mod tests {
         assert_eq!(state.get::<bool>("visited:inner_end").unwrap(), Some(true));
     }
 
-    #[tokio::test]
-    async fn nested_flow_error_is_reported_as_parent_node_exec_error() {
+    #[test]
+    fn nested_flow_error_is_reported_as_parent_node_exec_error() {
         let flow_a = FlowBuilder::new()
             .node("inner", StaticNode::failing())
             .build()
@@ -605,7 +640,7 @@ mod tests {
         let mut flow_b = FlowBuilder::new().node("nested", flow_a).build().unwrap();
         let mut state = MemoryStorage::new();
 
-        let error = flow_b.run(&mut state).await.unwrap_err();
+        let error = flow_b.run(&mut state).unwrap_err();
 
         match error {
             FlowError::NodeError(node_error) => {

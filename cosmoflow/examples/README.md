@@ -1,29 +1,29 @@
 # CosmoFlow Examples
 
-This directory contains **simple examples** designed for learning CosmoFlow's core concepts. These examples prioritize clarity and fast compilation over advanced features.
+This directory contains small examples for the main CosmoFlow core API. They prioritize clarity over advanced integrations.
 
 ## Learning Path
 
 Start here to understand CosmoFlow fundamentals:
 
 ### 1. **hello_world.rs** - Your First Workflow
-- Basic node creation and execution
-- Data flow between nodes using SharedStore
-- Understanding the core CosmoFlow concepts
+- Node implementation with `prep -> exec -> post`
+- Flow execution with natural termination
+- `SharedStore` as an optional key-value state model
 
 ### 2. **simple_loops.rs** - Control Flow Patterns  
-- Loop constructs and iteration patterns
-- Conditional execution and state management
-- Building more complex workflows step by step
+- Loops as ordinary state-machine routes
+- Action names as routing identity
+- Termination when an action has no matching route
 
 ### 3. **custom_node.rs** - Advanced Node Implementation
-- Creating custom nodes with complex logic
-- Custom storage backends and data persistence
-- Statistical analysis and data aggregation patterns
+- Strongly typed workflow state
+- Multi-node flow composition
+- Keeping domain data in an ordinary Rust struct
 
 ## Running Examples
 
-All examples use **sync-only features** for minimal setup:
+Run examples in sync mode:
 
 ```bash
 # Start with the basics
@@ -36,11 +36,19 @@ cargo run --example simple_loops
 cargo run --example custom_node
 ```
 
+Run the same examples with the async API:
+
+```bash
+cargo run --features async --example hello_world
+cargo run --features async --example simple_loops
+cargo run --features async --example custom_node
+```
+
 ## Ready for Production?
 
 Once you've mastered these basics, explore the **`../cookbook/`** directory for:
 
-- **async-workflows/** - Advanced async patterns with FlowBuilder
+- **async-workflows/** - Async patterns with FlowBuilder
 - **chat-assistant/** - Production chat applications  
 - **llm-request-handler/** - LLM integration patterns
 - **unified-workflow/** - Complex workflow compositions
