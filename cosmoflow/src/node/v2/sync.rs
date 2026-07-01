@@ -1,9 +1,8 @@
 use super::{NodeContext, NodeError, NodeId, NodePhase};
 use crate::action::v2::Action;
-use crate::shared_store::SharedStore;
 
 /// Node trait for the v2 synchronous `prep -> exec -> post` model.
-pub trait Node<S: SharedStore>: Send + Sync {
+pub trait Node<S>: Send + Sync {
     /// Result type produced by the preparation phase.
     type Prep: Send + Sync + 'static;
     /// Result type produced by the execution phase.
@@ -53,7 +52,7 @@ pub trait Node<S: SharedStore>: Send + Sync {
 
 /// Adapter trait used by v2 flow internals to execute nodes and nested flows.
 #[doc(hidden)]
-pub trait NodeAdapter<S: SharedStore>: Send + Sync {
+pub trait NodeAdapter<S>: Send + Sync {
     /// Run this object as a flow node.
     fn run(&mut self, state: &mut S, node_id: &NodeId) -> Result<Action, NodeError>;
 }
@@ -68,7 +67,7 @@ pub struct FlowInput;
 
 /// Convert flow builder inputs into the internal adapter interface.
 #[doc(hidden)]
-pub trait IntoNodeAdapter<S: SharedStore, Kind> {
+pub trait IntoNodeAdapter<S, Kind> {
     /// Convert this input into a boxed node adapter.
     fn into_node_adapter(self) -> Box<dyn NodeAdapter<S>>;
 }
@@ -78,7 +77,6 @@ struct NodeAdapterImpl<N>(N);
 impl<N, S> NodeAdapter<S> for NodeAdapterImpl<N>
 where
     N: Node<S>,
-    S: SharedStore,
 {
     fn run(&mut self, state: &mut S, node_id: &NodeId) -> Result<Action, NodeError> {
         self.0.run(state, NodeContext::new(node_id.clone()))
@@ -88,7 +86,6 @@ where
 impl<N, S> IntoNodeAdapter<S, NodeInput> for N
 where
     N: Node<S> + 'static,
-    S: SharedStore,
 {
     fn into_node_adapter(self) -> Box<dyn NodeAdapter<S>> {
         Box::new(NodeAdapterImpl(self))
@@ -207,6 +204,48 @@ mod tests {
         }
     }
 
+    #[derive(Default)]
+    struct TypedState {
+        visits: Vec<String>,
+        value: Option<String>,
+    }
+
+    struct TypedNode;
+
+    impl Node<TypedState> for TypedNode {
+        type Prep = String;
+        type Output = String;
+        type Error = TestError;
+
+        fn prep(
+            &mut self,
+            state: &TypedState,
+            _context: &NodeContext,
+        ) -> Result<Self::Prep, Self::Error> {
+            state.value.clone().ok_or(TestError("missing value"))
+        }
+
+        fn exec(
+            &mut self,
+            prep: &Self::Prep,
+            _context: &NodeContext,
+        ) -> Result<Self::Output, Self::Error> {
+            Ok(format!("{prep}:processed"))
+        }
+
+        fn post(
+            &mut self,
+            state: &mut TypedState,
+            _prep: Self::Prep,
+            output: Self::Output,
+            context: &NodeContext,
+        ) -> Result<Action, Self::Error> {
+            state.visits.push(context.node_id.as_str().to_string());
+            state.value = Some(output);
+            Ok(Action::new("done"))
+        }
+    }
+
     #[test]
     fn successful_run_executes_prep_exec_post_once() {
         let calls = Calls::new();
@@ -222,6 +261,23 @@ mod tests {
         assert_eq!(stored, Some("output".to_string()));
         assert_eq!(calls.snapshot(), vec!["prep", "exec", "post"]);
         assert_eq!(node.exec_calls, 1);
+    }
+
+    #[test]
+    fn run_supports_plain_typed_state() {
+        let mut node = TypedNode;
+        let mut state = TypedState {
+            visits: Vec::new(),
+            value: Some("input".to_string()),
+        };
+
+        let action = node
+            .run(&mut state, NodeContext::new("typed_node"))
+            .unwrap();
+
+        assert_eq!(action, Action::new("done"));
+        assert_eq!(state.visits, vec!["typed_node"]);
+        assert_eq!(state.value, Some("input:processed".to_string()));
     }
 
     #[test]

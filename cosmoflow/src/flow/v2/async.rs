@@ -1,13 +1,12 @@
 use super::{FlowAnalysis, FlowError, FlowExecution, Route};
 use crate::action::v2::{Action, ActionName};
 use crate::node::v2::{FlowInput, IntoNodeAdapter, NodeAdapter, NodeError, NodeId, NodePhase};
-use crate::shared_store::SharedStore;
 use async_trait::async_trait;
 use std::collections::HashMap;
 use std::fmt;
 
 /// Builder for a v2 asynchronous flow.
-pub struct FlowBuilder<S: SharedStore> {
+pub struct FlowBuilder<S: Send + Sync> {
     nodes: HashMap<NodeId, Box<dyn NodeAdapter<S>>>,
     node_order: Vec<NodeId>,
     routes: Vec<Route>,
@@ -15,13 +14,13 @@ pub struct FlowBuilder<S: SharedStore> {
     duplicate_nodes: Vec<NodeId>,
 }
 
-impl<S: SharedStore> Default for FlowBuilder<S> {
+impl<S: Send + Sync> Default for FlowBuilder<S> {
     fn default() -> Self {
         Self::new()
     }
 }
 
-impl<S: SharedStore> FlowBuilder<S> {
+impl<S: Send + Sync> FlowBuilder<S> {
     /// Create an empty flow builder.
     pub fn new() -> Self {
         Self {
@@ -91,7 +90,7 @@ impl<S: SharedStore> FlowBuilder<S> {
 }
 
 /// A v2 asynchronous flow.
-pub struct Flow<S: SharedStore> {
+pub struct Flow<S: Send + Sync> {
     nodes: HashMap<NodeId, Box<dyn NodeAdapter<S>>>,
     node_order: Vec<NodeId>,
     routes: Vec<Route>,
@@ -99,7 +98,7 @@ pub struct Flow<S: SharedStore> {
     analysis: FlowAnalysis,
 }
 
-impl<S: SharedStore> fmt::Debug for Flow<S> {
+impl<S: Send + Sync> fmt::Debug for Flow<S> {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         f.debug_struct("Flow")
             .field("node_order", &self.node_order)
@@ -110,7 +109,7 @@ impl<S: SharedStore> fmt::Debug for Flow<S> {
     }
 }
 
-impl<S: SharedStore> Flow<S> {
+impl<S: Send + Sync> Flow<S> {
     /// Return static graph analysis computed at build time.
     pub fn analysis(&self) -> &FlowAnalysis {
         &self.analysis
@@ -179,7 +178,7 @@ impl<S: SharedStore> Flow<S> {
 #[async_trait]
 impl<S> NodeAdapter<S> for Flow<S>
 where
-    S: SharedStore + Send + Sync,
+    S: Send + Sync,
 {
     async fn run(&mut self, state: &mut S, node_id: &NodeId) -> Result<Action, NodeError> {
         Flow::run(self, state)
@@ -190,7 +189,7 @@ where
 
 impl<S> IntoNodeAdapter<S, FlowInput> for Flow<S>
 where
-    S: SharedStore + Send + Sync + 'static,
+    S: Send + Sync + 'static,
 {
     fn into_node_adapter(self) -> Box<dyn NodeAdapter<S>> {
         Box::new(self)
@@ -279,6 +278,59 @@ mod tests {
         }
     }
 
+    #[derive(Default)]
+    struct TypedState {
+        visits: Vec<String>,
+        value: Option<String>,
+    }
+
+    struct TypedNode {
+        action: Action,
+    }
+
+    impl TypedNode {
+        fn new(action: impl Into<Action>) -> Self {
+            Self {
+                action: action.into(),
+            }
+        }
+    }
+
+    #[async_trait]
+    impl Node<TypedState> for TypedNode {
+        type Prep = ();
+        type Output = ();
+        type Error = TestError;
+
+        async fn prep(
+            &mut self,
+            _state: &TypedState,
+            _context: &NodeContext,
+        ) -> Result<Self::Prep, Self::Error> {
+            Ok(())
+        }
+
+        async fn exec(
+            &mut self,
+            _prep: &Self::Prep,
+            _context: &NodeContext,
+        ) -> Result<Self::Output, Self::Error> {
+            Ok(())
+        }
+
+        async fn post(
+            &mut self,
+            state: &mut TypedState,
+            _prep: Self::Prep,
+            _output: Self::Output,
+            context: &NodeContext,
+        ) -> Result<Action, Self::Error> {
+            state.visits.push(context.node_id.as_str().to_string());
+            state.value = Some(self.action.as_str().to_string());
+            Ok(self.action.clone())
+        }
+    }
+
     #[tokio::test]
     async fn single_node_flow_uses_default_start_and_naturally_terminates() {
         let mut flow = FlowBuilder::new()
@@ -294,6 +346,46 @@ mod tests {
         assert_eq!(execution.last_node_id.as_str(), "start");
         assert_eq!(execution.steps, 1);
         assert_eq!(execution.path, vec![NodeId::new("start")]);
+    }
+
+    #[tokio::test]
+    async fn flow_runs_with_plain_typed_state() {
+        let mut flow = FlowBuilder::new()
+            .node("first", TypedNode::new("next"))
+            .node("second", TypedNode::new("done"))
+            .route("first", "next", "second")
+            .build()
+            .unwrap();
+        let mut state = TypedState::default();
+
+        let execution = flow.run_recorded(&mut state).await.unwrap();
+
+        assert_eq!(execution.final_action, Action::new("done"));
+        assert_eq!(
+            execution.path,
+            vec![NodeId::new("first"), NodeId::new("second")]
+        );
+        assert_eq!(state.visits, vec!["first", "second"]);
+        assert_eq!(state.value, Some("done".to_string()));
+    }
+
+    #[tokio::test]
+    async fn nested_flow_runs_with_plain_typed_state() {
+        let flow_a = FlowBuilder::new()
+            .node("inner_start", TypedNode::new("next"))
+            .node("inner_end", TypedNode::new("inner_done"))
+            .route("inner_start", "next", "inner_end")
+            .build()
+            .unwrap();
+        let mut flow_b = FlowBuilder::new().node("nested", flow_a).build().unwrap();
+        let mut state = TypedState::default();
+
+        let execution = flow_b.run_recorded(&mut state).await.unwrap();
+
+        assert_eq!(execution.final_action, Action::new("inner_done"));
+        assert_eq!(execution.path, vec![NodeId::new("nested")]);
+        assert_eq!(state.visits, vec!["inner_start", "inner_end"]);
+        assert_eq!(state.value, Some("inner_done".to_string()));
     }
 
     #[tokio::test]
