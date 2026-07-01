@@ -1,105 +1,112 @@
 # Features
 
-CosmoFlow uses Cargo features to keep the core small and make storage and async
-support opt-in.
+CosmoFlow keeps its default feature set small. The default crate contains the
+core state-machine model: `Action`, `Node`, `Flow`, and the `SharedStore` trait.
+Async execution and built-in shared-store backends are enabled explicitly.
 
-## Core Features
-
-### `async`
-
-Enables the asynchronous node and flow APIs.
-
-Use this when node phases need `.await`, external async I/O, or integration with
-async runtimes. Async state types must satisfy `Send + Sync` because async
-futures may be moved safely across executor threads.
-
-### Storage Backends
-
-Storage backends provide implementations for the optional `SharedStore` model.
-They are useful when the workflow state is naturally dynamic key-value data.
-
-- `storage-memory`: in-memory shared store backend.
-- `storage-file`: file-backed shared store backend.
-- `storage-redis`: Redis-backed shared store backend.
-- `storage-full`: enables all storage backends.
-
-These features do not change the core `Node<S>` or `Flow<S>` state model. A
-plain Rust struct can still be used as state without any storage backend.
-
-## Convenience Feature Sets
-
-### `minimal`
-
-Core engine only.
-
-```toml
-[dependencies]
-cosmoflow = { version = "0.5.1", default-features = false, features = ["minimal"] }
-```
-
-Use this when application state is a custom type and no built-in storage backend
-is needed.
-
-### `basic`
-
-Default feature set with memory storage.
+## Default
 
 ```toml
 [dependencies]
 cosmoflow = "0.5.1"
 ```
 
-Equivalent to:
+This enables no optional runtime capability. It is the right starting point when
+your flow state is a typed Rust struct.
+
+## Async
+
+### `async`
+
+Enables the asynchronous node and flow APIs.
+
+Use this when node phases need `.await`, external async I/O, or integration with
+an async runtime:
 
 ```toml
 [dependencies]
-cosmoflow = { version = "0.5.1", features = ["basic"] }
+cosmoflow = { version = "0.5.1", features = ["async"] }
+async-trait = "0.1"
 ```
 
-### `standard`
+Async state types must satisfy `Send + Sync` because async futures may be moved
+across executor threads. This is a future-safety boundary, not a shared-store
+requirement.
 
-Memory storage plus async support.
+## Shared Store Backends
+
+Storage backends implement the optional `SharedStore` key-value state model.
+They do not change the core `Node<S>` or `Flow<S>` model; a plain Rust struct can
+still be used as state without any storage backend.
+
+### `storage-memory`
+
+Enables `MemoryStorage`.
 
 ```toml
 [dependencies]
-cosmoflow = { version = "0.5.1", features = ["standard"] }
+cosmoflow = { version = "0.5.1", features = ["storage-memory"] }
 ```
 
-Use this when most workflow nodes need async execution and a simple shared store
-backend is enough.
+Use this for tests, examples, and applications where in-memory dynamic key-value
+state is enough.
 
-### `full`
+### `storage-file`
 
-All storage backends plus async support.
+Enables `FileStorage`.
 
 ```toml
 [dependencies]
-cosmoflow = { version = "0.5.1", features = ["full"] }
+cosmoflow = { version = "0.5.1", features = ["storage-file"] }
 ```
 
-Use this for applications that want every built-in backend available.
+Use this when a simple local JSON-backed shared store fits the application.
 
-## Custom Combinations
+### `storage-redis`
+
+Enables `RedisStorage` and the optional Redis dependency.
+
+```toml
+[dependencies]
+cosmoflow = { version = "0.5.1", features = ["storage-redis"] }
+```
+
+Use this when shared state needs an external Redis backend.
+
+### `storage-full`
+
+Enables all built-in storage backends:
+
+```toml
+[dependencies]
+cosmoflow = { version = "0.5.1", features = ["storage-full"] }
+```
+
+This is a convenience feature for applications that intentionally want every
+built-in backend available.
+
+## Common Combinations
 
 ```toml
 # Async core without built-in storage
-cosmoflow = { version = "0.5.1", default-features = false, features = ["async"] }
+cosmoflow = { version = "0.5.1", features = ["async"] }
 
-# File storage without async
-cosmoflow = { version = "0.5.1", default-features = false, features = ["storage-file"] }
+# Memory storage without async
+cosmoflow = { version = "0.5.1", features = ["storage-memory"] }
 
-# Redis storage with async
-cosmoflow = { version = "0.5.1", default-features = false, features = ["storage-redis", "async"] }
+# Async flow plus memory storage
+cosmoflow = { version = "0.5.1", features = ["async", "storage-memory"] }
 
-# All storage backends with async
-cosmoflow = { version = "0.5.1", default-features = false, features = ["storage-full", "async"] }
+# Async flow plus all built-in storage backends
+cosmoflow = { version = "0.5.1", features = ["async", "storage-full"] }
 ```
 
 ## Comparison
 
 | Feature set | Async | Memory | File | Redis | Best fit |
 | --- | --- | --- | --- | --- | --- |
-| `minimal` | No | No | No | No | Strong typed state and no built-in storage |
-| `basic` | No | Yes | No | No | Simple synchronous flows |
-| `standard` | Yes | Yes | No | No | Async flows with memory shared store |
-| `full` | Yes | Yes | Yes | Yes | Applications using multiple storage backends |
+| default | No | No | No | No | Typed state and minimal dependencies |
+| `async` | Yes | No | No | No | Async nodes with typed state |
+| `storage-memory` | No | Yes | No | No | Dynamic in-memory shared state |
+| `storage-full` | No | Yes | Yes | Yes | All built-in shared-store backends |
+| `async`, `storage-full` | Yes | Yes | Yes | Yes | Async apps that need all built-in backends |

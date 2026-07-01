@@ -8,12 +8,19 @@ fn main() {
     println!("Run `cargo run -p cosmoflow --example async_flow --features async` for async usage.");
 }
 
-#[cfg(not(feature = "async"))]
+#[cfg(all(not(feature = "async"), feature = "storage-memory"))]
 fn main() -> Result<(), Box<dyn std::error::Error>> {
     sync_example::run()
 }
 
-#[cfg(not(feature = "async"))]
+#[cfg(all(not(feature = "async"), not(feature = "storage-memory")))]
+fn main() {
+    println!(
+        "Run `cargo run -p cosmoflow --example shared_store --features storage-memory` to enable MemoryStorage."
+    );
+}
+
+#[cfg(all(not(feature = "async"), feature = "storage-memory"))]
 mod sync_example {
     use cosmoflow::action::Action;
     use cosmoflow::flow::FlowBuilder;

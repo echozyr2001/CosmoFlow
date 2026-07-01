@@ -201,9 +201,7 @@ where
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::SharedStore;
     use crate::node::{Node, NodeContext};
-    use crate::shared_store::backends::MemoryStorage;
     use async_trait::async_trait;
     use serde_json::json;
     use std::error::Error;
@@ -242,14 +240,14 @@ mod tests {
     }
 
     #[async_trait]
-    impl Node<MemoryStorage> for StaticNode {
+    impl Node<Vec<String>> for StaticNode {
         type Prep = ();
         type Output = ();
         type Error = TestError;
 
         async fn prep(
             &mut self,
-            _state: &MemoryStorage,
+            _state: &Vec<String>,
             _context: &NodeContext,
         ) -> Result<Self::Prep, Self::Error> {
             if self.fail {
@@ -268,14 +266,12 @@ mod tests {
 
         async fn post(
             &mut self,
-            state: &mut MemoryStorage,
+            state: &mut Vec<String>,
             _prep: Self::Prep,
             _output: Self::Output,
             context: &NodeContext,
         ) -> Result<Action, Self::Error> {
-            state
-                .set(format!("visited:{}", context.node_id.as_str()), true)
-                .map_err(|_| TestError("storage failed"))?;
+            state.push(context.node_id.as_str().to_string());
             Ok(self.action.clone())
         }
     }
@@ -339,7 +335,7 @@ mod tests {
             .node("start", StaticNode::new("done"))
             .build()
             .unwrap();
-        let mut state = MemoryStorage::new();
+        let mut state = Vec::new();
 
         let execution = flow.run_recorded(&mut state).await.unwrap();
 
@@ -396,7 +392,7 @@ mod tests {
             .node("start", StaticNode::new("done"))
             .build()
             .unwrap();
-        let mut state = MemoryStorage::new();
+        let mut state = Vec::new();
 
         let action = flow.run(&mut state).await.unwrap();
 
@@ -412,7 +408,7 @@ mod tests {
             .route("second", "next", "first")
             .build()
             .unwrap();
-        let mut state = MemoryStorage::new();
+        let mut state = Vec::new();
 
         let execution = flow.run_recorded(&mut state).await.unwrap();
 
@@ -435,7 +431,7 @@ mod tests {
             .route("first", "next", "second")
             .build()
             .unwrap();
-        let mut state = MemoryStorage::new();
+        let mut state = Vec::new();
 
         let execution = flow.run_recorded(&mut state).await.unwrap();
 
@@ -453,7 +449,7 @@ mod tests {
             .route("first", "other", "second")
             .build()
             .unwrap();
-        let mut state = MemoryStorage::new();
+        let mut state = Vec::new();
 
         let execution = flow.run_recorded(&mut state).await.unwrap();
 
@@ -464,7 +460,7 @@ mod tests {
     #[test]
     fn build_fails_for_invalid_graphs() {
         assert_eq!(
-            FlowBuilder::<MemoryStorage>::new().build().unwrap_err(),
+            FlowBuilder::<Vec<String>>::new().build().unwrap_err(),
             FlowError::EmptyFlow
         );
 
@@ -561,7 +557,7 @@ mod tests {
             .node("start", StaticNode::failing())
             .build()
             .unwrap();
-        let mut state = MemoryStorage::new();
+        let mut state = Vec::new();
 
         let error = flow.run(&mut state).await.unwrap_err();
 
@@ -583,17 +579,13 @@ mod tests {
             .build()
             .unwrap();
         let mut flow_b = FlowBuilder::new().node("nested", flow_a).build().unwrap();
-        let mut state = MemoryStorage::new();
+        let mut state = Vec::new();
 
         let execution = flow_b.run_recorded(&mut state).await.unwrap();
 
         assert_eq!(execution.final_action, Action::new("inner_done"));
         assert_eq!(execution.path, vec![NodeId::new("nested")]);
-        assert_eq!(
-            state.get::<bool>("visited:inner_start").unwrap(),
-            Some(true)
-        );
-        assert_eq!(state.get::<bool>("visited:inner_end").unwrap(), Some(true));
+        assert_eq!(state, vec!["inner_start", "inner_end"]);
     }
 
     #[tokio::test]
@@ -603,7 +595,7 @@ mod tests {
             .build()
             .unwrap();
         let mut flow_b = FlowBuilder::new().node("nested", flow_a).build().unwrap();
-        let mut state = MemoryStorage::new();
+        let mut state = Vec::new();
 
         let error = flow_b.run(&mut state).await.unwrap_err();
 

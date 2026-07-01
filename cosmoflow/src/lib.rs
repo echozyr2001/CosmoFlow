@@ -78,21 +78,15 @@
 //!
 //! ## Feature Flags
 //!
-//! CosmoFlow uses a feature flag system to keep the core library lightweight
-//! and allow users to opt-in to additional functionality.
+//! CosmoFlow uses feature flags to keep the default crate focused on the core
+//! state-machine framework. Async execution and built-in shared-store backends
+//! are opt-in.
 //!
 //! ### Storage Backends
 //!
 //! *   `storage-memory`: In-memory storage backend.
 //! *   `storage-file`: File-based storage backend.
 //! *   `storage-redis`: Redis storage backend for distributed workflows.
-//!
-//! ### Convenience Features
-//!
-//! *   `minimal`: Core engine only (bring your own storage).
-//! *   `basic`: Basic usable configuration with memory storage.
-//! *   `standard`: Core + memory storage + async support.
-//! *   `full`: All storage backends + async support enabled.
 //!
 //! ### Sync/Async Mode
 //!

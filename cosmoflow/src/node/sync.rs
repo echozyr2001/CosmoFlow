@@ -97,8 +97,6 @@ where
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::SharedStore;
-    use crate::shared_store::backends::MemoryStorage;
     use std::error::Error;
     use std::fmt;
     use std::sync::{Arc, Mutex};
@@ -155,14 +153,14 @@ mod tests {
         }
     }
 
-    impl Node<MemoryStorage> for RecordingNode {
+    impl Node<Vec<String>> for RecordingNode {
         type Prep = String;
         type Output = String;
         type Error = TestError;
 
         fn prep(
             &mut self,
-            _state: &MemoryStorage,
+            _state: &Vec<String>,
             _context: &NodeContext,
         ) -> Result<Self::Prep, Self::Error> {
             self.calls.push("prep");
@@ -188,7 +186,7 @@ mod tests {
 
         fn post(
             &mut self,
-            state: &mut MemoryStorage,
+            state: &mut Vec<String>,
             prep: Self::Prep,
             output: Self::Output,
             _context: &NodeContext,
@@ -199,9 +197,7 @@ mod tests {
             if self.fail_phase == Some(NodePhase::Post) {
                 return Err(TestError("post failed"));
             }
-            state
-                .set("sync_result".to_string(), output)
-                .map_err(|_| TestError("storage failed"))?;
+            state.push(output);
             Ok(Action::new("complete"))
         }
     }
@@ -252,15 +248,14 @@ mod tests {
     fn successful_run_executes_prep_exec_post_once() {
         let calls = Calls::new();
         let mut node = RecordingNode::new(calls.clone());
-        let mut state = MemoryStorage::new();
+        let mut state = Vec::new();
         let context = NodeContext::new("sync_node");
 
         let action = node.run(&mut state, context).unwrap();
-        let stored: Option<String> = state.get("sync_result").unwrap();
 
         assert_eq!(action, Action::new("complete"));
         assert_eq!(action.as_str(), "complete");
-        assert_eq!(stored, Some("output".to_string()));
+        assert_eq!(state, vec!["output".to_string()]);
         assert_eq!(calls.snapshot(), vec!["prep", "exec", "post"]);
         assert_eq!(node.exec_calls, 1);
     }
@@ -286,7 +281,7 @@ mod tests {
     fn prep_failure_stops_before_exec_and_post() {
         let calls = Calls::new();
         let mut node = RecordingNode::failing(calls.clone(), NodePhase::Prep);
-        let mut state = MemoryStorage::new();
+        let mut state = Vec::new();
 
         let error = node
             .run(&mut state, NodeContext::new("sync_node"))
@@ -302,7 +297,7 @@ mod tests {
     fn exec_failure_is_not_retried_and_skips_post() {
         let calls = Calls::new();
         let mut node = RecordingNode::failing(calls.clone(), NodePhase::Exec);
-        let mut state = MemoryStorage::new();
+        let mut state = Vec::new();
 
         let error = node
             .run(&mut state, NodeContext::new("sync_node"))
@@ -318,7 +313,7 @@ mod tests {
     fn post_failure_reports_post_phase() {
         let calls = Calls::new();
         let mut node = RecordingNode::failing(calls.clone(), NodePhase::Post);
-        let mut state = MemoryStorage::new();
+        let mut state = Vec::new();
 
         let error = node
             .run(&mut state, NodeContext::new("sync_node"))

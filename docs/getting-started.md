@@ -7,14 +7,14 @@ and flows.
 
 ```toml
 [dependencies]
-cosmoflow = { version = "0.5.1", features = ["basic"] }
+cosmoflow = "0.5.1"
 ```
 
 Use the `async` feature when node execution should be asynchronous:
 
 ```toml
 [dependencies]
-cosmoflow = { version = "0.5.1", features = ["standard"] }
+cosmoflow = { version = "0.5.1", features = ["async"] }
 async-trait = "0.1"
 ```
 
