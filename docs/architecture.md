@@ -1,179 +1,129 @@
-# Architecture Guide
+# Architecture
 
-This guide provides a comprehensive overview of CosmoFlow's architecture and component interactions.
+CosmoFlow models workflow execution as a state machine graph. The core runtime
+is deliberately small: it connects nodes, routes actions, validates graph
+structure, and executes one node at a time.
 
-## System Overview
+## Design Principles
 
-CosmoFlow follows a modular, layered architecture where each component has clear responsibilities:
+CosmoFlow core is built around two ideas:
+
+- Every program can be modeled as a state machine.
+- The framework core should stay minimal. Runtime policy belongs in user code,
+  wrapper nodes, flow composition, or optional extensions.
+
+Because of that, retry, fallback, timeout, agent/tool/LLM integration, memory,
+and tracing are not core flow semantics.
 
 ## Core Components
 
-### Flows
+### Action
 
-The `cosmoflow::flow` module provides workflow orchestration and execution. A Flow represents a directed graph of nodes with routing rules.
+An `Action` is the transition signal returned by a node or flow.
 
-**Key Features:**
-- Async execution model
-- Conditional routing
-- Error handling and recovery
-- Execution tracking
+It has two fields:
 
-**Example:**
-```rust
-let flow = Flow::builder("my-workflow")
-    .add_node("start", StartNode::new())
-    .add_node("process", ProcessNode::new())
-    .add_route("start", "process")
-    .build()?;
+- `name`: the routing identity.
+- `params`: optional JSON values carried with the action.
+
+Flow routing uses only the action name. Parameters are data, not route identity.
+`Display` for an action should therefore print only the name.
+
+### Node
+
+A `Node<S>` is the user-defined unit of behavior. It runs once through three
+phases:
+
+1. `prep`: read state and prepare input.
+2. `exec`: run the main node logic.
+3. `post`: write state and return an action.
+
+Phase-aware errors preserve whether a failure happened during prep, exec, or
+post. Core node execution does not retry or fallback; those policies can be
+modeled above the node, inside the node, or with wrapper nodes.
+
+### Flow
+
+A `Flow<S>` is a state-machine graph plus a single sequential executor.
+
+The builder registers nodes and routes. The first registered node becomes the
+default start node unless `.start(id)` is used. Each route maps:
+
+```text
+source node + action name -> target node
 ```
 
-### Nodes
+Execution starts at the start node. After each node returns an action, the flow
+looks for a matching route from the current node. If none exists, the flow
+terminates naturally and returns that final action.
 
-The `cosmoflow::node` module defines the execution units of workflows. Each node implements the `NodeBackend` trait.
+### State
 
-**Key Features:**
-- Async execution
-- Retry logic
-- Context management
-- Error propagation
+`S` is the runtime state type passed through node and flow execution.
 
-**Example:**
-```rust
-#[async_trait]
-impl NodeBackend for MyNode {
-    async fn execute(&self, ctx: &ExecutionContext) -> Result<()> {
-        // Your logic here
-        Ok(())
-    }
-}
-```
+It can be:
 
-### Actions
+- a strong typed application struct;
+- an official `SharedStore` backend;
+- any other state type that fits the application.
 
-The `cosmoflow::action` module handles flow control between nodes, supporting simple transitions and parameterized routing.
+The core model does not require `S: SharedStore`. In async mode, `S: Send + Sync`
+is required for future safety, not for storage semantics.
 
-**Types of Actions:**
-- **Simple**: Direct transition to named node (most common usage - 53.3%)
-- **Parameterized**: Transition with additional data for complex routing logic
+### SharedStore
 
-**Example:**
-```rust
-use cosmoflow::action::Action;
-use serde_json::json;
-use std::collections::HashMap;
+`SharedStore` is the official dynamic key-value context model. It is useful for
+workflow state that needs typed get/set operations, serialization, or pluggable
+memory/file/Redis backends.
 
-// Simple action (most common)
-let simple_action = Action::simple("next_node");
+It remains a supported state model, but it is not the definition of state in the
+core API.
 
-// Parameterized action for conditional routing
-let mut params = HashMap::new();
-params.insert("condition_key".to_string(), json!("user_authenticated"));
-params.insert("condition_value".to_string(), json!(true));
-params.insert("true_action".to_string(), json!("authenticated_flow"));
-params.insert("false_action".to_string(), json!("login_flow"));
-let conditional_action = Action::with_params("conditional", params);
-```
+## Build-Time Graph Validation
 
-### Shared Store
+The flow builder validates graph structure before producing a `Flow`.
 
-The `cosmoflow::shared_store` module provides type-safe data sharing between nodes with a simple `get()`/`set()` API.
+Build failures include:
 
-**Key Features:**
-- Type-safe operations
-- Automatic serialization
-- Storage backend agnostic
-- Zero-copy where possible
+- empty flow;
+- duplicate node id;
+- configured start node missing from the graph;
+- route source or target missing;
+- duplicate route for the same source node and action name;
+- nodes unreachable from the start node.
 
-**Example:**
-```rust
-// Store data
-store.set("user_id", &user.id).await?;
+Cycles are allowed because many state machines are cyclic. `FlowAnalysis`
+records reachable nodes, whether the graph is a DAG, and a topological order
+when one exists.
 
-// Retrieve data
-let user_id: String = store.get("user_id").await?;
-```
+## Nested Flows
 
-### Storage Backends
+A built flow can be used as a node in another flow. The parent flow treats the
+child flow as one node and sees only its final action.
 
-The `cosmoflow::storage` module provides pluggable storage implementations:
+If the child flow fails, the parent reports that failure as an execution-phase
+error on the parent node that contained the child flow.
 
-- **Memory**: Fast, non-persistent storage
-- **File**: Persistent file-based storage
-- **Custom**: Implement your own backends
+## Internal Adapter Boundary
 
-## Data Flow
+Flow internals need to store heterogeneous nodes in one collection. User nodes
+can have different `Prep`, `Output`, and `Error` associated types, so the flow
+uses an internal adapter layer to erase those differences behind one execution
+interface.
 
-1. **Flow Initialization**: Create flow with nodes and routes
-2. **Execution Start**: Begin with entry node
-3. **Node Execution**: Execute current node with context
-4. **Action Evaluation**: Determine next node based on action
-5. **Data Sharing**: Nodes communicate via shared store
-6. **Flow Completion**: Process completes or terminates
+This adapter layer is not part of the user mental model. Users implement
+`Node<S>` or compose `Flow<S>` values.
 
-## Error Handling
+## Sync And Async
 
-CosmoFlow provides comprehensive error handling at multiple levels:
+CosmoFlow has sync and async variants behind the `async` feature.
 
-- **Node Level**: Individual node execution errors
-- **Flow Level**: Workflow orchestration errors  
-- **Storage Level**: Data persistence errors
-- **Action Level**: Routing and condition errors
+The public model is the same in both variants:
 
-## Performance Considerations
+- nodes still run `prep -> exec -> post`;
+- flows still route by action name;
+- unmatched routes still terminate naturally;
+- graph validation still runs at build time.
 
-- **Async/Await**: Full async support for concurrent operations
-- **Zero-Copy**: Efficient data handling where possible
-- **Memory Management**: Configurable storage backends
-- **Type Safety**: Compile-time optimizations
-
-## Extensibility
-
-### Custom Nodes
-
-Implement the `NodeBackend` trait:
-
-```rust
-struct CustomNode {
-    config: MyConfig,
-}
-
-#[async_trait]
-impl NodeBackend for CustomNode {
-    async fn execute(&self, ctx: &ExecutionContext) -> Result<()> {
-        // Custom logic
-        Ok(())
-    }
-}
-```
-
-### Custom Storage
-
-Implement the `Storage` trait:
-
-```rust
-struct CustomStorage;
-
-#[async_trait]
-impl Storage for CustomStorage {
-    async fn get(&self, key: &str) -> Result<Option<String>> {
-        // Custom get logic
-    }
-    
-    async fn set(&self, key: &str, value: &str) -> Result<()> {
-        // Custom set logic
-    }
-}
-```
-
-## Best Practices
-
-1. **Keep Nodes Focused**: Each node should have a single responsibility
-2. **Use Type Safety**: Leverage Rust's type system for correctness
-3. **Handle Errors Gracefully**: Implement proper error handling
-4. **Design for Reusability**: Create composable, reusable components
-5. **Test Thoroughly**: Unit test nodes and integration test flows
-
-## Next Steps
-
-- Explore the [Features Guide](features.md) for configuration options
-- Read the [API documentation](https://docs.rs/cosmoflow) for detailed reference
+The async variant uses async node phases and async flow execution. Its extra
+`Send + Sync` bounds are execution-safety bounds introduced by async futures.

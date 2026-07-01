@@ -1,153 +1,94 @@
 # CosmoFlow
 
-A lightweight, type-safe workflow engine for Rust, optimized for LLM applications.
+CosmoFlow is a small Rust framework for building workflows as state machines.
 
-CosmoFlow provides a minimal yet powerful framework for building complex workflows
-with clean abstractions and excellent performance. It is:
+The core design follows two principles:
 
-* **Lightweight**: Minimal dependencies with optional features
-* **Type-Safe**: Full Rust type safety with async/await support  
-* **LLM-Optimized**: Built-in patterns for AI/LLM workflows
-* **Modular**: Enable only what you need through feature flags
+- Every program can be modeled as a state machine.
+- The core framework should stay small; policy such as retry, timeout, fallback,
+  LLM calls, tools, memory, and tracing should be composed by users or added by
+  optional extensions.
 
-[![Crates.io][crates-badge]][crates-url]
-[![MIT licensed][mit-badge]][mit-url]
-[![Documentation][docs-badge]][docs-url]
+## Core Model
 
-[crates-badge]: https://img.shields.io/crates/v/cosmoflow.svg
-[crates-url]: https://crates.io/crates/cosmoflow
-[mit-badge]: https://img.shields.io/badge/license-MIT-blue.svg
-[mit-url]: https://github.com/echozyr2001/CosmoFlow/blob/main/LICENSE
-[docs-badge]: https://docs.rs/cosmoflow/badge.svg
-[docs-url]: https://docs.rs/cosmoflow
+CosmoFlow has three core concepts:
 
-[Guides](./docs/getting-started.md) |
-[API Docs](https://docs.rs/cosmoflow/latest/cosmoflow) |
-[Examples](./cosmoflow/examples/) |
-[Cookbook](./cookbook/)
+- `Action`: a state transition signal. Its `name` is the routing identity, and
+  `params` are optional data carried with the transition.
+- `Node`: a unit of behavior implemented as `prep -> exec -> post`.
+- `Flow`: a state-machine graph with build-time validation and a single
+  sequential executor.
 
-## Overview
-
-**CosmoFlow** is a **next-generation workflow engine** that brings the elegant 
-design philosophy of [PocketFlow](https://github.com/The-Pocket/PocketFlow) to 
-the Rust ecosystem. Built from the ground up for **LLM applications**, **high-performance scenarios**, 
-and **production reliability**. it provides a few major components:
-
-* A lightweight, async-based workflow [scheduler].
-* Pluggable storage system (memory, file, Redis).
-* Asynchronous [node execution][nodes] with retry logic and error handling.
-
-These components provide the runtime infrastructure necessary for building
-complex workflow applications.
-
-[nodes]: https://docs.rs/cosmoflow/latest/cosmoflow/node/index.html
-[scheduler]: https://docs.rs/cosmoflow/latest/cosmoflow/flow/index.html
+The runtime state is a generic `S`. It can be a strong typed application struct,
+or it can be an official `SharedStore` implementation when dynamic key-value
+sharing is the right model.
 
 ## Quick Start
 
-Add to your `Cargo.toml`:
-
-```toml
-[dependencies]
-cosmoflow = { version = "0.5.1", features = ["storage-memory"] }
-```
-
-Create your first workflow:
-
 ```rust
-use cosmoflow::prelude::*;
+use cosmoflow::action::Action;
+use cosmoflow::flow::FlowBuilder;
+use cosmoflow::node::{Node, NodeContext};
 
-#[tokio::main]
-async fn main() -> Result<(), Box<dyn std::error::Error>> {
-    // Create storage
-    let mut store = MemoryStorage::new();
-    
-    // Build workflow  
-    let mut flow = FlowBuilder::new()
-        .node("start", MyNode::new())
-        .terminal_route("start", "complete")
-        .build();
-    
-    // Execute
-    let result = flow.execute(&mut store).await?;
-    println!("Workflow completed: {:?}", result);
-    Ok(())
+#[derive(Default)]
+struct AppState {
+    visits: Vec<String>,
 }
+
+struct LoadUser;
+
+impl Node<AppState> for LoadUser {
+    type Prep = ();
+    type Output = String;
+    type Error = std::convert::Infallible;
+
+    fn prep(&mut self, _state: &AppState, _ctx: &NodeContext) -> Result<Self::Prep, Self::Error> {
+        Ok(())
+    }
+
+    fn exec(&mut self, _prep: &Self::Prep, _ctx: &NodeContext) -> Result<Self::Output, Self::Error> {
+        Ok("ada".to_string())
+    }
+
+    fn post(
+        &mut self,
+        state: &mut AppState,
+        _prep: Self::Prep,
+        user: Self::Output,
+        ctx: &NodeContext,
+    ) -> Result<Action, Self::Error> {
+        state.visits.push(format!("{}:{user}", ctx.node_id.as_str()));
+        Ok(Action::new("done"))
+    }
+}
+
+let mut flow = FlowBuilder::new()
+    .node("load", LoadUser)
+    .build()?;
+
+let mut state = AppState::default();
+let action = flow.run(&mut state)?;
+
+assert_eq!(action.as_str(), "done");
 ```
 
-To see a list of the available features flags that can be enabled, check our
-[docs][feature-flag-docs].
+A flow starts at the first registered node unless `.start(id)` is provided.
+After a node returns an action, routing uses only the action name. If the current
+node has no route for that action, the flow terminates naturally.
 
-[feature-flag-docs]: https://docs.rs/cosmoflow/#features
+## Optional Shared Store
 
-## Getting Help
+`SharedStore` remains useful when nodes need dynamic key-value context or a
+pluggable backend such as memory, file, or Redis storage. It is not required by
+the core node or flow model; strong typed state is often simpler for application
+logic.
 
-First, see if the answer to your question can be found in the [Guides] or the
-[API documentation]. If the answer is not there, there is an active community in
-the [CosmoFlow Discord server][Chat]. We would be happy to try to answer your
-question. You can also ask your question on [the discussions page][discussions].
+See the repository docs for the full guides:
 
-[Guides]: ./docs/getting-started.md
-[API documentation]: https://docs.rs/cosmoflow/latest/cosmoflow
-[Chat]: https://discord.gg/cosmoflow
-[discussions]: https://github.com/echozyr2001/CosmoFlow/discussions
-
-## Project Structure
-
-This workspace contains:
-
-### Core Library
-- **`cosmoflow/`** - The main CosmoFlow library with modular features
-  - **`cosmoflow/examples/`** - Simple feature demonstrations and basic usage patterns
-
-### Cookbook  
-- **`cookbook/`** - Production-ready examples and real-world solutions
-  - **`chat-assistant/`** - Complete chat assistant implementation
-  - **`llm-request-handler/`** - Efficient LLM request handling patterns  
-  - **`unified-workflow/`** - Advanced workflow composition examples
-
-### Quick Start
-
-**Basic Examples (Learning)**:
-```bash
-cd cosmoflow/
-cargo run --example hello_world_sync
-cargo run --example simple_loops --features async
-```
-
-**Production Examples (Real Use Cases)**:
-```bash
-cd cookbook/chat-assistant/
-cargo run
-
-cd cookbook/unified-workflow/
-cargo run
-```
-
-## Core Modules
-
-CosmoFlow provides a focused set of core modules:
-
-* [`cosmoflow`]: Main integration and API crate for CosmoFlow workflows.
-* [`cosmoflow::flow`]: Workflow orchestration engine for managing complex multi-node workflows.
-* [`cosmoflow::node`]: Execution nodes system with async support and retry logic.
-* [`cosmoflow::action`]: Control flow logic and condition evaluation.
-* [`cosmoflow::shared_store`]: Thread-safe data communication layer between workflow components.
-
-[`cosmoflow`]: https://docs.rs/cosmoflow/latest/cosmoflow
-[`cosmoflow::flow`]: https://docs.rs/cosmoflow/latest/cosmoflow/flow/index.html
-[`cosmoflow::node`]: https://docs.rs/cosmoflow/latest/cosmoflow/node/index.html
-[`cosmoflow::action`]: https://docs.rs/cosmoflow/latest/cosmoflow/action/index.html
-[`cosmoflow::shared_store`]: https://docs.rs/cosmoflow/latest/cosmoflow/shared_store/index.html
+- [Getting Started](../docs/getting-started.md)
+- [Architecture](../docs/architecture.md)
+- [Features](../docs/features.md)
 
 ## License
 
-This project is licensed under the [MIT license].
-
-[MIT license]: https://github.com/echozyr2001/CosmoFlow/blob/main/LICENSE
-
-### Contribution
-
-Unless you explicitly state otherwise, any contribution intentionally submitted
-for inclusion in CosmoFlow by you, shall be licensed as MIT, without any additional
-terms or conditions.
+CosmoFlow is licensed under the [MIT license](../LICENSE).

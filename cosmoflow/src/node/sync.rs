@@ -1,13 +1,8 @@
 use super::{NodeContext, NodeError, NodeId, NodePhase};
 use crate::action::Action;
-use async_trait::async_trait;
 
-/// Node trait for the asynchronous `prep -> exec -> post` model.
-///
-/// The `S: Send + Sync` bound is required for async future safety. It does not
-/// require the state type to implement shared-store semantics.
-#[async_trait]
-pub trait Node<S: Send + Sync>: Send + Sync {
+/// Node trait for the synchronous `prep -> exec -> post` model.
+pub trait Node<S>: Send + Sync {
     /// Result type produced by the preparation phase.
     type Prep: Send + Sync + 'static;
     /// Result type produced by the execution phase.
@@ -16,17 +11,17 @@ pub trait Node<S: Send + Sync>: Send + Sync {
     type Error: std::error::Error + Send + Sync + 'static;
 
     /// Read state and prepare input for execution.
-    async fn prep(&mut self, state: &S, context: &NodeContext) -> Result<Self::Prep, Self::Error>;
+    fn prep(&mut self, state: &S, context: &NodeContext) -> Result<Self::Prep, Self::Error>;
 
     /// Execute node logic once.
-    async fn exec(
+    fn exec(
         &mut self,
         prep: &Self::Prep,
         context: &NodeContext,
     ) -> Result<Self::Output, Self::Error>;
 
     /// Write state and return the next action.
-    async fn post(
+    fn post(
         &mut self,
         state: &mut S,
         prep: Self::Prep,
@@ -40,29 +35,26 @@ pub trait Node<S: Send + Sync>: Send + Sync {
     }
 
     /// Run a node once through `prep -> exec -> post`.
-    async fn run(&mut self, state: &mut S, context: NodeContext) -> Result<Action, NodeError> {
-        let prep = self.prep(state, &context).await.map_err(|error| {
+    fn run(&mut self, state: &mut S, context: NodeContext) -> Result<Action, NodeError> {
+        let prep = self.prep(state, &context).map_err(|error| {
             NodeError::new(NodePhase::Prep, context.node_id.clone(), error.to_string())
         })?;
 
-        let output = self.exec(&prep, &context).await.map_err(|error| {
+        let output = self.exec(&prep, &context).map_err(|error| {
             NodeError::new(NodePhase::Exec, context.node_id.clone(), error.to_string())
         })?;
 
-        self.post(state, prep, output, &context)
-            .await
-            .map_err(|error| {
-                NodeError::new(NodePhase::Post, context.node_id.clone(), error.to_string())
-            })
+        self.post(state, prep, output, &context).map_err(|error| {
+            NodeError::new(NodePhase::Post, context.node_id.clone(), error.to_string())
+        })
     }
 }
 
 /// Flow-internal object-safe execution interface for nodes and nested flows.
-#[async_trait]
 #[doc(hidden)]
-pub trait NodeAdapter<S: Send + Sync>: Send + Sync {
+pub trait NodeAdapter<S>: Send + Sync {
     /// Run this object as a flow node.
-    async fn run(&mut self, state: &mut S, node_id: &NodeId) -> Result<Action, NodeError>;
+    fn run(&mut self, state: &mut S, node_id: &NodeId) -> Result<Action, NodeError>;
 }
 
 /// Marker for direct node inputs.
@@ -75,7 +67,7 @@ pub struct FlowInput;
 
 /// Convert flow builder inputs into the internal adapter interface.
 #[doc(hidden)]
-pub trait IntoNodeAdapter<S: Send + Sync, Kind> {
+pub trait IntoNodeAdapter<S, Kind> {
     /// Convert this input into a boxed node adapter.
     fn into_node_adapter(self) -> Box<dyn NodeAdapter<S>>;
 }
@@ -84,21 +76,18 @@ struct NodeAdapterImpl<N>(N);
 
 // This wrapper erases each node's associated Prep/Output/Error types so a flow
 // can store heterogeneous nodes behind one internal execution interface.
-#[async_trait]
 impl<N, S> NodeAdapter<S> for NodeAdapterImpl<N>
 where
     N: Node<S>,
-    S: Send + Sync,
 {
-    async fn run(&mut self, state: &mut S, node_id: &NodeId) -> Result<Action, NodeError> {
-        self.0.run(state, NodeContext::new(node_id.clone())).await
+    fn run(&mut self, state: &mut S, node_id: &NodeId) -> Result<Action, NodeError> {
+        self.0.run(state, NodeContext::new(node_id.clone()))
     }
 }
 
 impl<N, S> IntoNodeAdapter<S, NodeInput> for N
 where
     N: Node<S> + 'static,
-    S: Send + Sync,
 {
     fn into_node_adapter(self) -> Box<dyn NodeAdapter<S>> {
         Box::new(NodeAdapterImpl(self))
@@ -164,13 +153,12 @@ mod tests {
         }
     }
 
-    #[async_trait]
     impl Node<Vec<String>> for RecordingNode {
         type Prep = String;
         type Output = String;
         type Error = TestError;
 
-        async fn prep(
+        fn prep(
             &mut self,
             _state: &Vec<String>,
             _context: &NodeContext,
@@ -182,7 +170,7 @@ mod tests {
             Ok("prepared".to_string())
         }
 
-        async fn exec(
+        fn exec(
             &mut self,
             prep: &Self::Prep,
             _context: &NodeContext,
@@ -196,7 +184,7 @@ mod tests {
             Ok("output".to_string())
         }
 
-        async fn post(
+        fn post(
             &mut self,
             state: &mut Vec<String>,
             prep: Self::Prep,
@@ -222,13 +210,12 @@ mod tests {
 
     struct TypedNode;
 
-    #[async_trait]
     impl Node<TypedState> for TypedNode {
         type Prep = String;
         type Output = String;
         type Error = TestError;
 
-        async fn prep(
+        fn prep(
             &mut self,
             state: &TypedState,
             _context: &NodeContext,
@@ -236,7 +223,7 @@ mod tests {
             state.value.clone().ok_or(TestError("missing value"))
         }
 
-        async fn exec(
+        fn exec(
             &mut self,
             prep: &Self::Prep,
             _context: &NodeContext,
@@ -244,7 +231,7 @@ mod tests {
             Ok(format!("{prep}:processed"))
         }
 
-        async fn post(
+        fn post(
             &mut self,
             state: &mut TypedState,
             _prep: Self::Prep,
@@ -257,14 +244,14 @@ mod tests {
         }
     }
 
-    #[tokio::test]
-    async fn successful_run_executes_prep_exec_post_once() {
+    #[test]
+    fn successful_run_executes_prep_exec_post_once() {
         let calls = Calls::new();
         let mut node = RecordingNode::new(calls.clone());
         let mut state = Vec::new();
-        let context = NodeContext::new("async_node");
+        let context = NodeContext::new("sync_node");
 
-        let action = node.run(&mut state, context).await.unwrap();
+        let action = node.run(&mut state, context).unwrap();
 
         assert_eq!(action, Action::new("complete"));
         assert_eq!(action.as_str(), "complete");
@@ -273,8 +260,8 @@ mod tests {
         assert_eq!(node.exec_calls, 1);
     }
 
-    #[tokio::test]
-    async fn run_supports_plain_typed_state() {
+    #[test]
+    fn run_supports_plain_typed_state() {
         let mut node = TypedNode;
         let mut state = TypedState {
             visits: Vec::new(),
@@ -283,7 +270,6 @@ mod tests {
 
         let action = node
             .run(&mut state, NodeContext::new("typed_node"))
-            .await
             .unwrap();
 
         assert_eq!(action, Action::new("done"));
@@ -291,32 +277,30 @@ mod tests {
         assert_eq!(state.value, Some("input:processed".to_string()));
     }
 
-    #[tokio::test]
-    async fn prep_failure_stops_before_exec_and_post() {
+    #[test]
+    fn prep_failure_stops_before_exec_and_post() {
         let calls = Calls::new();
         let mut node = RecordingNode::failing(calls.clone(), NodePhase::Prep);
         let mut state = Vec::new();
 
         let error = node
-            .run(&mut state, NodeContext::new("async_node"))
-            .await
+            .run(&mut state, NodeContext::new("sync_node"))
             .unwrap_err();
 
         assert_eq!(error.phase, NodePhase::Prep);
-        assert_eq!(error.node_id.as_str(), "async_node");
+        assert_eq!(error.node_id.as_str(), "sync_node");
         assert_eq!(error.message, "prep failed");
         assert_eq!(calls.snapshot(), vec!["prep"]);
     }
 
-    #[tokio::test]
-    async fn exec_failure_is_not_retried_and_skips_post() {
+    #[test]
+    fn exec_failure_is_not_retried_and_skips_post() {
         let calls = Calls::new();
         let mut node = RecordingNode::failing(calls.clone(), NodePhase::Exec);
         let mut state = Vec::new();
 
         let error = node
-            .run(&mut state, NodeContext::new("async_node"))
-            .await
+            .run(&mut state, NodeContext::new("sync_node"))
             .unwrap_err();
 
         assert_eq!(error.phase, NodePhase::Exec);
@@ -325,15 +309,14 @@ mod tests {
         assert_eq!(node.exec_calls, 1);
     }
 
-    #[tokio::test]
-    async fn post_failure_reports_post_phase() {
+    #[test]
+    fn post_failure_reports_post_phase() {
         let calls = Calls::new();
         let mut node = RecordingNode::failing(calls.clone(), NodePhase::Post);
         let mut state = Vec::new();
 
         let error = node
-            .run(&mut state, NodeContext::new("async_node"))
-            .await
+            .run(&mut state, NodeContext::new("sync_node"))
             .unwrap_err();
 
         assert_eq!(error.phase, NodePhase::Post);

@@ -1,20 +1,25 @@
 # CosmoFlow Documentation
 
-Welcome to the comprehensive documentation for CosmoFlow, a type-safe workflow engine for Rust.
+CosmoFlow is a small Rust framework for modeling programs as state machines.
+The core API is intentionally narrow: actions signal transitions, nodes perform
+work, and flows connect nodes into validated graphs.
 
-## Documentation Structure
+## Guides
 
-This directory contains detailed guides and documentation for CosmoFlow:
+- [Getting Started](getting-started.md): build a typed-state flow and run it.
+- [Architecture](architecture.md): understand the core boundaries and design
+  trade-offs.
+- [Features](features.md): choose async and storage feature flags.
+- [API Reference](https://docs.rs/cosmoflow): generated Rust API docs.
 
-- **[Getting Started](getting-started.md)** - Quick setup and first workflow
-- **[Architecture](architecture.md)** - System design and component overview  
-- **[Features Guide](features.md)** - Complete feature flags reference
-- **[API Reference](https://docs.rs/cosmoflow)** - Generated API documentation
+## Core Principles
 
-## Need Help?
+- Every program can be modeled as a state machine.
+- CosmoFlow core is a framework, not a policy runtime. Retry, fallback,
+  timeout, agent/tool/LLM integration, memory, and tracing should be composed
+  above the core or provided by optional extensions.
 
-- Check the [Getting Started](getting-started.md) guide for basic usage
-- Review the [Architecture](architecture.md) for system understanding
-- Browse the [Features Reference](features.md) for configuration options
-- Browse the [API Reference](https://docs.rs/cosmoflow) for detailed function documentation
-- Open an issue on [GitHub](https://github.com/echozyr2001/CosmoFlow/issues) for bugs or questions
+## API
+
+The core API is exposed through `cosmoflow::action`, `cosmoflow::node`, and
+`cosmoflow::flow`, with commonly used types re-exported from the crate root.

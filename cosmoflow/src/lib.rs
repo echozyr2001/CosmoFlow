@@ -1,120 +1,92 @@
 #![deny(missing_docs)]
 //! # CosmoFlow
 //!
-//! A lightweight, type-safe workflow engine for Rust, optimized for LLM applications.
+//! A lightweight framework for modeling workflows as state machines.
 //!
-//! CosmoFlow provides a minimal yet powerful framework for building complex workflows
-//! with clean abstractions and excellent performance.
+//! CosmoFlow core follows two principles:
+//!
+//! *   Every program can be modeled as a state machine.
+//! *   The framework core should stay small; retry, fallback, timeout, LLM/tool
+//!     integration, memory, and tracing belong in user composition or optional
+//!     extensions.
 //!
 //! ## Core Concepts
 //!
-//! *   **Flow**: A collection of nodes and the routes between them, representing a
-//!     complete workflow.
-//! *   **Node**: A single unit of work in a workflow.
-//! *   **Action**: The result of a node's execution, used to determine the next
-//!     step in the flow.
-//! *   **Shared Store**: A key-value store used to share data between nodes.
-//! *   **Storage Backend**: A pluggable storage mechanism for the shared store.
+//! *   **Action**: A state transition signal. Its name is the routing identity,
+//!     and parameters are optional carried data.
+//! *   **Node**: A user-defined `prep -> exec -> post` behavior unit.
+//! *   **Flow**: A state-machine graph with build-time validation and a single
+//!     sequential executor.
+//! *   **State**: The runtime state value `S` passed through node and flow
+//!     execution. It may be a strong typed struct or a shared store.
+//! *   **Shared Store**: An optional key-value state model with memory, file, and
+//!     Redis backends.
 //!
 //! # Quick Start
 //!
-//! ## Synchronous Usage (default)
+//! ```rust
+//! # #[cfg(not(feature = "async"))]
+//! # fn main() -> std::result::Result<(), Box<dyn std::error::Error>> {
+//! use cosmoflow::action::Action;
+//! use cosmoflow::flow::FlowBuilder;
+//! use cosmoflow::node::{Node, NodeContext};
 //!
-//! ```rust,no_run
-//! # #[cfg(all(feature = "storage-memory", not(feature = "async")))]
-//! # fn example() -> Result<(), Box<dyn std::error::Error>> {
-//! use cosmoflow::prelude::*;
+//! #[derive(Default)]
+//! struct AppState {
+//!     visits: Vec<String>,
+//! }
 //!
-//! // Create a shared store with memory backend
-//! let mut store = MemoryStorage::new();
-//!
-//! // Define a simple node
 //! struct MyNode;
-//! impl<S: SharedStore> Node<S> for MyNode {
-//!     type PrepResult = String;
-//!     type ExecResult = ();
-//!     type Error = NodeError;
-//!     fn prep(&mut self, _store: &S, _context: &ExecutionContext) -> Result<String, Self::Error> {
-//!         Ok("prepared".to_string())
-//!     }
-//!     fn exec(&mut self, _prep_result: String, _context: &ExecutionContext) -> Result<(), Self::Error> {
+//!
+//! impl Node<AppState> for MyNode {
+//!     type Prep = ();
+//!     type Output = ();
+//!     type Error = std::convert::Infallible;
+//!
+//!     fn prep(&mut self, _state: &AppState, _ctx: &NodeContext) -> Result<Self::Prep, Self::Error> {
 //!         Ok(())
 //!     }
-//!     fn post(&mut self, _store: &mut S, _prep_result: String, _exec_result: (), _context: &ExecutionContext) -> Result<Action, Self::Error> {
-//!         Ok(Action::simple("complete"))
+//!
+//!     fn exec(&mut self, _prep: &Self::Prep, _ctx: &NodeContext) -> Result<Self::Output, Self::Error> {
+//!         Ok(())
+//!     }
+//!
+//!     fn post(
+//!         &mut self,
+//!         state: &mut AppState,
+//!         _prep: Self::Prep,
+//!         _output: Self::Output,
+//!         ctx: &NodeContext,
+//!     ) -> Result<Action, Self::Error> {
+//!         state.visits.push(ctx.node_id.as_str().to_string());
+//!         Ok(Action::new("done"))
 //!     }
 //! }
 //!
-//! // Create a flow
 //! let mut flow = FlowBuilder::new()
 //!     .node("start", MyNode)
-//!     .terminal_route("start", "complete")
-//!     .build();
+//!     .build()?;
 //!
-//! // Execute the flow
-//! let result = flow.execute(&mut store)?;
+//! let mut state = AppState::default();
+//! let action = flow.run(&mut state)?;
+//! assert_eq!(action.as_str(), "done");
 //! # Ok(())
 //! # }
-//! ```
-//!
-//! ## Asynchronous Usage (with async feature)
-//!
-//! ```rust,no_run
-//! # #[cfg(all(feature = "async", feature = "storage-memory"))]
-//! # async fn example() -> Result<(), Box<dyn std::error::Error>> {
-//! use cosmoflow::prelude::*;
-//! use async_trait::async_trait;
-//!
-//! // Create a shared store with memory backend
-//! let mut store = MemoryStorage::new();
-//!
-//! // Define a simple node
-//! struct MyNode;
-//! #[async_trait]
-//! impl<S: SharedStore> Node<S> for MyNode {
-//!     type PrepResult = String;
-//!     type ExecResult = ();
-//!     type Error = NodeError;
-//!     async fn prep(&mut self, _store: &S, _context: &ExecutionContext) -> Result<String, Self::Error> {
-//!         Ok("prepared".to_string())
-//!     }
-//!     async fn exec(&mut self, _prep_result: String, _context: &ExecutionContext) -> Result<(), Self::Error> {
-//!         Ok(())
-//!     }
-//!     async fn post(&mut self, _store: &mut S, _prep_result: String, _exec_result: (), _context: &ExecutionContext) -> Result<Action, Self::Error> {
-//!         Ok(Action::simple("complete"))
-//!     }
-//! }
-//!
-//! // Create a flow
-//! let mut flow = FlowBuilder::new()
-//!     .node("start", MyNode)
-//!     .terminal_route("start", "complete")
-//!     .build();
-//!
-//! // Execute the flow
-//! let result = flow.execute(&mut store).await?;
-//! # Ok(())
-//! # }
+//! # #[cfg(feature = "async")]
+//! # fn main() {}
 //! ```
 //!
 //! ## Feature Flags
 //!
-//! CosmoFlow uses a feature flag system to keep the core library lightweight
-//! and allow users to opt-in to additional functionality.
+//! CosmoFlow uses feature flags to keep the default crate focused on the core
+//! state-machine framework. Async execution and built-in shared-store backends
+//! are opt-in.
 //!
 //! ### Storage Backends
 //!
 //! *   `storage-memory`: In-memory storage backend.
 //! *   `storage-file`: File-based storage backend.
 //! *   `storage-redis`: Redis storage backend for distributed workflows.
-//!
-//! ### Convenience Features
-//!
-//! *   `minimal`: Core engine only (bring your own storage).
-//! *   `basic`: Basic usable configuration with memory storage.
-//! *   `standard`: Core + memory storage + async support.
-//! *   `full`: All storage backends + async support enabled.
 //!
 //! ### Sync/Async Mode
 //!
@@ -125,43 +97,21 @@
 // CORE EXPORTS
 // ============================================================================
 
-/// Shared store for data communication between workflow nodes
+/// Optional key-value state model for dynamic workflow context.
 pub mod shared_store;
 pub use shared_store::SharedStore;
 
-/// Action definition and condition evaluation
+/// Action types for workflow transition signals.
 pub mod action;
-pub use action::Action;
+pub use action::{Action, ActionName, ActionParams};
 
-/// Flow definition and execution
+/// Flow graph definition and execution.
 pub mod flow;
+pub use flow::{Flow, FlowAnalysis, FlowBuilder, FlowError, FlowExecution, Route};
 
-// Sync exports
-#[cfg(not(feature = "async"))]
-pub use flow::{
-    Flow, FlowBackend, FlowBuilder, FlowConfig, FlowExecutionResult, errors::FlowError,
-    route::Route,
-};
-
-// Async exports
-#[cfg(feature = "async")]
-pub use flow::{
-    FlowConfig, FlowExecutionResult,
-    r#async::{Flow, FlowBackend, FlowBuilder},
-    errors::FlowError,
-    route::Route,
-};
-
-/// Node execution system and traits
+/// Node execution traits and context types.
 pub mod node;
-
-// Sync Node exports
-#[cfg(not(feature = "async"))]
-pub use node::{ExecutionContext, Node, NodeError};
-
-// Async Node exports
-#[cfg(feature = "async")]
-pub use node::{ExecutionContext, NodeError, r#async::Node};
+pub use node::{ExecutionId, Node, NodeContext, NodeError, NodeId, NodePhase};
 
 // ============================================================================
 // CONVENIENCE TYPE ALIAS
@@ -184,10 +134,13 @@ pub type Result<T> = std::result::Result<T, FlowError>;
 /// ```
 pub mod prelude {
     // Core types (always available)
-    pub use crate::{Action, ExecutionContext, Node, NodeError, SharedStore};
+    pub use crate::{
+        Action, ActionName, ActionParams, ExecutionId, Node, NodeContext, NodeError, NodeId,
+        NodePhase, SharedStore,
+    };
 
     // Flow types (always available)
-    pub use crate::{Flow, FlowBackend, FlowBuilder, FlowConfig, FlowExecutionResult};
+    pub use crate::{Flow, FlowAnalysis, FlowBuilder, FlowError, FlowExecution, Route};
 
     // Re-export async_trait when async feature is enabled
     #[cfg(feature = "async")]

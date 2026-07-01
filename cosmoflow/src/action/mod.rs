@@ -1,75 +1,116 @@
 #![deny(missing_docs)]
-//! # CosmoFlow Action
+//! Action API.
 //!
-//! This module provides a streamlined action system for controlling workflow
-//! execution in the CosmoFlow engine. The design focuses on essential functionality
-//! while eliminating redundant and rarely-used features.
-//!
-//! ## Key Features
-//!
-//! - **Consistent Naming**: Standardized `is_*` and `has_*` method patterns
-//! - **Convenience Methods**: Reduced boilerplate with `with_param()` for single parameters
-//! - **Essential Functionality**: Focused API with only the most commonly used methods
-//! - **Clean Design**: Removed redundant aliases and utility methods
-//!
-//! ## Core API
-//!
-//! ### Creation Methods
-//! - `simple(name)` - Create simple action
-//! - `with_params(name, params)` - Create action with multiple parameters
-//! - `with_param(name, key, value)` - Convenience method for single parameter
-//!
-//! ### Type Checking
-//! - `is_simple()` - Check if action is simple
-//! - `is_parameterized()` - Check if action has parameters
-//!
-//! ### Parameter Access
-//! - `params()` - Get all parameters
-//! - `get_param(key)` - Get specific parameter value
-//! - `has_param(key)` - Check if specific parameter exists
-//! - `param_count()` - Get number of parameters
-//!
-//! ## Examples
-//!
-//! ### Simple Actions (Most Common)
-//! ```rust
-//! use cosmoflow::action::Action;
-//!
-//! let action = Action::simple("next_step");
-//! assert!(action.is_simple());
-//! ```
-//!
-//! ### Single Parameter Actions (Convenience)
-//! ```rust
-//! use cosmoflow::action::Action;
-//! use serde_json::json;
-//!
-//! let action = Action::with_param("retry", "count", json!(3));
-//! assert!(action.has_param("count"));
-//! assert_eq!(action.get_param("count"), Some(&json!(3)));
-//! ```
-//!
-//! ### Multiple Parameter Actions
-//! ```rust
-//! use cosmoflow::action::Action;
-//! use serde_json::json;
-//! use std::collections::HashMap;
-//!
-//! let mut params = HashMap::new();
-//! params.insert("timeout".to_string(), json!(30));
-//! params.insert("retries".to_string(), json!(3));
-//! let action = Action::with_params("process", params);
-//! assert_eq!(action.param_count(), 2);
-//! ```
-//!
-//! For more information, please see the main [`cosmoflow`](https://docs.rs/cosmoflow)
-//! crate documentation.
+//! An action is the state transition signal returned by nodes and flows. Its
+//! name is the routing identity, and parameters are optional carried data.
 
-/// The simplified action module defines the `Action` enum and its variants.
-pub mod action_core;
+mod core;
+mod name;
+mod params;
 
-/// Test module for the simplified action system.
+pub use core::Action;
+pub use name::ActionName;
+pub use params::ActionParams;
+
 #[cfg(test)]
-pub mod tests;
+mod tests {
+    use super::{Action, ActionName, ActionParams};
+    use serde_json::{Value, json};
 
-pub use action_core::Action;
+    #[test]
+    fn action_name_supports_creation_and_display() {
+        let from_new = ActionName::new("next");
+        let from_str = ActionName::from("next");
+        let from_string = ActionName::from("next".to_string());
+
+        assert_eq!(from_new.as_str(), "next");
+        assert_eq!(from_new.to_string(), "next");
+        assert_eq!(from_new, from_str);
+        assert_eq!(from_new, from_string);
+    }
+
+    #[test]
+    fn new_action_has_empty_params() {
+        let action = Action::new("next");
+
+        assert_eq!(action.name().as_str(), "next");
+        assert_eq!(action.as_str(), "next");
+        assert_eq!(action.params(), &ActionParams::new());
+        assert_eq!(action.get_param("missing"), None);
+        assert!(!action.has_param("missing"));
+        assert_eq!(action.param_count(), 0);
+        assert!(!action.has_params());
+    }
+
+    #[test]
+    fn action_with_param_stores_one_value() {
+        let action = Action::with_param("retry", "count", json!(3));
+
+        assert_eq!(action.name().as_str(), "retry");
+        assert_eq!(action.get_param("count"), Some(&json!(3)));
+        assert!(action.has_param("count"));
+        assert_eq!(action.param_count(), 1);
+        assert!(action.has_params());
+    }
+
+    #[test]
+    fn action_with_params_stores_all_values() {
+        let mut params = ActionParams::new();
+        params.insert("path".to_string(), json!("tools"));
+        params.insert("attempt".to_string(), json!(2));
+
+        let action = Action::with_params("dispatch", params.clone());
+
+        assert_eq!(action.name().as_str(), "dispatch");
+        assert_eq!(action.params(), &params);
+        assert_eq!(action.get_param("path"), Some(&json!("tools")));
+        assert_eq!(action.get_param("attempt"), Some(&json!(2)));
+        assert_eq!(action.param_count(), 2);
+    }
+
+    #[test]
+    fn params_always_return_a_map_reference() {
+        let empty = Action::with_params("empty", ActionParams::new());
+
+        assert_eq!(empty.params(), &ActionParams::new());
+        assert_eq!(empty.param_count(), 0);
+        assert!(!empty.has_params());
+    }
+
+    #[test]
+    fn action_display_only_uses_name() {
+        let action = Action::with_param("route", "detail", json!("ignored by display"));
+
+        assert_eq!(action.to_string(), "route");
+    }
+
+    #[test]
+    fn action_serialization_roundtrips_name_and_params() {
+        let action = Action::with_param("route", "score", json!(42));
+
+        let serialized = serde_json::to_string(&action).unwrap();
+        let deserialized: Action = serde_json::from_str(&serialized).unwrap();
+
+        assert_eq!(deserialized, action);
+        assert_eq!(deserialized.get_param("score"), Some(&json!(42)));
+    }
+
+    #[test]
+    fn action_serialization_skips_empty_params() {
+        let action = Action::new("route");
+
+        let serialized: Value = serde_json::to_value(&action).unwrap();
+
+        assert_eq!(serialized, json!({ "name": "route" }));
+    }
+
+    #[test]
+    fn missing_params_deserialize_as_empty_map() {
+        let action: Action = serde_json::from_value(json!({ "name": "route" })).unwrap();
+
+        assert_eq!(action.name().as_str(), "route");
+        assert_eq!(action.params(), &ActionParams::new());
+        assert_eq!(action.param_count(), 0);
+        assert!(!action.has_params());
+    }
+}

@@ -1,1098 +1,418 @@
-#![deny(missing_docs)]
-//! # Flow Macros - CosmoFlow Workflow Construction Macros
-//!
-//! This module provides convenient macros for building CosmoFlow workflows with minimal boilerplate.
-//! These macros are designed to work with the minimal feature set and don't depend on any builtin modules.
-//!
-//! ## Key Features
-//!
-//! - **flow!**: Declarative workflow construction with automatic routing
-//! - **Explicit Terminal Routes**: Support for the new terminal route system
-//! - **Type-Safe Workflow Termination**: No hidden terminal actions
-//!
-//! ## Quick Start
-//!
-//! ```rust,ignore
-//! use cosmoflow::flow::macros::*;
-//! use cosmoflow::shared_store::backends::MemoryStorage;
-//!
-//! // Build a workflow with explicit termination
-//! let workflow = flow! {
-//!     storage: MemoryStorage,
-//!     start: "start",
-//!     nodes: {
-//!         "start": StartNode,
-//!         "end": EndNode,
-//!     },
-//!     routes: {
-//!         "start" - "next" => "end",
-//!     },
-//!     terminals: {
-//!         "end" - "complete",
-//!     }
-//! };
-//! ```
+//! Macros for declarative flow construction.
 
-/// Declarative workflow construction with explicit terminal routes and type inference.
+/// Declarative flow construction.
 ///
-/// This macro provides a clean, declarative syntax for building CosmoFlow workflows.
-/// It automatically handles node registration, routing setup, and explicit terminal route
-/// configuration with the new type-safe termination system.
-///
-/// # Syntax
-///
-/// ## Structured syntax with explicit terminal routes:
-/// ```rust,ignore
-/// flow! {
-///     storage: StorageType,
-///     start: "start_node_id",
-///     nodes: {
-///         "node_id" : NodeBackend,
-///         "other_id" : OtherBackend,
-///         "final_id" : FinalBackend,
-///     },
-///     routes: {
-///         "node_id" - "custom_action" => "other_id",
-///         "other_id" - "next" => "final_id",
-///     },
-///     terminals: {
-///         "final_id" - "complete",
-///         "other_id" - "error",
-///     }
-/// }
-/// ```
-///
-/// ## Structured syntax with conditional terminal routes:
-/// ```rust,ignore
-/// flow! {
-///     storage: StorageType,
-///     start: "start_node_id",
-///     nodes: {
-///         "node_id" : NodeBackend,
-///         "other_id" : OtherBackend,
-///     },
-///     routes: {
-///         "node_id" - "next" => "other_id",
-///     },
-///     terminals: {
-///         "other_id" - "complete",
-///     }
-/// }
-/// ```
-///
-/// # Arguments
-///
-/// * `storage` - The storage backend type to use
-/// * `start` - The ID of the starting node (for structured syntax)
-/// * `nodes` - Node definitions in the format: `"id" : Backend`
-/// * `routes` - Route definitions in the format: `"from" - "action" => "to"`
-/// * `terminals` - Terminal route definitions in the format: `"from" - "action"`
-///
-/// # Features
-///
-/// - **Explicit Terminal Routes**: Full support for the new terminal route system
-/// - **Type-Safe Termination**: No hidden terminal actions; all termination is explicit
-/// - **Custom Actions**: Supports custom action names for routing (e.g., "default", "error", "success")
-/// - **Type Safety**: Compile-time storage type checking
-/// - **Clean Syntax**: Declarative workflow definition
-/// - **Flexible**: Supports any Node implementation
+/// This macro expands to [`FlowBuilder`](super::FlowBuilder). It only supports
+/// identifier node ids and action names; use `FlowBuilder` directly for string
+/// literals, dynamic names, or names that are not valid Rust identifiers.
 ///
 /// # Examples
 ///
-/// ## Structured Workflow with Explicit Terminal Routes
 /// ```rust,ignore
-/// use cosmoflow::flow::macros::flow;
-/// use cosmoflow::shared_store::backends::MemoryStorage;
-/// use cosmoflow::action::Action;
-/// use cosmoflow::node::Node;
-///
-/// // Define some nodes (using standard Node implementations)
-/// struct StartNode;
-/// struct ProcessNode;
-/// struct EndNode;
-///
-/// // Node implementations would be defined here...
-///
-/// // Build the workflow with explicit termination
-/// let workflow = flow! {
-///     storage: MemoryStorage,
-///     start: "start",
-///     nodes: {
-///         "start": StartNode,
-///         "process": ProcessNode,
-///         "end": EndNode,
-///     },
-///     routes: {
-///         "start" - "next" => "process",
-///         "process" - "next" => "end",
-///     },
-///     terminals: {
-///         "end" - "complete",
+/// let flow = cosmoflow::flow::flow! {
+///     nodes {
+///         load = LoadUser;
+///         score = ScoreUser;
+///         done = Done;
 ///     }
-/// };
+///
+///     routes {
+///         load => next => score;
+///         score => complete => done;
+///     }
+/// }?;
 /// ```
 ///
-/// ## Workflow with Error Handling and Multiple Terminal Routes
+/// Explicit start node:
+///
 /// ```rust,ignore
-/// use cosmoflow::flow::macros::flow;
-/// use cosmoflow::shared_store::backends::MemoryStorage;
-/// use cosmoflow::action::Action;
-/// use cosmoflow::node::Node;
+/// let flow = cosmoflow::flow::flow! {
+///     start = score;
 ///
-/// // Custom node with complex logic
-/// struct DataProcessor;
-/// struct ErrorHandler;
-/// struct SuccessHandler;
-///
-/// // Node implementations would be defined here...
-///
-/// let workflow = flow! {
-///     storage: MemoryStorage,
-///     start: "input",
-///     nodes: {
-///         "input": DataProcessor,
-///         "error": ErrorHandler,
-///         "success": SuccessHandler,
-///     },
-///     routes: {
-///         "input" - "success" => "success",
-///         "input" - "error" => "error",
-///     },
-///     terminals: {
-///         "success" - "complete",
-///         "error" - "failed",
+///     nodes {
+///         load = LoadUser;
+///         score = ScoreUser;
 ///     }
-/// };
-/// ```
 ///
-/// ## Simple Linear Workflow
-/// ```rust,ignore
-/// use cosmoflow::flow::macros::flow;
-/// use cosmoflow::shared_store::backends::MemoryStorage;
-/// use cosmoflow::action::Action;
-/// use cosmoflow::node::Node;
-///
-/// // Simple workflow with linear progression
-/// struct ProcessingNode;
-/// struct FinalNode;
-///
-/// // Node implementations would be defined here...
-///
-/// let workflow = flow! {
-///     storage: MemoryStorage,
-///     start: "process",
-///     nodes: {
-///         "process": ProcessingNode,
-///         "final": FinalNode,
-///     },
-///     routes: {
-///         "process" - "next" => "final",
-///     },
-///     terminals: {
-///         "final" - "complete",
+///     routes {
+///         score => complete => load;
 ///     }
-/// };
+/// }?;
 /// ```
+#[doc(hidden)]
 #[macro_export]
-macro_rules! flow {
-    // Structured syntax with explicit start, nodes, routes, and terminal routes
+macro_rules! __cosmoflow_flow {
     (
-        storage: $storage:ty,
-        start: $start:expr,
-        nodes: {
+        start = $start:ident;
+
+        nodes {
+            $first_id:ident = $first_node:expr;
             $(
-                $id:literal : $backend:expr
-            ),* $(,)?
-        },
-        routes: {
+                $id:ident = $node:expr;
+            )*
+        }
+
+        routes {
             $(
-                $from:literal - $action:literal => $to:literal
-            ),* $(,)?
-        },
-        terminals: {
-            $(
-                $term_from:literal - $term_action:literal
-            ),* $(,)?
-        } $(,)?
+                $from:ident => $action:ident => $to:ident;
+            )*
+        }
     ) => {
         {
-            let mut builder = $crate::FlowBuilder::<$storage>::new()
-                .start_node($start);
-
-            $(
-                builder = builder.node($id, $backend);
-            )*
-
-            $(
-                builder = builder.route($from, $action, $to);
-            )*
-
-            $(
-                builder = builder.terminal_route($term_from, $term_action);
-            )*
-
-            builder.build()
+            $crate::flow::FlowBuilder::new()
+                .node(stringify!($first_id), $first_node)
+                $(
+                    .node(stringify!($id), $node)
+                )*
+                .start(stringify!($start))
+                $(
+                    .route(stringify!($from), stringify!($action), stringify!($to))
+                )*
+                .build()
         }
     };
 
-    // Structured syntax with only routes (no terminal routes - for backward compatibility)
     (
-        storage: $storage:ty,
-        start: $start:expr,
-        nodes: {
+        nodes {
+            $first_id:ident = $first_node:expr;
             $(
-                $id:literal : $backend:expr
-            ),* $(,)?
-        },
-        routes: {
+                $id:ident = $node:expr;
+            )*
+        }
+
+        routes {
             $(
-                $from:literal - $action:literal => $to:literal
-            ),* $(,)?
-        } $(,)?
+                $from:ident => $action:ident => $to:ident;
+            )*
+        }
     ) => {
         {
-            let mut builder = $crate::FlowBuilder::<$storage>::new()
-                .start_node($start);
-
-            $(
-                builder = builder.node($id, $backend);
-            )*
-
-            $(
-                builder = builder.route($from, $action, $to);
-            )*
-
-            builder.build()
+            $crate::flow::FlowBuilder::new()
+                .node(stringify!($first_id), $first_node)
+                $(
+                    .node(stringify!($id), $node)
+                )*
+                $(
+                    .route(stringify!($from), stringify!($action), stringify!($to))
+                )*
+                .build()
         }
     };
 }
 
-/// Declarative async workflow construction with explicit terminal routes and type inference.
-///
-/// This macro provides a clean, declarative syntax for building async CosmoFlow workflows.
-/// It automatically handles node registration, routing setup, and explicit terminal route
-/// configuration with the new type-safe termination system.
-///
-/// **Note**: This macro creates async flows. For sync flows, use `flow!` macro.
-/// This macro is only available when the "async" feature is enabled.
-///
-/// # Syntax
-///
-/// Same as `flow!` macro but creates async flows instead of sync flows.
-///
-/// # Example
-///
-/// ```rust,ignore
-/// #[cfg(feature = "async")]
-/// let workflow = async_flow! {
-///     storage: MemoryStorage,
-///     start: "start",
-///     nodes: {
-///         "start": AsyncStartNode,
-///         "end": AsyncEndNode,
-///     },
-///     routes: {
-///         "start" - "next" => "end",
-///     },
-///     terminals: {
-///         "end" - "complete",
-///     }
-/// };
-/// ```
-#[cfg(feature = "async")]
-#[macro_export]
-macro_rules! async_flow {
-    // Structured syntax with explicit terminal routes
-    (
-        storage: $storage:ty,
-        start: $start:expr,
-        nodes: {
-            $(
-                $id:literal : $backend:expr
-            ),* $(,)?
-        },
-        routes: {
-            $(
-                $from:literal - $action:literal => $to:literal
-            ),* $(,)?
-        },
-        terminals: {
-            $(
-                $term_from:literal - $term_action:literal
-            ),* $(,)?
-        } $(,)?
-    ) => {
-        {
-            let mut builder = $crate::flow::r#async::FlowBuilder::<$storage>::new()
-                .start_node($start);
-
-            $(
-                builder = builder.node($id, $backend);
-            )*
-
-            $(
-                builder = builder.route($from, $action, $to);
-            )*
-
-            $(
-                builder = builder.terminal_route($term_from, $term_action);
-            )*
-
-            builder.build()
-        }
-    };
-
-    // Structured syntax with only routes (no terminal routes - for backward compatibility)
-    (
-        storage: $storage:ty,
-        start: $start:expr,
-        nodes: {
-            $(
-                $id:literal : $backend:expr
-            ),* $(,)?
-        },
-        routes: {
-            $(
-                $from:literal - $action:literal => $to:literal
-            ),* $(,)?
-        } $(,)?
-    ) => {
-        {
-            let mut builder = $crate::flow::r#async::FlowBuilder::<$storage>::new()
-                .start_node($start);
-
-            $(
-                builder = builder.node($id, $backend);
-            )*
-
-            $(
-                builder = builder.route($from, $action, $to);
-            )*
-
-            builder.build()
-        }
-    };
-}
-
-// Re-export macro for easier access
-pub use flow;
+pub use crate::__cosmoflow_flow as flow;
 
 #[cfg(all(test, feature = "storage-memory"))]
 mod tests {
-    use super::*;
     use crate::action::Action;
-    use crate::shared_store::SharedStore;
+    #[cfg(not(feature = "async"))]
+    use crate::flow::FlowBuilder;
+    use crate::flow::FlowError;
+    use crate::node::{Node, NodeContext, NodeId};
     use crate::shared_store::backends::MemoryStorage;
+    use std::convert::Infallible;
 
-    // Import the correct Node trait based on features
-    #[cfg(not(feature = "async"))]
-    use crate::node::Node;
-    #[cfg(feature = "async")]
-    use crate::node::r#async::Node;
+    struct StaticNode {
+        action: &'static str,
+    }
 
-    #[cfg(not(feature = "async"))]
-    use crate::flow::{FlowBackend, FlowBuilder};
-
-    #[cfg(feature = "async")]
-    use crate::flow::r#async::{FlowBackend, FlowBuilder};
-
-    // Test node implementations - sync version
-    #[cfg(not(feature = "async"))]
-    mod sync_nodes {
-        use super::*;
-
-        pub struct TestStartNode;
-
-        impl<S: SharedStore> Node<S> for TestStartNode {
-            type PrepResult = ();
-            type ExecResult = ();
-            type Error = crate::node::NodeError;
-
-            fn prep(
-                &mut self,
-                _: &S,
-                _: &crate::node::ExecutionContext,
-            ) -> Result<(), Self::Error> {
-                Ok(())
-            }
-
-            fn exec(
-                &mut self,
-                _: (),
-                _: &crate::node::ExecutionContext,
-            ) -> Result<(), Self::Error> {
-                Ok(())
-            }
-
-            fn post(
-                &mut self,
-                _: &mut S,
-                _: (),
-                _: (),
-                _: &crate::node::ExecutionContext,
-            ) -> Result<Action, Self::Error> {
-                Ok(Action::simple("next"))
-            }
-        }
-
-        pub struct TestProcessNode;
-
-        impl<S: SharedStore> Node<S> for TestProcessNode {
-            type PrepResult = ();
-            type ExecResult = ();
-            type Error = crate::node::NodeError;
-
-            fn prep(
-                &mut self,
-                _: &S,
-                _: &crate::node::ExecutionContext,
-            ) -> Result<(), Self::Error> {
-                Ok(())
-            }
-
-            fn exec(
-                &mut self,
-                _: (),
-                _: &crate::node::ExecutionContext,
-            ) -> Result<(), Self::Error> {
-                Ok(())
-            }
-
-            fn post(
-                &mut self,
-                _: &mut S,
-                _: (),
-                _: (),
-                _: &crate::node::ExecutionContext,
-            ) -> Result<Action, Self::Error> {
-                Ok(Action::simple("next"))
-            }
-        }
-
-        pub struct TestEndNode;
-
-        impl<S: SharedStore> Node<S> for TestEndNode {
-            type PrepResult = ();
-            type ExecResult = ();
-            type Error = crate::node::NodeError;
-
-            fn prep(
-                &mut self,
-                _: &S,
-                _: &crate::node::ExecutionContext,
-            ) -> Result<(), Self::Error> {
-                Ok(())
-            }
-
-            fn exec(
-                &mut self,
-                _: (),
-                _: &crate::node::ExecutionContext,
-            ) -> Result<(), Self::Error> {
-                Ok(())
-            }
-
-            fn post(
-                &mut self,
-                _: &mut S,
-                _: (),
-                _: (),
-                _: &crate::node::ExecutionContext,
-            ) -> Result<Action, Self::Error> {
-                Ok(Action::simple("complete"))
-            }
-        }
-
-        pub struct TestCustomNode {
-            pub action: String,
-        }
-
-        impl TestCustomNode {
-            pub fn new(action: impl Into<String>) -> Self {
-                Self {
-                    action: action.into(),
-                }
-            }
-        }
-
-        impl<S: SharedStore> Node<S> for TestCustomNode {
-            type PrepResult = ();
-            type ExecResult = ();
-            type Error = crate::node::NodeError;
-
-            fn prep(
-                &mut self,
-                _: &S,
-                _: &crate::node::ExecutionContext,
-            ) -> Result<(), Self::Error> {
-                Ok(())
-            }
-
-            fn exec(
-                &mut self,
-                _: (),
-                _: &crate::node::ExecutionContext,
-            ) -> Result<(), Self::Error> {
-                Ok(())
-            }
-
-            fn post(
-                &mut self,
-                _: &mut S,
-                _: (),
-                _: (),
-                _: &crate::node::ExecutionContext,
-            ) -> Result<Action, Self::Error> {
-                Ok(Action::simple(&self.action))
-            }
+    impl StaticNode {
+        fn new(action: &'static str) -> Self {
+            Self { action }
         }
     }
 
-    // Test node implementations - async version
-    #[cfg(feature = "async")]
-    mod async_nodes {
-        use super::*;
-        use async_trait::async_trait;
+    #[cfg(not(feature = "async"))]
+    impl Node<MemoryStorage> for StaticNode {
+        type Prep = ();
+        type Output = ();
+        type Error = Infallible;
 
-        pub struct TestStartNode;
-
-        #[async_trait]
-        impl<S: SharedStore + Send + Sync> Node<S> for TestStartNode {
-            type PrepResult = ();
-            type ExecResult = ();
-            type Error = crate::node::NodeError;
-
-            async fn prep(
-                &mut self,
-                _: &S,
-                _: &crate::node::ExecutionContext,
-            ) -> Result<(), Self::Error> {
-                Ok(())
-            }
-
-            async fn exec(
-                &mut self,
-                _: (),
-                _: &crate::node::ExecutionContext,
-            ) -> Result<(), Self::Error> {
-                Ok(())
-            }
-
-            async fn post(
-                &mut self,
-                _: &mut S,
-                _: (),
-                _: (),
-                _: &crate::node::ExecutionContext,
-            ) -> Result<Action, Self::Error> {
-                Ok(Action::simple("next"))
-            }
+        fn prep(
+            &mut self,
+            _state: &MemoryStorage,
+            _context: &NodeContext,
+        ) -> Result<Self::Prep, Self::Error> {
+            Ok(())
         }
 
-        pub struct TestProcessNode;
-
-        #[async_trait]
-        impl<S: SharedStore + Send + Sync> Node<S> for TestProcessNode {
-            type PrepResult = ();
-            type ExecResult = ();
-            type Error = crate::node::NodeError;
-
-            async fn prep(
-                &mut self,
-                _: &S,
-                _: &crate::node::ExecutionContext,
-            ) -> Result<(), Self::Error> {
-                Ok(())
-            }
-
-            async fn exec(
-                &mut self,
-                _: (),
-                _: &crate::node::ExecutionContext,
-            ) -> Result<(), Self::Error> {
-                Ok(())
-            }
-
-            async fn post(
-                &mut self,
-                _: &mut S,
-                _: (),
-                _: (),
-                _: &crate::node::ExecutionContext,
-            ) -> Result<Action, Self::Error> {
-                Ok(Action::simple("next"))
-            }
+        fn exec(
+            &mut self,
+            _prep: &Self::Prep,
+            _context: &NodeContext,
+        ) -> Result<Self::Output, Self::Error> {
+            Ok(())
         }
 
-        pub struct TestEndNode;
-
-        #[async_trait]
-        impl<S: SharedStore + Send + Sync> Node<S> for TestEndNode {
-            type PrepResult = ();
-            type ExecResult = ();
-            type Error = crate::node::NodeError;
-
-            async fn prep(
-                &mut self,
-                _: &S,
-                _: &crate::node::ExecutionContext,
-            ) -> Result<(), Self::Error> {
-                Ok(())
-            }
-
-            async fn exec(
-                &mut self,
-                _: (),
-                _: &crate::node::ExecutionContext,
-            ) -> Result<(), Self::Error> {
-                Ok(())
-            }
-
-            async fn post(
-                &mut self,
-                _: &mut S,
-                _: (),
-                _: (),
-                _: &crate::node::ExecutionContext,
-            ) -> Result<Action, Self::Error> {
-                Ok(Action::simple("complete"))
-            }
-        }
-
-        pub struct TestCustomNode {
-            pub action: String,
-        }
-
-        impl TestCustomNode {
-            pub fn new(action: impl Into<String>) -> Self {
-                Self {
-                    action: action.into(),
-                }
-            }
-        }
-
-        #[async_trait]
-        impl<S: SharedStore + Send + Sync> Node<S> for TestCustomNode {
-            type PrepResult = ();
-            type ExecResult = ();
-            type Error = crate::node::NodeError;
-
-            async fn prep(
-                &mut self,
-                _: &S,
-                _: &crate::node::ExecutionContext,
-            ) -> Result<(), Self::Error> {
-                Ok(())
-            }
-
-            async fn exec(
-                &mut self,
-                _: (),
-                _: &crate::node::ExecutionContext,
-            ) -> Result<(), Self::Error> {
-                Ok(())
-            }
-
-            async fn post(
-                &mut self,
-                _: &mut S,
-                _: (),
-                _: (),
-                _: &crate::node::ExecutionContext,
-            ) -> Result<Action, Self::Error> {
-                Ok(Action::simple(&self.action))
-            }
+        fn post(
+            &mut self,
+            _state: &mut MemoryStorage,
+            _prep: Self::Prep,
+            _output: Self::Output,
+            _context: &NodeContext,
+        ) -> Result<Action, Self::Error> {
+            Ok(Action::new(self.action))
         }
     }
 
-    // Use appropriate node implementations based on feature
     #[cfg(feature = "async")]
-    use async_nodes::*;
-    #[cfg(not(feature = "async"))]
-    use sync_nodes::*;
+    #[async_trait::async_trait]
+    impl Node<MemoryStorage> for StaticNode {
+        type Prep = ();
+        type Output = ();
+        type Error = Infallible;
 
-    // Test: Structured syntax with explicit terminal routes
+        async fn prep(
+            &mut self,
+            _state: &MemoryStorage,
+            _context: &NodeContext,
+        ) -> Result<Self::Prep, Self::Error> {
+            Ok(())
+        }
+
+        async fn exec(
+            &mut self,
+            _prep: &Self::Prep,
+            _context: &NodeContext,
+        ) -> Result<Self::Output, Self::Error> {
+            Ok(())
+        }
+
+        async fn post(
+            &mut self,
+            _state: &mut MemoryStorage,
+            _prep: Self::Prep,
+            _output: Self::Output,
+            _context: &NodeContext,
+        ) -> Result<Action, Self::Error> {
+            Ok(Action::new(self.action))
+        }
+    }
+
+    #[cfg(not(feature = "async"))]
     #[test]
-    fn test_flow_macro_with_terminal_routes() {
-        let _workflow = flow! {
-            storage: MemoryStorage,
-            start: "entry",
-            nodes: {
-                "entry": TestCustomNode::new("default"),
-                "process": TestCustomNode::new("success"),
-                "error": TestEndNode,
-                "success": TestEndNode,
-            },
-            routes: {
-                "entry" - "default" => "process",
-                "process" - "success" => "success",
-                "entry" - "error" => "error",
-            },
-            terminals: {
-                "success" - "complete",
-                "error" - "failed",
+    fn macro_matches_manual_builder() {
+        let mut macro_flow = crate::flow::flow! {
+            nodes {
+                load = StaticNode::new("next");
+                score = StaticNode::new("complete");
             }
-        };
-        // Test new terminal routes syntax
+
+            routes {
+                load => next => score;
+            }
+        }
+        .unwrap();
+
+        let mut manual_flow = FlowBuilder::new()
+            .node("load", StaticNode::new("next"))
+            .node("score", StaticNode::new("complete"))
+            .route("load", "next", "score")
+            .build()
+            .unwrap();
+
+        let mut macro_state = MemoryStorage::new();
+        let mut manual_state = MemoryStorage::new();
+        let macro_execution = macro_flow.run_recorded(&mut macro_state).unwrap();
+        let manual_execution = manual_flow.run_recorded(&mut manual_state).unwrap();
+
+        assert_eq!(macro_execution.path, manual_execution.path);
+        assert_eq!(macro_execution.final_action, manual_execution.final_action);
+        assert_eq!(macro_execution.last_node_id, manual_execution.last_node_id);
+        assert_eq!(macro_execution.steps, manual_execution.steps);
     }
 
-    // Test: Legacy syntax without terminal routes (backward compatibility)
-    #[test]
-    fn test_flow_macro_legacy_syntax() {
-        let _workflow = flow! {
-            storage: MemoryStorage,
-            start: "entry",
-            nodes: {
-                "entry": TestCustomNode::new("default"),
-                "process": TestCustomNode::new("success"),
-                "error": TestEndNode,
-                "success": TestEndNode,
-            },
-            routes: {
-                "entry" - "default" => "process",
-                "process" - "success" => "success",
-                "entry" - "error" => "error",
-            }
-        };
-        // Test legacy syntax for backward compatibility
-    }
-
-    // Sync execution tests
     #[cfg(not(feature = "async"))]
-    mod sync_tests {
-        use super::*;
+    #[test]
+    fn first_node_is_default_start() {
+        let flow = crate::flow::flow! {
+            nodes {
+                load = StaticNode::new("complete");
+                score = StaticNode::new("complete");
+            }
 
-        #[test]
-        fn test_flow_macro_with_terminal_routes_execution() {
-            let mut workflow = flow! {
-                storage: MemoryStorage,
-                start: "entry",
-                nodes: {
-                    "entry": TestCustomNode::new("default"),
-                    "process": TestCustomNode::new("continue"),
-                    "end": TestEndNode,
-                },
-                routes: {
-                    "entry" - "default" => "process",
-                    "process" - "continue" => "end",
-                },
-                terminals: {
-                    "end" - "complete",
-                }
-            };
-
-            let mut store = MemoryStorage::new();
-            let result = workflow.execute(&mut store);
-
-            assert!(result.is_ok(), "Flow macro execution should succeed");
-            let execution_result = result.unwrap();
-            assert!(execution_result.success);
-            assert_eq!(execution_result.steps_executed, 3);
-            assert_eq!(
-                execution_result.execution_path,
-                vec!["entry", "process", "end"]
-            );
+            routes {
+                load => complete => score;
+            }
         }
+        .unwrap();
 
-        #[test]
-        fn test_flow_macro_legacy_execution() {
-            let mut workflow = FlowBuilder::new()
-                .start_node("entry")
-                .node("entry", TestCustomNode::new("default"))
-                .node("process", TestCustomNode::new("continue"))
-                .node("end", TestEndNode)
-                .route("entry", "default", "process")
-                .route("process", "continue", "end")
-                .terminal_route("end", "complete")
-                .build();
-
-            let mut store = MemoryStorage::new();
-            let result = workflow.execute(&mut store);
-
-            assert!(result.is_ok(), "Legacy flow execution should succeed");
-            let execution_result = result.unwrap();
-            assert!(execution_result.success);
-            assert_eq!(execution_result.steps_executed, 3);
-            assert_eq!(
-                execution_result.execution_path,
-                vec!["entry", "process", "end"]
-            );
-        }
-
-        #[test]
-        fn test_flow_macro_multiple_terminal_routes() {
-            let mut success_workflow = flow! {
-                storage: MemoryStorage,
-                start: "check",
-                nodes: {
-                    "check": TestCustomNode::new("success"),
-                    "success_handler": TestEndNode,
-                    "error_handler": TestEndNode,
-                },
-                routes: {
-                    "check" - "success" => "success_handler",
-                    "check" - "error" => "error_handler",
-                },
-                terminals: {
-                    "success_handler" - "complete",
-                    "error_handler" - "failed",
-                }
-            };
-
-            let mut store = MemoryStorage::new();
-            let result = success_workflow.execute(&mut store);
-
-            assert!(
-                result.is_ok(),
-                "Multiple terminal routes workflow should succeed"
-            );
-            let execution_result = result.unwrap();
-            assert!(execution_result.success);
-            assert_eq!(
-                execution_result.execution_path,
-                vec!["check", "success_handler"]
-            );
-        }
+        assert_eq!(flow.start().as_str(), "load");
     }
 
-    // Async execution tests
+    #[cfg(not(feature = "async"))]
+    #[test]
+    fn explicit_start_overrides_default_start() {
+        let mut flow = crate::flow::flow! {
+            start = score;
+
+            nodes {
+                load = StaticNode::new("complete");
+                score = StaticNode::new("complete");
+            }
+
+            routes {
+                score => complete => load;
+            }
+        }
+        .unwrap();
+        let mut state = MemoryStorage::new();
+
+        let execution = flow.run_recorded(&mut state).unwrap();
+
+        assert_eq!(flow.start().as_str(), "score");
+        assert_eq!(
+            execution.path,
+            vec![NodeId::new("score"), NodeId::new("load")]
+        );
+    }
+
+    #[cfg(not(feature = "async"))]
+    #[test]
+    fn empty_routes_naturally_terminate() {
+        let mut flow = crate::flow::flow! {
+            nodes {
+                done = StaticNode::new("complete");
+            }
+
+            routes {}
+        }
+        .unwrap();
+        let mut state = MemoryStorage::new();
+
+        let execution = flow.run_recorded(&mut state).unwrap();
+
+        assert_eq!(execution.path, vec![NodeId::new("done")]);
+        assert_eq!(execution.final_action, Action::new("complete"));
+    }
+
+    #[test]
+    fn build_time_graph_errors_are_preserved() {
+        let error = crate::flow::flow! {
+            nodes {
+                start = StaticNode::new("complete");
+                orphan = StaticNode::new("complete");
+            }
+
+            routes {}
+        }
+        .unwrap_err();
+
+        assert_eq!(error, FlowError::UnreachableNode(NodeId::new("orphan")));
+    }
+
+    #[cfg(not(feature = "async"))]
+    #[test]
+    fn nested_flow_nodes_are_accepted() {
+        let inner = crate::flow::flow! {
+            nodes {
+                inner_start = StaticNode::new("next");
+                inner_end = StaticNode::new("inner_done");
+            }
+
+            routes {
+                inner_start => next => inner_end;
+            }
+        }
+        .unwrap();
+
+        let mut outer = crate::flow::flow! {
+            nodes {
+                nested = inner;
+            }
+
+            routes {}
+        }
+        .unwrap();
+        let mut state = MemoryStorage::new();
+
+        let execution = outer.run_recorded(&mut state).unwrap();
+
+        assert_eq!(execution.path, vec![NodeId::new("nested")]);
+        assert_eq!(execution.final_action, Action::new("inner_done"));
+    }
+
     #[cfg(feature = "async")]
-    mod async_tests {
-        use super::*;
+    #[tokio::test]
+    async fn macro_builds_and_runs_async_flow() {
+        let mut flow = crate::flow::flow! {
+            nodes {
+                load = StaticNode::new("next");
+                score = StaticNode::new("complete");
+            }
 
-        #[tokio::test]
-        async fn test_flow_macro_with_terminal_routes_execution() {
-            let mut workflow = flow! {
-                storage: MemoryStorage,
-                start: "entry",
-                nodes: {
-                    "entry": TestCustomNode::new("default"),
-                    "process": TestCustomNode::new("continue"),
-                    "end": TestEndNode,
-                },
-                routes: {
-                    "entry" - "default" => "process",
-                    "process" - "continue" => "end",
-                },
-                terminals: {
-                    "end" - "complete",
-                }
-            };
-
-            let mut store = MemoryStorage::new();
-            let result = workflow.execute(&mut store).await;
-
-            assert!(result.is_ok(), "Flow macro execution should succeed");
-            let execution_result = result.unwrap();
-            assert!(execution_result.success);
-            assert_eq!(execution_result.steps_executed, 3);
-            assert_eq!(
-                execution_result.execution_path,
-                vec!["entry", "process", "end"]
-            );
+            routes {
+                load => next => score;
+            }
         }
+        .unwrap();
+        let mut state = MemoryStorage::new();
 
-        #[tokio::test]
-        async fn test_flow_macro_legacy_execution() {
-            let mut workflow = FlowBuilder::new()
-                .start_node("entry")
-                .node("entry", TestCustomNode::new("default"))
-                .node("process", TestCustomNode::new("continue"))
-                .node("end", TestEndNode)
-                .route("entry", "default", "process")
-                .route("process", "continue", "end")
-                .terminal_route("end", "complete")
-                .build();
+        let execution = flow.run_recorded(&mut state).await.unwrap();
 
-            let mut store = MemoryStorage::new();
-            let result = workflow.execute(&mut store).await;
+        assert_eq!(flow.start().as_str(), "load");
+        assert_eq!(
+            execution.path,
+            vec![NodeId::new("load"), NodeId::new("score")]
+        );
+        assert_eq!(execution.final_action, Action::new("complete"));
+    }
 
-            assert!(result.is_ok(), "Legacy flow execution should succeed");
-            let execution_result = result.unwrap();
-            assert!(execution_result.success);
-            assert_eq!(execution_result.steps_executed, 3);
-            assert_eq!(
-                execution_result.execution_path,
-                vec!["entry", "process", "end"]
-            );
+    #[cfg(feature = "async")]
+    #[tokio::test]
+    async fn explicit_start_works_for_async_flow() {
+        let mut flow = crate::flow::flow! {
+            start = score;
+
+            nodes {
+                load = StaticNode::new("complete");
+                score = StaticNode::new("complete");
+            }
+
+            routes {
+                score => complete => load;
+            }
         }
+        .unwrap();
+        let mut state = MemoryStorage::new();
 
-        #[tokio::test]
-        async fn test_flow_macro_multiple_terminal_routes() {
-            let mut success_workflow = flow! {
-                storage: MemoryStorage,
-                start: "check",
-                nodes: {
-                    "check": TestCustomNode::new("success"),
-                    "success_handler": TestEndNode,
-                    "error_handler": TestEndNode,
-                },
-                routes: {
-                    "check" - "success" => "success_handler",
-                    "check" - "error" => "error_handler",
-                },
-                terminals: {
-                    "success_handler" - "complete",
-                    "error_handler" - "failed",
-                }
-            };
+        let execution = flow.run_recorded(&mut state).await.unwrap();
 
-            let mut store = MemoryStorage::new();
-            let result = success_workflow.execute(&mut store).await;
+        assert_eq!(flow.start().as_str(), "score");
+        assert_eq!(
+            execution.path,
+            vec![NodeId::new("score"), NodeId::new("load")]
+        );
+    }
 
-            assert!(
-                result.is_ok(),
-                "Multiple terminal routes workflow should succeed"
-            );
-            let execution_result = result.unwrap();
-            assert!(execution_result.success);
-            assert_eq!(
-                execution_result.execution_path,
-                vec!["check", "success_handler"]
-            );
+    #[cfg(feature = "async")]
+    #[tokio::test]
+    async fn async_nested_flow_nodes_are_accepted() {
+        let inner = crate::flow::flow! {
+            nodes {
+                inner_start = StaticNode::new("next");
+                inner_end = StaticNode::new("inner_done");
+            }
+
+            routes {
+                inner_start => next => inner_end;
+            }
         }
+        .unwrap();
 
-        #[tokio::test]
-        async fn test_async_flow_macro_with_terminal_routes_execution() {
-            let mut workflow = async_flow! {
-                storage: MemoryStorage,
-                start: "entry",
-                nodes: {
-                    "entry": TestCustomNode::new("default"),
-                    "process": TestCustomNode::new("continue"),
-                    "end": TestEndNode,
-                },
-                routes: {
-                    "entry" - "default" => "process",
-                    "process" - "continue" => "end",
-                },
-                terminals: {
-                    "end" - "complete",
-                }
-            };
+        let mut outer = crate::flow::flow! {
+            nodes {
+                nested = inner;
+            }
 
-            let mut store = MemoryStorage::new();
-            let result = workflow.execute(&mut store).await;
-
-            assert!(result.is_ok(), "Async flow macro execution should succeed");
-            let execution_result = result.unwrap();
-            assert!(execution_result.success);
-            assert_eq!(execution_result.steps_executed, 3);
-            assert_eq!(
-                execution_result.execution_path,
-                vec!["entry", "process", "end"]
-            );
+            routes {}
         }
+        .unwrap();
+        let mut state = MemoryStorage::new();
 
-        #[tokio::test]
-        async fn test_async_flow_macro_legacy_syntax() {
-            let mut workflow = async_flow! {
-                storage: MemoryStorage,
-                start: "start",
-                nodes: {
-                    "start": TestCustomNode::new("next"),
-                    "end": TestEndNode,
-                },
-                routes: {
-                    "start" - "next" => "end",
-                },
-                terminals: {
-                    "end" - "complete",
-                }
-            };
+        let execution = outer.run_recorded(&mut state).await.unwrap();
 
-            let mut store = MemoryStorage::new();
-            let result = workflow.execute(&mut store).await;
-
-            assert!(result.is_ok(), "Async flow macro legacy syntax should work");
-            let execution_result = result.unwrap();
-            assert!(execution_result.success);
-            assert_eq!(execution_result.steps_executed, 2);
-            assert_eq!(execution_result.execution_path, vec!["start", "end"]);
-        }
-
-        #[tokio::test]
-        async fn test_async_flow_macro_multiple_terminal_routes() {
-            let mut success_workflow = async_flow! {
-                storage: MemoryStorage,
-                start: "check",
-                nodes: {
-                    "check": TestCustomNode::new("success"),
-                    "success_handler": TestEndNode,
-                    "error_handler": TestEndNode,
-                },
-                routes: {
-                    "check" - "success" => "success_handler",
-                    "check" - "error" => "error_handler",
-                },
-                terminals: {
-                    "success_handler" - "complete",
-                    "error_handler" - "failed",
-                }
-            };
-
-            let mut store = MemoryStorage::new();
-            let result = success_workflow.execute(&mut store).await;
-
-            assert!(
-                result.is_ok(),
-                "Async flow macro with multiple terminal routes should succeed"
-            );
-            let execution_result = result.unwrap();
-            assert!(execution_result.success);
-            assert_eq!(
-                execution_result.execution_path,
-                vec!["check", "success_handler"]
-            );
-        }
-
-        #[tokio::test]
-        async fn test_async_flow_macro_vs_regular_flow_consistency() {
-            // Test that async_flow! produces the same result as manual FlowBuilder
-            let mut async_flow_workflow = async_flow! {
-                storage: MemoryStorage,
-                start: "start",
-                nodes: {
-                    "start": TestCustomNode::new("proceed"),
-                    "middle": TestCustomNode::new("finish"),
-                    "end": TestEndNode,
-                },
-                routes: {
-                    "start" - "proceed" => "middle",
-                    "middle" - "finish" => "end",
-                },
-                terminals: {
-                    "end" - "complete",
-                }
-            };
-
-            let mut manual_workflow = crate::flow::r#async::FlowBuilder::<MemoryStorage>::new()
-                .start_node("start")
-                .node("start", TestCustomNode::new("proceed"))
-                .node("middle", TestCustomNode::new("finish"))
-                .node("end", TestEndNode)
-                .route("start", "proceed", "middle")
-                .route("middle", "finish", "end")
-                .terminal_route("end", "complete")
-                .build();
-
-            let mut store1 = MemoryStorage::new();
-            let mut store2 = MemoryStorage::new();
-
-            let result1 = async_flow_workflow.execute(&mut store1).await;
-            let result2 = manual_workflow.execute(&mut store2).await;
-
-            assert!(
-                result1.is_ok() && result2.is_ok(),
-                "Both workflows should succeed"
-            );
-
-            let exec1 = result1.unwrap();
-            let exec2 = result2.unwrap();
-
-            assert_eq!(exec1.success, exec2.success);
-            assert_eq!(exec1.steps_executed, exec2.steps_executed);
-            assert_eq!(exec1.execution_path, exec2.execution_path);
-        }
+        assert_eq!(execution.path, vec![NodeId::new("nested")]);
+        assert_eq!(execution.final_action, Action::new("inner_done"));
     }
 }

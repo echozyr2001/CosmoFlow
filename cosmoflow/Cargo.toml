@@ -24,22 +24,13 @@ tempfile = { workspace = true }
 tokio-test = { workspace = true }
 
 [features]
-default = ["basic"]
+default = []
 
 # Async support
-async = ["async-trait", "tokio"]
+async = ["dep:async-trait", "dep:tokio"]
 
 # Storage backends
 storage-memory = []
 storage-file = []
-storage-redis = ["redis"]
+storage-redis = ["dep:redis"]
 storage-full = ["storage-memory", "storage-file", "storage-redis"]
-
-# Convenience feature combinations
-minimal = [] # Core engine only (bring your own storage)
-basic = ["storage-memory"] # Basic usable configuration with memory storage
-standard = [
-  "storage-memory",
-  "async",
-] # Standard configuration with async support
-full = ["storage-full", "async"] # Full feature set with all storage backends

@@ -1,65 +1,78 @@
-//! Test for chat application loop pattern - demonstrating simplified approach
+//! Chat loop example using the core state-machine API.
 
 use async_trait::async_trait;
 use cosmoflow::prelude::*;
+use std::error::Error;
+use std::fmt;
+
+#[derive(Debug)]
+struct ChatError(String);
+
+impl ChatError {
+    fn new(error: impl fmt::Display) -> Self {
+        Self(error.to_string())
+    }
+}
+
+impl fmt::Display for ChatError {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        f.write_str(&self.0)
+    }
+}
+
+impl Error for ChatError {}
 
 struct InputNode;
 
 #[async_trait]
 impl Node<MemoryStorage> for InputNode {
-    type PrepResult = ();
-    type ExecResult = ();
-    type Error = NodeError;
+    type Prep = ();
+    type Output = ();
+    type Error = ChatError;
 
     async fn prep(
         &mut self,
         _store: &MemoryStorage,
-        _context: &ExecutionContext,
-    ) -> Result<Self::PrepResult, Self::Error> {
+        _context: &NodeContext,
+    ) -> Result<Self::Prep, Self::Error> {
         Ok(())
     }
 
     async fn exec(
         &mut self,
-        _prep_result: Self::PrepResult,
-        _context: &ExecutionContext,
-    ) -> Result<Self::ExecResult, Self::Error> {
-        println!("📥 Getting user input...");
+        _prep: &Self::Prep,
+        _context: &NodeContext,
+    ) -> Result<Self::Output, Self::Error> {
+        println!("Getting user input...");
         Ok(())
     }
 
     async fn post(
         &mut self,
         store: &mut MemoryStorage,
-        _prep_result: Self::PrepResult,
-        _exec_result: Self::ExecResult,
-        _context: &ExecutionContext,
+        _prep: Self::Prep,
+        _output: Self::Output,
+        _context: &NodeContext,
     ) -> Result<Action, Self::Error> {
-        // Simulate getting user input
-        let message_count: i32 = match store.get("message_count") {
-            Ok(Some(count)) => count,
-            _ => 0,
-        };
+        let message_count = store
+            .get::<i32>("message_count")
+            .map_err(ChatError::new)?
+            .unwrap_or(0);
         store
             .set(
                 "current_message".to_string(),
                 format!("Message {}", message_count + 1),
             )
-            .unwrap();
+            .map_err(ChatError::new)?;
         store
             .set("message_count".to_string(), message_count + 1)
-            .unwrap();
+            .map_err(ChatError::new)?;
 
-        // Stop after 5 messages for demo
         if message_count >= 5 {
-            Ok(Action::simple("quit"))
+            Ok(Action::new("quit"))
         } else {
-            Ok(Action::simple("process"))
+            Ok(Action::new("process"))
         }
-    }
-
-    fn name(&self) -> &str {
-        "InputNode"
     }
 }
 
@@ -67,45 +80,41 @@ struct ProcessNode;
 
 #[async_trait]
 impl Node<MemoryStorage> for ProcessNode {
-    type PrepResult = String;
-    type ExecResult = String;
-    type Error = NodeError;
+    type Prep = String;
+    type Output = String;
+    type Error = ChatError;
 
     async fn prep(
         &mut self,
         store: &MemoryStorage,
-        _context: &ExecutionContext,
-    ) -> Result<Self::PrepResult, Self::Error> {
-        let message = store
+        _context: &NodeContext,
+    ) -> Result<Self::Prep, Self::Error> {
+        store
             .get::<String>("current_message")
-            .unwrap()
-            .unwrap_or("".to_string());
-        Ok(message)
+            .map_err(ChatError::new)?
+            .ok_or_else(|| ChatError::new("missing current_message"))
     }
 
     async fn exec(
         &mut self,
-        prep_result: Self::PrepResult,
-        _context: &ExecutionContext,
-    ) -> Result<Self::ExecResult, Self::Error> {
-        println!("🔄 Processing: {}", prep_result);
-        let response = format!("Processed: {prep_result}");
-        Ok(response)
+        message: &Self::Prep,
+        _context: &NodeContext,
+    ) -> Result<Self::Output, Self::Error> {
+        println!("Processing: {message}");
+        Ok(format!("Processed: {message}"))
     }
 
     async fn post(
         &mut self,
         store: &mut MemoryStorage,
-        _prep_result: Self::PrepResult,
-        exec_result: Self::ExecResult,
-        _context: &ExecutionContext,
+        _message: Self::Prep,
+        response: Self::Output,
+        _context: &NodeContext,
     ) -> Result<Action, Self::Error> {
-        store.set("response".to_string(), exec_result).unwrap();
-        Ok(Action::simple("output"))
-    }
-
-    fn name(&self) -> &str {
-        "ProcessNode"
+        store
+            .set("response".to_string(), response)
+            .map_err(ChatError::new)?;
+        Ok(Action::new("output"))
     }
 }
 
@@ -113,43 +122,38 @@ struct OutputNode;
 
 #[async_trait]
 impl Node<MemoryStorage> for OutputNode {
-    type PrepResult = String;
-    type ExecResult = ();
-    type Error = NodeError;
+    type Prep = String;
+    type Output = ();
+    type Error = ChatError;
 
     async fn prep(
         &mut self,
         store: &MemoryStorage,
-        _context: &ExecutionContext,
-    ) -> Result<Self::PrepResult, Self::Error> {
-        let response = store
+        _context: &NodeContext,
+    ) -> Result<Self::Prep, Self::Error> {
+        store
             .get::<String>("response")
-            .unwrap()
-            .unwrap_or("".to_string());
-        Ok(response)
+            .map_err(ChatError::new)?
+            .ok_or_else(|| ChatError::new("missing response"))
     }
 
     async fn exec(
         &mut self,
-        prep_result: Self::PrepResult,
-        _context: &ExecutionContext,
-    ) -> Result<Self::ExecResult, Self::Error> {
-        println!("📤 Output: {}", prep_result);
+        response: &Self::Prep,
+        _context: &NodeContext,
+    ) -> Result<Self::Output, Self::Error> {
+        println!("Output: {response}");
         Ok(())
     }
 
     async fn post(
         &mut self,
         _store: &mut MemoryStorage,
-        _prep_result: Self::PrepResult,
-        _exec_result: Self::ExecResult,
-        _context: &ExecutionContext,
+        _response: Self::Prep,
+        _output: Self::Output,
+        _context: &NodeContext,
     ) -> Result<Action, Self::Error> {
-        Ok(Action::simple("input")) // Back to input for next message
-    }
-
-    fn name(&self) -> &str {
-        "OutputNode"
+        Ok(Action::new("input"))
     }
 }
 
@@ -157,96 +161,65 @@ struct QuitNode;
 
 #[async_trait]
 impl Node<MemoryStorage> for QuitNode {
-    type PrepResult = ();
-    type ExecResult = ();
-    type Error = NodeError;
+    type Prep = ();
+    type Output = ();
+    type Error = ChatError;
 
     async fn prep(
         &mut self,
         _store: &MemoryStorage,
-        _context: &ExecutionContext,
-    ) -> Result<Self::PrepResult, Self::Error> {
+        _context: &NodeContext,
+    ) -> Result<Self::Prep, Self::Error> {
         Ok(())
     }
 
     async fn exec(
         &mut self,
-        _prep_result: Self::PrepResult,
-        _context: &ExecutionContext,
-    ) -> Result<Self::ExecResult, Self::Error> {
-        println!("👋 Chat session ended");
+        _prep: &Self::Prep,
+        _context: &NodeContext,
+    ) -> Result<Self::Output, Self::Error> {
+        println!("Chat session ended");
         Ok(())
     }
 
     async fn post(
         &mut self,
         _store: &mut MemoryStorage,
-        _prep_result: Self::PrepResult,
-        _exec_result: Self::ExecResult,
-        _context: &ExecutionContext,
+        _prep: Self::Prep,
+        _output: Self::Output,
+        _context: &NodeContext,
     ) -> Result<Action, Self::Error> {
-        Ok(Action::simple("complete"))
-    }
-
-    fn name(&self) -> &str {
-        "QuitNode"
+        Ok(Action::new("complete"))
     }
 }
 
 #[tokio::main]
 async fn main() -> Result<(), Box<dyn std::error::Error>> {
-    println!("💬 Chat Application Loop Pattern - Simplified Approach");
-    println!("======================================================\n");
-
-    let mut store = MemoryStorage::new();
-
-    println!("✨ Building Chat Flow with Natural Loop Support");
-    println!("----------------------------------------------");
+    println!("Chat Application Loop Pattern");
 
     let mut chat_flow = FlowBuilder::new()
-        .start_node("input")
-        .max_steps(20) // Simple protection against infinite loops
         .node("input", InputNode)
         .node("process", ProcessNode)
         .node("output", OutputNode)
         .node("quit", QuitNode)
+        .start("input")
         .route("input", "process", "process")
         .route("process", "output", "output")
-        .route("output", "input", "input") // Natural chat loop - no workarounds needed!
+        .route("output", "input", "input")
         .route("input", "quit", "quit")
-        .terminal_route("quit", "complete")
-        .build();
+        .build()?;
 
-    println!("Flow configuration:");
-    println!("  max_steps: {}", chat_flow.config().max_steps);
-    println!("  start_node_id: {}", chat_flow.config().start_node_id);
-    println!();
+    let mut store = MemoryStorage::new();
+    let execution = chat_flow.run_recorded(&mut store).await?;
 
-    println!("🚀 Executing Chat Flow...");
-    println!("-------------------------");
-
-    match chat_flow.execute(&mut store).await {
-        Ok(result) => {
-            println!("✅ Chat flow executed successfully!");
-            println!("   Steps executed: {}", result.steps_executed);
-            println!(
-                "   Messages processed: {}",
-                store.get::<i32>("message_count").unwrap().unwrap_or(0)
-            );
-            println!("   Execution path: {:?}", result.execution_path);
-        }
-        Err(e) => {
-            println!("❌ Chat flow failed: {e}");
-        }
-    }
-
-    println!("\n🎯 Key Benefits");
-    println!("===============");
-    println!("• ✅ Natural loop patterns work out of the box");
-    println!("• ✅ No need to disable cycle detection");
-    println!("• ✅ Simple max_steps protection against infinite loops");
-    println!("• ✅ Clean, readable flow definitions");
-    println!("• ✅ Perfect for chat, game loops, and iterative workflows");
+    println!("Chat flow executed successfully");
+    println!("Steps executed: {}", execution.steps);
+    println!(
+        "Messages processed: {}",
+        store.get::<i32>("message_count")?.unwrap_or(0)
+    );
+    println!("Execution path: {:?}", execution.path);
+    println!("Final action: {}", execution.final_action);
 
     Ok(())
 }

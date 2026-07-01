@@ -1,46 +1,51 @@
 # CosmoFlow Examples
 
-This directory contains **simple examples** designed for learning CosmoFlow's core concepts. These examples prioritize clarity and fast compilation over advanced features.
+`examples/` is the feature showcase for CosmoFlow. Each program highlights one framework capability with minimal application code.
+
+For complete applications built with CosmoFlow, use [`../../cookbook`](../../cookbook).
 
 ## Learning Path
 
-Start here to understand CosmoFlow fundamentals:
+1. `hello_world.rs`
+   Basic sync `Node`, `FlowBuilder`, strongly typed state, and natural termination.
 
-### 1. **hello_world.rs** - Your First Workflow
-- Basic node creation and execution
-- Data flow between nodes using SharedStore
-- Understanding the core CosmoFlow concepts
+2. `custom_node.rs`
+   Fallible custom nodes with domain validation and typed state.
 
-### 2. **simple_loops.rs** - Control Flow Patterns  
-- Loop constructs and iteration patterns
-- Conditional execution and state management
-- Building more complex workflows step by step
+3. `simple_loops.rs`
+   Loops as ordinary state-machine routes.
 
-### 3. **custom_node.rs** - Advanced Node Implementation
-- Creating custom nodes with complex logic
-- Custom storage backends and data persistence
-- Statistical analysis and data aggregation patterns
+4. `action_params.rs`
+   `Action` params carried with a transition. Routing still uses only the action name.
 
-## Running Examples
+5. `flow_macro.rs`
+   Declarative construction with `cosmoflow::flow::flow!`.
 
-All examples use **sync-only features** for minimal setup:
+6. `nested_flow.rs`
+   A built `Flow<S>` used as a node inside another flow.
+
+7. `shared_store.rs`
+   `MemoryStorage` as an optional dynamic key-value state model.
+
+8. `async_flow.rs`
+   The async feature and async `Node` trait.
+
+## Run Sync Examples
 
 ```bash
-# Start with the basics
-cargo run --example hello_world
-
-# Learn control flow patterns
-cargo run --example simple_loops
-
-# Advanced node customization
-cargo run --example custom_node
+cargo run -p cosmoflow --example hello_world
+cargo run -p cosmoflow --example custom_node
+cargo run -p cosmoflow --example simple_loops
+cargo run -p cosmoflow --example action_params
+cargo run -p cosmoflow --example flow_macro
+cargo run -p cosmoflow --example nested_flow
+cargo run -p cosmoflow --example shared_store
 ```
 
-## Ready for Production?
+## Run Async Example
 
-Once you've mastered these basics, explore the **`../cookbook/`** directory for:
+```bash
+cargo run -p cosmoflow --features async --example async_flow
+```
 
-- **async-workflows/** - Advanced async patterns with FlowBuilder
-- **chat-assistant/** - Production chat applications  
-- **llm-request-handler/** - LLM integration patterns
-- **unified-workflow/** - Complex workflow compositions
+Most examples are intentionally sync-only so the core ideas stay readable. They still compile under `--features async --examples`, but they print a pointer to `async_flow` instead of duplicating every node implementation.

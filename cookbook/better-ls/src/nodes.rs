@@ -1,13 +1,31 @@
-use std::{fs, path::Path, time::SystemTime};
+use std::{error::Error, fmt, fs, path::Path, time::SystemTime};
 
+use async_trait::async_trait;
 use clap::Parser;
-use cosmoflow::{Action, ExecutionContext, Node, NodeError, SharedStore, prelude::MemoryStorage};
+use cosmoflow::{Action, Node, NodeContext, SharedStore, prelude::MemoryStorage};
 use tabled::{Table, settings::Color};
 
 use crate::{
     Args, FileEntry,
     utils::{format_permissions, format_size, format_time},
 };
+
+#[derive(Debug)]
+pub struct BetterLsError(String);
+
+impl BetterLsError {
+    fn new(message: impl Into<String>) -> Self {
+        Self(message.into())
+    }
+}
+
+impl fmt::Display for BetterLsError {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        f.write_str(&self.0)
+    }
+}
+
+impl Error for BetterLsError {}
 
 /// Input node that processes command line arguments using clap
 pub struct InputNode {
@@ -28,58 +46,59 @@ impl Default for InputNode {
     }
 }
 
+#[async_trait]
 impl Node<MemoryStorage> for InputNode {
-    type PrepResult = Args;
-    type ExecResult = Args;
-    type Error = NodeError;
+    type Prep = Args;
+    type Output = Args;
+    type Error = BetterLsError;
 
-    fn prep(
+    async fn prep(
         &mut self,
         _store: &MemoryStorage,
-        _context: &ExecutionContext,
-    ) -> Result<Self::PrepResult, Self::Error> {
+        _context: &NodeContext,
+    ) -> Result<Self::Prep, Self::Error> {
         // Return the parsed arguments
         Ok(self.args.clone())
     }
 
-    fn exec(
+    async fn exec(
         &mut self,
-        prep_result: Self::PrepResult,
-        _context: &ExecutionContext,
-    ) -> Result<Self::ExecResult, Self::Error> {
+        prep_result: &Self::Prep,
+        _context: &NodeContext,
+    ) -> Result<Self::Output, Self::Error> {
         // Get directory path from arguments or default to current directory
         let target_path = prep_result.path.as_deref().unwrap_or(".");
         let path = Path::new(target_path);
 
         // Validate that the path exists and is a directory
         if !path.exists() {
-            return Err(NodeError::ValidationError(format!(
-                "Path does not exist: {target_path}"
+            return Err(BetterLsError::new(format!(
+                "path does not exist: {target_path}"
             )));
         }
 
         if !path.is_dir() {
-            return Err(NodeError::ValidationError(format!(
-                "Path is not a directory: {target_path}"
+            return Err(BetterLsError::new(format!(
+                "path is not a directory: {target_path}"
             )));
         }
 
-        Ok(prep_result)
+        Ok(prep_result.clone())
     }
 
-    fn post(
+    async fn post(
         &mut self,
         store: &mut MemoryStorage,
-        _prep_result: Self::PrepResult,
-        exec_result: Self::ExecResult,
-        _context: &ExecutionContext,
+        _prep_result: Self::Prep,
+        exec_result: Self::Output,
+        _context: &NodeContext,
     ) -> Result<Action, Self::Error> {
         // Store the parsed arguments
         store
             .set("args".to_string(), exec_result)
-            .map_err(|e| NodeError::StorageError(e.to_string()))?;
+            .map_err(|e| BetterLsError::new(e.to_string()))?;
 
-        Ok(Action::simple("list"))
+        Ok(Action::new("list"))
     }
 
     fn name(&self) -> &str {
@@ -90,46 +109,47 @@ impl Node<MemoryStorage> for InputNode {
 /// LS node that lists directory contents
 pub struct LsNode;
 
+#[async_trait]
 impl Node<MemoryStorage> for LsNode {
-    type PrepResult = Args;
-    type ExecResult = Vec<FileEntry>;
-    type Error = NodeError;
+    type Prep = Args;
+    type Output = Vec<FileEntry>;
+    type Error = BetterLsError;
 
-    fn prep(
+    async fn prep(
         &mut self,
         store: &MemoryStorage,
-        _context: &ExecutionContext,
-    ) -> Result<Self::PrepResult, Self::Error> {
+        _context: &NodeContext,
+    ) -> Result<Self::Prep, Self::Error> {
         // Get the parsed arguments from storage
         let args: Args = store
             .get("args")
-            .map_err(|e| NodeError::StorageError(e.to_string()))?
-            .ok_or_else(|| NodeError::ValidationError("Arguments not found".to_string()))?;
+            .map_err(|e| BetterLsError::new(e.to_string()))?
+            .ok_or_else(|| BetterLsError::new("arguments not found"))?;
 
         Ok(args)
     }
 
-    fn exec(
+    async fn exec(
         &mut self,
-        prep_result: Self::PrepResult,
-        _context: &ExecutionContext,
-    ) -> Result<Self::ExecResult, Self::Error> {
+        prep_result: &Self::Prep,
+        _context: &NodeContext,
+    ) -> Result<Self::Output, Self::Error> {
         let target_path = prep_result.path.as_deref().unwrap_or(".");
         let path = Path::new(target_path);
 
         // Read directory contents
         let entries = fs::read_dir(path)
-            .map_err(|e| NodeError::ExecutionError(format!("Failed to read directory: {e}")))?;
+            .map_err(|e| BetterLsError::new(format!("failed to read directory: {e}")))?;
 
         let mut file_entries = Vec::new();
 
         for entry in entries {
-            let entry = entry
-                .map_err(|e| NodeError::ExecutionError(format!("Failed to read entry: {e}")))?;
+            let entry =
+                entry.map_err(|e| BetterLsError::new(format!("failed to read entry: {e}")))?;
 
             let metadata = entry
                 .metadata()
-                .map_err(|e| NodeError::ExecutionError(format!("Failed to read metadata: {e}")))?;
+                .map_err(|e| BetterLsError::new(format!("failed to read metadata: {e}")))?;
 
             let name = entry.file_name().to_string_lossy().to_string();
 
@@ -234,19 +254,19 @@ impl Node<MemoryStorage> for LsNode {
         Ok(file_entries)
     }
 
-    fn post(
+    async fn post(
         &mut self,
         store: &mut MemoryStorage,
-        _prep_result: Self::PrepResult,
-        exec_result: Self::ExecResult,
-        _context: &ExecutionContext,
+        _prep_result: Self::Prep,
+        exec_result: Self::Output,
+        _context: &NodeContext,
     ) -> Result<Action, Self::Error> {
         // Store the file listing
         store
             .set("file_listing".to_string(), exec_result)
-            .map_err(|e| NodeError::StorageError(e.to_string()))?;
+            .map_err(|e| BetterLsError::new(e.to_string()))?;
 
-        Ok(Action::simple("output"))
+        Ok(Action::new("output"))
     }
 
     fn name(&self) -> &str {
@@ -257,35 +277,36 @@ impl Node<MemoryStorage> for LsNode {
 /// Output node that formats and displays the results
 pub struct OutputNode;
 
+#[async_trait]
 impl Node<MemoryStorage> for OutputNode {
-    type PrepResult = (Args, Vec<FileEntry>);
-    type ExecResult = String;
-    type Error = NodeError;
+    type Prep = (Args, Vec<FileEntry>);
+    type Output = String;
+    type Error = BetterLsError;
 
-    fn prep(
+    async fn prep(
         &mut self,
         store: &MemoryStorage,
-        _context: &ExecutionContext,
-    ) -> Result<Self::PrepResult, Self::Error> {
+        _context: &NodeContext,
+    ) -> Result<Self::Prep, Self::Error> {
         // Get both the args and file listing
         let args: Args = store
             .get("args")
-            .map_err(|e| NodeError::StorageError(e.to_string()))?
-            .ok_or_else(|| NodeError::ValidationError("Arguments not found".to_string()))?;
+            .map_err(|e| BetterLsError::new(e.to_string()))?
+            .ok_or_else(|| BetterLsError::new("arguments not found"))?;
 
         let file_listing: Vec<FileEntry> = store
             .get("file_listing")
-            .map_err(|e| NodeError::StorageError(e.to_string()))?
-            .ok_or_else(|| NodeError::ValidationError("File listing not found".to_string()))?;
+            .map_err(|e| BetterLsError::new(e.to_string()))?
+            .ok_or_else(|| BetterLsError::new("file listing not found"))?;
 
         Ok((args, file_listing))
     }
 
-    fn exec(
+    async fn exec(
         &mut self,
-        (_args, file_listing): Self::PrepResult,
-        _context: &ExecutionContext,
-    ) -> Result<Self::ExecResult, Self::Error> {
+        (_args, file_listing): &Self::Prep,
+        _context: &NodeContext,
+    ) -> Result<Self::Output, Self::Error> {
         let mut output = String::new();
 
         if file_listing.is_empty() {
@@ -295,7 +316,7 @@ impl Node<MemoryStorage> for OutputNode {
 
             // Create table with proper alignment and colors using tabled's Color enum
             let table_string = {
-                Table::new(file_listing)
+                Table::new(file_listing.clone())
                     .with(Style::rounded())
                     .modify(tabled::settings::object::Rows::new(1..), Alignment::left())
                     .modify(Columns::new(2..=2), Alignment::right())
@@ -312,22 +333,22 @@ impl Node<MemoryStorage> for OutputNode {
         Ok(output)
     }
 
-    fn post(
+    async fn post(
         &mut self,
         store: &mut MemoryStorage,
-        _prep_result: Self::PrepResult,
-        exec_result: Self::ExecResult,
-        _context: &ExecutionContext,
+        _prep_result: Self::Prep,
+        exec_result: Self::Output,
+        _context: &NodeContext,
     ) -> Result<Action, Self::Error> {
         // Store formatted output for potential reuse - demonstrating CosmoFlow's data flow
         store
             .set("formatted_output".to_string(), exec_result.clone())
-            .map_err(|e| NodeError::StorageError(e.to_string()))?;
+            .map_err(|e| BetterLsError::new(e.to_string()))?;
 
         // Display the formatted output
         println!("{exec_result}");
 
-        Ok(Action::simple("complete"))
+        Ok(Action::new("complete"))
     }
 
     fn name(&self) -> &str {

@@ -1,470 +1,333 @@
 use crate::{LexerContext, TokenType};
-use cosmoflow::prelude::*;
+use async_trait::async_trait;
+use cosmoflow::{shared_store::backends::MemoryStorage, Action, Node, NodeContext, SharedStore};
+use std::{error::Error, fmt};
 
-/// Dispatcher node - determines which sub-flow to route to
+#[derive(Debug)]
+pub struct LexerError(String);
+
+impl LexerError {
+    fn new(message: impl Into<String>) -> Self {
+        Self(message.into())
+    }
+}
+
+impl fmt::Display for LexerError {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        f.write_str(&self.0)
+    }
+}
+
+impl Error for LexerError {}
+
+fn load_context(store: &MemoryStorage) -> Result<LexerContext, LexerError> {
+    store
+        .get("lexer_context")
+        .map_err(|error| LexerError::new(error.to_string()))?
+        .ok_or_else(|| LexerError::new("lexer_context not found"))
+}
+
+fn save_context(store: &mut MemoryStorage, context: LexerContext) -> Result<(), LexerError> {
+    store
+        .set("lexer_context".to_string(), context)
+        .map_err(|error| LexerError::new(error.to_string()))
+}
+
+/// Dispatcher node determines which token sub-flow should run next.
 pub struct DispatcherNode;
 
-impl<S: SharedStore> Node<S> for DispatcherNode {
-    type PrepResult = ();
-    type ExecResult = String;
-    type Error = NodeError;
+#[async_trait]
+impl Node<MemoryStorage> for DispatcherNode {
+    type Prep = LexerContext;
+    type Output = &'static str;
+    type Error = LexerError;
 
-    fn prep(&mut self, _store: &S, _context: &ExecutionContext) -> Result<(), Self::Error> {
-        Ok(())
+    async fn prep(
+        &mut self,
+        store: &MemoryStorage,
+        _context: &NodeContext,
+    ) -> Result<Self::Prep, Self::Error> {
+        load_context(store)
     }
 
-    fn exec(
+    async fn exec(
         &mut self,
-        _prep_result: (),
-        _context: &ExecutionContext,
-    ) -> Result<String, Self::Error> {
-        Ok("analyzed".to_string())
-    }
-
-    fn post(
-        &mut self,
-        store: &mut S,
-        _prep_result: (),
-        _exec_result: String,
-        _context: &ExecutionContext,
-    ) -> Result<Action, Self::Error> {
-        let lexer_ctx: Option<LexerContext> = store.get("lexer_context").unwrap_or_default();
-        let lexer_ctx = lexer_ctx.unwrap_or_else(|| LexerContext::new(String::new()));
-
+        lexer_ctx: &Self::Prep,
+        _context: &NodeContext,
+    ) -> Result<Self::Output, Self::Error> {
         if lexer_ctx.is_at_end() {
-            return Ok(Action::simple("end_of_input"));
+            return Ok("end_of_input");
         }
 
-        match lexer_ctx.current_char() {
-            Some(' ') | Some('\t') | Some('\n') | Some('\r') => {
-                Ok(Action::simple("whitespace_flow"))
-            }
-            Some('a'..='z') | Some('A'..='Z') | Some('_') => Ok(Action::simple("identifier_flow")),
-            Some('0'..='9') => Ok(Action::simple("integer_flow")),
-            Some('"') => Ok(Action::simple("string_flow")),
-            Some('/') if lexer_ctx.peek_char() == Some('/') => Ok(Action::simple("comment_flow")),
+        Ok(match lexer_ctx.current_char() {
+            Some(' ') | Some('\t') | Some('\n') | Some('\r') => "whitespace_flow",
+            Some('a'..='z') | Some('A'..='Z') | Some('_') => "identifier_flow",
+            Some('0'..='9') => "integer_flow",
+            Some('"') => "string_flow",
+            Some('/') if lexer_ctx.peek_char() == Some('/') => "comment_flow",
             Some('+') | Some('-') | Some('*') | Some('/') | Some('=') | Some('<') | Some('>')
-            | Some('!') => Ok(Action::simple("operator_flow")),
+            | Some('!') => "operator_flow",
             Some('(') | Some(')') | Some('{') | Some('}') | Some('[') | Some(']') | Some(';')
-            | Some(',') | Some('.') => Ok(Action::simple("delimiter_flow")),
-            _ => Ok(Action::simple("unknown_flow")),
-        }
+            | Some(',') | Some('.') => "delimiter_flow",
+            _ => "unknown_flow",
+        })
+    }
+
+    async fn post(
+        &mut self,
+        _store: &mut MemoryStorage,
+        _prep: Self::Prep,
+        output: Self::Output,
+        _context: &NodeContext,
+    ) -> Result<Action, Self::Error> {
+        Ok(Action::new(output))
     }
 }
 
-/// End of input node
+/// End-of-input node appends the final EOF token and terminates naturally.
 pub struct EndOfInputNode;
 
-impl<S: SharedStore> Node<S> for EndOfInputNode {
-    type PrepResult = ();
-    type ExecResult = ();
-    type Error = NodeError;
+#[async_trait]
+impl Node<MemoryStorage> for EndOfInputNode {
+    type Prep = LexerContext;
+    type Output = LexerContext;
+    type Error = LexerError;
 
-    fn prep(&mut self, _store: &S, _context: &ExecutionContext) -> Result<(), Self::Error> {
-        Ok(())
-    }
-
-    fn exec(&mut self, _prep_result: (), _context: &ExecutionContext) -> Result<(), Self::Error> {
-        Ok(())
-    }
-
-    fn post(
+    async fn prep(
         &mut self,
-        store: &mut S,
-        _prep_result: (),
-        _exec_result: (),
-        _context: &ExecutionContext,
-    ) -> Result<Action, Self::Error> {
-        let lexer_ctx: Option<LexerContext> = store.get("lexer_context").unwrap_or_default();
-        let mut lexer_ctx = lexer_ctx.unwrap_or_else(|| LexerContext::new(String::new()));
+        store: &MemoryStorage,
+        _context: &NodeContext,
+    ) -> Result<Self::Prep, Self::Error> {
+        load_context(store)
+    }
 
+    async fn exec(
+        &mut self,
+        lexer_ctx: &Self::Prep,
+        _context: &NodeContext,
+    ) -> Result<Self::Output, Self::Error> {
+        let mut lexer_ctx = lexer_ctx.clone();
         lexer_ctx.add_token(TokenType::EndOfInput, String::new());
-        store.set("lexer_context".to_string(), &lexer_ctx).unwrap();
+        Ok(lexer_ctx)
+    }
 
-        Ok(Action::simple("complete"))
+    async fn post(
+        &mut self,
+        store: &mut MemoryStorage,
+        _prep: Self::Prep,
+        output: Self::Output,
+        _context: &NodeContext,
+    ) -> Result<Action, Self::Error> {
+        save_context(store, output)?;
+        Ok(Action::new("complete"))
     }
 }
 
-/// Node that returns control to the dispatcher after processing a token
+/// Node that returns control to the dispatcher after a token sub-flow completes.
 pub struct ReturnToDispatcherNode;
 
-impl<S: SharedStore> Node<S> for ReturnToDispatcherNode {
-    type PrepResult = ();
-    type ExecResult = ();
-    type Error = NodeError;
+#[async_trait]
+impl Node<MemoryStorage> for ReturnToDispatcherNode {
+    type Prep = ();
+    type Output = ();
+    type Error = LexerError;
 
-    fn prep(&mut self, _store: &S, _context: &ExecutionContext) -> Result<(), Self::Error> {
-        Ok(())
-    }
-
-    fn exec(&mut self, _prep_result: (), _context: &ExecutionContext) -> Result<(), Self::Error> {
-        Ok(())
-    }
-
-    fn post(
+    async fn prep(
         &mut self,
-        _store: &mut S,
-        _prep_result: (),
-        _exec_result: (),
-        _context: &ExecutionContext,
+        _store: &MemoryStorage,
+        _context: &NodeContext,
+    ) -> Result<Self::Prep, Self::Error> {
+        Ok(())
+    }
+
+    async fn exec(
+        &mut self,
+        _prep: &Self::Prep,
+        _context: &NodeContext,
+    ) -> Result<Self::Output, Self::Error> {
+        Ok(())
+    }
+
+    async fn post(
+        &mut self,
+        _store: &mut MemoryStorage,
+        _prep: Self::Prep,
+        _output: Self::Output,
+        _context: &NodeContext,
     ) -> Result<Action, Self::Error> {
-        Ok(Action::simple("dispatch"))
+        Ok(Action::new("dispatch"))
     }
 }
 
-/// Optimized whitespace collector node
-pub struct WhitespaceCollectorNode;
+macro_rules! collector_node {
+    ($node:ident, $collector:ident) => {
+        pub struct $node;
 
-impl<S: SharedStore> Node<S> for WhitespaceCollectorNode {
-    type PrepResult = ();
-    type ExecResult = ();
-    type Error = NodeError;
+        #[async_trait]
+        impl Node<MemoryStorage> for $node {
+            type Prep = LexerContext;
+            type Output = LexerContext;
+            type Error = LexerError;
 
-    fn prep(&mut self, _store: &S, _context: &ExecutionContext) -> Result<(), Self::Error> {
-        Ok(())
-    }
+            async fn prep(
+                &mut self,
+                store: &MemoryStorage,
+                _context: &NodeContext,
+            ) -> Result<Self::Prep, Self::Error> {
+                load_context(store)
+            }
 
-    fn exec(&mut self, _prep_result: (), _context: &ExecutionContext) -> Result<(), Self::Error> {
-        Ok(())
-    }
+            async fn exec(
+                &mut self,
+                lexer_ctx: &Self::Prep,
+                _context: &NodeContext,
+            ) -> Result<Self::Output, Self::Error> {
+                let mut lexer_ctx = lexer_ctx.clone();
+                $collector(&mut lexer_ctx);
+                Ok(lexer_ctx)
+            }
 
-    fn post(
-        &mut self,
-        store: &mut S,
-        _prep_result: (),
-        _exec_result: (),
-        _context: &ExecutionContext,
-    ) -> Result<Action, Self::Error> {
-        let lexer_ctx: Option<LexerContext> = store.get("lexer_context").unwrap_or_default();
-        let mut lexer_ctx = lexer_ctx.unwrap_or_else(|| LexerContext::new(String::new()));
-
-        let mut lexeme = String::new();
-        while let Some(ch) = lexer_ctx.current_char() {
-            if ch.is_whitespace() {
-                lexeme.push(ch);
-                lexer_ctx.advance();
-            } else {
-                break;
+            async fn post(
+                &mut self,
+                store: &mut MemoryStorage,
+                _prep: Self::Prep,
+                output: Self::Output,
+                _context: &NodeContext,
+            ) -> Result<Action, Self::Error> {
+                save_context(store, output)?;
+                Ok(Action::new("complete"))
             }
         }
-
-        lexer_ctx.add_token(TokenType::Whitespace, lexeme);
-        store.set("lexer_context".to_string(), &lexer_ctx).unwrap();
-
-        Ok(Action::simple("complete"))
-    }
+    };
 }
 
-/// Optimized identifier collector node with keyword classification
-pub struct IdentifierCollectorNode;
+collector_node!(WhitespaceCollectorNode, collect_whitespace);
+collector_node!(IdentifierCollectorNode, collect_identifier);
+collector_node!(IntegerCollectorNode, collect_integer);
+collector_node!(StringCollectorNode, collect_string);
+collector_node!(OperatorCollectorNode, collect_operator);
+collector_node!(DelimiterCollectorNode, collect_delimiter);
+collector_node!(CommentCollectorNode, collect_comment);
+collector_node!(UnknownCollectorNode, collect_unknown);
 
-impl<S: SharedStore> Node<S> for IdentifierCollectorNode {
-    type PrepResult = ();
-    type ExecResult = ();
-    type Error = NodeError;
-
-    fn prep(&mut self, _store: &S, _context: &ExecutionContext) -> Result<(), Self::Error> {
-        Ok(())
-    }
-
-    fn exec(&mut self, _prep_result: (), _context: &ExecutionContext) -> Result<(), Self::Error> {
-        Ok(())
-    }
-
-    fn post(
-        &mut self,
-        store: &mut S,
-        _prep_result: (),
-        _exec_result: (),
-        _context: &ExecutionContext,
-    ) -> Result<Action, Self::Error> {
-        let lexer_ctx: Option<LexerContext> = store.get("lexer_context").unwrap_or_default();
-        let mut lexer_ctx = lexer_ctx.unwrap_or_else(|| LexerContext::new(String::new()));
-
-        let mut lexeme = String::new();
-        while let Some(ch) = lexer_ctx.current_char() {
-            if ch.is_alphanumeric() || ch == '_' {
-                lexeme.push(ch);
-                lexer_ctx.advance();
-            } else {
-                break;
-            }
-        }
-
-        // Check if it's a keyword
-        let token_type = match lexeme.as_str() {
-            "if" | "else" | "while" | "for" | "fn" | "let" | "const" | "var" | "return"
-            | "true" | "false" => TokenType::Keyword,
-            _ => TokenType::Identifier,
-        };
-
-        lexer_ctx.add_token(token_type, lexeme);
-        store.set("lexer_context".to_string(), &lexer_ctx).unwrap();
-
-        Ok(Action::simple("complete"))
-    }
-}
-
-/// Optimized integer collector node
-pub struct IntegerCollectorNode;
-
-impl<S: SharedStore> Node<S> for IntegerCollectorNode {
-    type PrepResult = ();
-    type ExecResult = ();
-    type Error = NodeError;
-
-    fn prep(&mut self, _store: &S, _context: &ExecutionContext) -> Result<(), Self::Error> {
-        Ok(())
-    }
-
-    fn exec(&mut self, _prep_result: (), _context: &ExecutionContext) -> Result<(), Self::Error> {
-        Ok(())
-    }
-
-    fn post(
-        &mut self,
-        store: &mut S,
-        _prep_result: (),
-        _exec_result: (),
-        _context: &ExecutionContext,
-    ) -> Result<Action, Self::Error> {
-        let lexer_ctx: Option<LexerContext> = store.get("lexer_context").unwrap_or_default();
-        let mut lexer_ctx = lexer_ctx.unwrap_or_else(|| LexerContext::new(String::new()));
-
-        let mut lexeme = String::new();
-        while let Some(ch) = lexer_ctx.current_char() {
-            if ch.is_ascii_digit() {
-                lexeme.push(ch);
-                lexer_ctx.advance();
-            } else {
-                break;
-            }
-        }
-
-        lexer_ctx.add_token(TokenType::Integer, lexeme);
-        store.set("lexer_context".to_string(), &lexer_ctx).unwrap();
-
-        Ok(Action::simple("complete"))
-    }
-}
-
-/// Optimized string collector node
-pub struct StringCollectorNode;
-
-impl<S: SharedStore> Node<S> for StringCollectorNode {
-    type PrepResult = ();
-    type ExecResult = ();
-    type Error = NodeError;
-
-    fn prep(&mut self, _store: &S, _context: &ExecutionContext) -> Result<(), Self::Error> {
-        Ok(())
-    }
-
-    fn exec(&mut self, _prep_result: (), _context: &ExecutionContext) -> Result<(), Self::Error> {
-        Ok(())
-    }
-
-    fn post(
-        &mut self,
-        store: &mut S,
-        _prep_result: (),
-        _exec_result: (),
-        _context: &ExecutionContext,
-    ) -> Result<Action, Self::Error> {
-        let lexer_ctx: Option<LexerContext> = store.get("lexer_context").unwrap_or_default();
-        let mut lexer_ctx = lexer_ctx.unwrap_or_else(|| LexerContext::new(String::new()));
-
-        let mut lexeme = String::new();
-
-        // Consume opening quote
-        if let Some('"') = lexer_ctx.current_char() {
-            lexeme.push(lexer_ctx.advance().unwrap());
-        }
-
-        let mut escaped = false;
-        while let Some(ch) = lexer_ctx.current_char() {
+fn collect_whitespace(lexer_ctx: &mut LexerContext) {
+    let mut lexeme = String::new();
+    while let Some(ch) = lexer_ctx.current_char() {
+        if ch.is_whitespace() {
             lexeme.push(ch);
             lexer_ctx.advance();
-
-            if escaped {
-                escaped = false;
-            } else if ch == '\\' {
-                escaped = true;
-            } else if ch == '"' {
-                break;
-            }
+        } else {
+            break;
         }
-
-        lexer_ctx.add_token(TokenType::String, lexeme);
-        store.set("lexer_context".to_string(), &lexer_ctx).unwrap();
-
-        Ok(Action::simple("complete"))
     }
+
+    lexer_ctx.add_token(TokenType::Whitespace, lexeme);
 }
 
-/// Optimized operator collector node
-pub struct OperatorCollectorNode;
-
-impl<S: SharedStore> Node<S> for OperatorCollectorNode {
-    type PrepResult = ();
-    type ExecResult = ();
-    type Error = NodeError;
-
-    fn prep(&mut self, _store: &S, _context: &ExecutionContext) -> Result<(), Self::Error> {
-        Ok(())
-    }
-
-    fn exec(&mut self, _prep_result: (), _context: &ExecutionContext) -> Result<(), Self::Error> {
-        Ok(())
-    }
-
-    fn post(
-        &mut self,
-        store: &mut S,
-        _prep_result: (),
-        _exec_result: (),
-        _context: &ExecutionContext,
-    ) -> Result<Action, Self::Error> {
-        let lexer_ctx: Option<LexerContext> = store.get("lexer_context").unwrap_or_default();
-        let mut lexer_ctx = lexer_ctx.unwrap_or_else(|| LexerContext::new(String::new()));
-
-        let mut lexeme = String::new();
-        if let Some(ch) = lexer_ctx.current_char() {
+fn collect_identifier(lexer_ctx: &mut LexerContext) {
+    let mut lexeme = String::new();
+    while let Some(ch) = lexer_ctx.current_char() {
+        if ch.is_alphanumeric() || ch == '_' {
             lexeme.push(ch);
             lexer_ctx.advance();
-
-            // Handle two-character operators
-            if let Some(next_ch) = lexer_ctx.current_char() {
-                let two_char = format!("{ch}{next_ch}");
-                match two_char.as_str() {
-                    "==" | "!=" | "<=" | ">=" | "++" | "--" | "&&" | "||" => {
-                        lexeme.push(next_ch);
-                        lexer_ctx.advance();
-                    }
-                    _ => {}
-                }
-            }
+        } else {
+            break;
         }
-
-        lexer_ctx.add_token(TokenType::Operator, lexeme);
-        store.set("lexer_context".to_string(), &lexer_ctx).unwrap();
-
-        Ok(Action::simple("complete"))
     }
+
+    let token_type = match lexeme.as_str() {
+        "if" | "else" | "while" | "for" | "fn" | "let" | "const" | "var" | "return" | "true"
+        | "false" => TokenType::Keyword,
+        _ => TokenType::Identifier,
+    };
+
+    lexer_ctx.add_token(token_type, lexeme);
 }
 
-/// Optimized delimiter collector node
-pub struct DelimiterCollectorNode;
-
-impl<S: SharedStore> Node<S> for DelimiterCollectorNode {
-    type PrepResult = ();
-    type ExecResult = ();
-    type Error = NodeError;
-
-    fn prep(&mut self, _store: &S, _context: &ExecutionContext) -> Result<(), Self::Error> {
-        Ok(())
-    }
-
-    fn exec(&mut self, _prep_result: (), _context: &ExecutionContext) -> Result<(), Self::Error> {
-        Ok(())
-    }
-
-    fn post(
-        &mut self,
-        store: &mut S,
-        _prep_result: (),
-        _exec_result: (),
-        _context: &ExecutionContext,
-    ) -> Result<Action, Self::Error> {
-        let lexer_ctx: Option<LexerContext> = store.get("lexer_context").unwrap_or_default();
-        let mut lexer_ctx = lexer_ctx.unwrap_or_else(|| LexerContext::new(String::new()));
-
-        let mut lexeme = String::new();
-        if let Some(ch) = lexer_ctx.advance() {
-            lexeme.push(ch);
-        }
-
-        lexer_ctx.add_token(TokenType::Delimiter, lexeme);
-        store.set("lexer_context".to_string(), &lexer_ctx).unwrap();
-
-        Ok(Action::simple("complete"))
-    }
-}
-
-/// Optimized comment collector node
-pub struct CommentCollectorNode;
-
-impl<S: SharedStore> Node<S> for CommentCollectorNode {
-    type PrepResult = ();
-    type ExecResult = ();
-    type Error = NodeError;
-
-    fn prep(&mut self, _store: &S, _context: &ExecutionContext) -> Result<(), Self::Error> {
-        Ok(())
-    }
-
-    fn exec(&mut self, _prep_result: (), _context: &ExecutionContext) -> Result<(), Self::Error> {
-        Ok(())
-    }
-
-    fn post(
-        &mut self,
-        store: &mut S,
-        _prep_result: (),
-        _exec_result: (),
-        _context: &ExecutionContext,
-    ) -> Result<Action, Self::Error> {
-        let lexer_ctx: Option<LexerContext> = store.get("lexer_context").unwrap_or_default();
-        let mut lexer_ctx = lexer_ctx.unwrap_or_else(|| LexerContext::new(String::new()));
-
-        let mut lexeme = String::new();
-        while let Some(ch) = lexer_ctx.current_char() {
-            if ch == '\n' {
-                break;
-            }
+fn collect_integer(lexer_ctx: &mut LexerContext) {
+    let mut lexeme = String::new();
+    while let Some(ch) = lexer_ctx.current_char() {
+        if ch.is_ascii_digit() {
             lexeme.push(ch);
             lexer_ctx.advance();
+        } else {
+            break;
         }
-
-        lexer_ctx.add_token(TokenType::Comment, lexeme);
-        store.set("lexer_context".to_string(), &lexer_ctx).unwrap();
-
-        Ok(Action::simple("complete"))
     }
+
+    lexer_ctx.add_token(TokenType::Integer, lexeme);
 }
 
-/// Optimized unknown token collector node
-pub struct UnknownCollectorNode;
+fn collect_string(lexer_ctx: &mut LexerContext) {
+    let mut lexeme = String::new();
 
-impl<S: SharedStore> Node<S> for UnknownCollectorNode {
-    type PrepResult = ();
-    type ExecResult = ();
-    type Error = NodeError;
-
-    fn prep(&mut self, _store: &S, _context: &ExecutionContext) -> Result<(), Self::Error> {
-        Ok(())
+    if let Some('"') = lexer_ctx.current_char() {
+        lexeme.push('"');
+        lexer_ctx.advance();
     }
 
-    fn exec(&mut self, _prep_result: (), _context: &ExecutionContext) -> Result<(), Self::Error> {
-        Ok(())
-    }
+    let mut escaped = false;
+    while let Some(ch) = lexer_ctx.current_char() {
+        lexeme.push(ch);
+        lexer_ctx.advance();
 
-    fn post(
-        &mut self,
-        store: &mut S,
-        _prep_result: (),
-        _exec_result: (),
-        _context: &ExecutionContext,
-    ) -> Result<Action, Self::Error> {
-        let lexer_ctx: Option<LexerContext> = store.get("lexer_context").unwrap_or_default();
-        let mut lexer_ctx = lexer_ctx.unwrap_or_else(|| LexerContext::new(String::new()));
-
-        if let Some(ch) = lexer_ctx.advance() {
-            lexer_ctx.add_token(TokenType::Unknown, ch.to_string());
+        if escaped {
+            escaped = false;
+        } else if ch == '\\' {
+            escaped = true;
+        } else if ch == '"' {
+            break;
         }
+    }
 
-        store.set("lexer_context".to_string(), &lexer_ctx).unwrap();
+    lexer_ctx.add_token(TokenType::String, lexeme);
+}
 
-        Ok(Action::simple("complete"))
+fn collect_operator(lexer_ctx: &mut LexerContext) {
+    let mut lexeme = String::new();
+    if let Some(ch) = lexer_ctx.current_char() {
+        lexeme.push(ch);
+        lexer_ctx.advance();
+
+        if let Some(next_ch) = lexer_ctx.current_char() {
+            let two_char = format!("{ch}{next_ch}");
+            if matches!(
+                two_char.as_str(),
+                "==" | "!=" | "<=" | ">=" | "++" | "--" | "&&" | "||"
+            ) {
+                lexeme.push(next_ch);
+                lexer_ctx.advance();
+            }
+        }
+    }
+
+    lexer_ctx.add_token(TokenType::Operator, lexeme);
+}
+
+fn collect_delimiter(lexer_ctx: &mut LexerContext) {
+    let mut lexeme = String::new();
+    if let Some(ch) = lexer_ctx.advance() {
+        lexeme.push(ch);
+    }
+
+    lexer_ctx.add_token(TokenType::Delimiter, lexeme);
+}
+
+fn collect_comment(lexer_ctx: &mut LexerContext) {
+    let mut lexeme = String::new();
+    while let Some(ch) = lexer_ctx.current_char() {
+        if ch == '\n' {
+            break;
+        }
+        lexeme.push(ch);
+        lexer_ctx.advance();
+    }
+
+    lexer_ctx.add_token(TokenType::Comment, lexeme);
+}
+
+fn collect_unknown(lexer_ctx: &mut LexerContext) {
+    if let Some(ch) = lexer_ctx.advance() {
+        lexer_ctx.add_token(TokenType::Unknown, ch.to_string());
     }
 }

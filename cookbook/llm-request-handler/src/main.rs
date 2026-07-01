@@ -1,45 +1,540 @@
-//! # LLM Request Example
+//! LLM request queue processor built with CosmoFlow.
 //!
-//! This example demonstrates how to integrate LLM functionality into CosmoFlow
-//! workflows using direct HTTP client patterns instead of heavy SDK dependencies.
-//!
-//! This approach shows how to implement LLM integration patterns that can be
-//! copied into your own projects as needed, rather than depending on framework-provided
-//! abstractions.
-//!
-//! ## Environment Variables
-//!
-//! Set these environment variables before running:
-//! - `LLM_API_KEY`: Your API key (e.g., OpenAI API key)
-//! - `LLM_BASE_URL`: Base URL for the API (e.g., "https://api.openai.com/v1")
-//! - `LLM_MODEL`: Model name (e.g., "gpt-3.5-turbo", "gpt-4")
+//! The application is a real state machine: load configuration, enqueue work,
+//! pick the next request, dispatch it, record success/failure, and continue
+//! until the queue is empty. Retry is application logic, not a core framework
+//! feature.
 
 use async_trait::async_trait;
-use cosmoflow::flow::errors::FlowError;
-use cosmoflow::prelude::*;
-use cosmoflow::shared_store::backends::MemoryStorage;
+use cosmoflow::{
+    action::Action,
+    flow::FlowBuilder,
+    node::{Node, NodeContext},
+};
 use serde_json::{json, Value};
-use std::collections::HashMap;
+use std::collections::{HashMap, VecDeque};
 use std::env;
+use std::error::Error;
+use std::fmt;
 
-// ============================================================================
-// LLM INTEGRATION UTILITIES
-// ============================================================================
-// These utilities show patterns you can copy into your own projects
+const MAX_ATTEMPTS: u8 = 2;
 
-/// A lightweight HTTP client wrapper for LLM API calls
-///
-/// This demonstrates a simple pattern for making HTTP requests to LLM APIs
-/// without heavy SDK dependencies. Copy this pattern into your own code.
-pub struct LlmClient {
+#[derive(Debug)]
+struct AppError(String);
+
+impl AppError {
+    fn new(message: impl Into<String>) -> Self {
+        Self(message.into())
+    }
+}
+
+impl fmt::Display for AppError {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        f.write_str(&self.0)
+    }
+}
+
+impl Error for AppError {}
+
+#[derive(Debug, Clone)]
+enum ProviderConfig {
+    Mock,
+    Http {
+        api_key: String,
+        base_url: String,
+        model: String,
+    },
+}
+
+impl ProviderConfig {
+    fn from_env() -> Result<Self, AppError> {
+        match env::var("LLM_PROVIDER").as_deref() {
+            Ok("mock") | Err(env::VarError::NotPresent) => Ok(Self::Mock),
+            Ok("http") => Ok(Self::Http {
+                api_key: required_env("LLM_API_KEY")?,
+                base_url: required_env("LLM_BASE_URL")?,
+                model: required_env("LLM_MODEL")?,
+            }),
+            Ok(provider) => Err(AppError::new(format!(
+                "unsupported LLM_PROVIDER '{provider}', expected 'mock' or 'http'"
+            ))),
+            Err(error) => Err(AppError::new(format!(
+                "failed to read LLM_PROVIDER: {error}"
+            ))),
+        }
+    }
+}
+
+fn required_env(key: &str) -> Result<String, AppError> {
+    env::var(key).map_err(|_| AppError::new(format!("{key} is required when LLM_PROVIDER=http")))
+}
+
+#[derive(Debug, Clone)]
+struct LlmRequest {
+    id: u64,
+    prompt: String,
+    attempts: u8,
+}
+
+#[derive(Debug, Clone)]
+struct CompletedRequest {
+    id: u64,
+    prompt: String,
+    response: String,
+    attempts: u8,
+}
+
+#[derive(Debug, Clone)]
+struct FailedRequest {
+    id: u64,
+    prompt: String,
+    error: String,
+    attempts: u8,
+}
+
+#[derive(Debug, Clone)]
+struct CurrentRequest {
+    request: LlmRequest,
+    response: Option<String>,
+    error: Option<String>,
+}
+
+#[derive(Debug, Default)]
+struct QueueState {
+    provider: Option<ProviderConfig>,
+    queue: VecDeque<LlmRequest>,
+    current: Option<CurrentRequest>,
+    completed: Vec<CompletedRequest>,
+    failed: Vec<FailedRequest>,
+}
+
+impl QueueState {
+    fn provider(&self) -> Result<ProviderConfig, AppError> {
+        self.provider
+            .clone()
+            .ok_or_else(|| AppError::new("provider config has not been loaded"))
+    }
+
+    fn current(&self) -> Result<CurrentRequest, AppError> {
+        self.current
+            .clone()
+            .ok_or_else(|| AppError::new("no current request selected"))
+    }
+}
+
+#[derive(Debug, Clone)]
+enum DispatchOutcome {
+    Success(String),
+    Failure(String),
+}
+
+struct LoadConfigNode;
+
+#[async_trait]
+impl Node<QueueState> for LoadConfigNode {
+    type Prep = ();
+    type Output = ProviderConfig;
+    type Error = AppError;
+
+    async fn prep(
+        &mut self,
+        _state: &QueueState,
+        _context: &NodeContext,
+    ) -> Result<Self::Prep, Self::Error> {
+        Ok(())
+    }
+
+    async fn exec(
+        &mut self,
+        _prep: &Self::Prep,
+        _context: &NodeContext,
+    ) -> Result<Self::Output, Self::Error> {
+        ProviderConfig::from_env()
+    }
+
+    async fn post(
+        &mut self,
+        state: &mut QueueState,
+        _prep: Self::Prep,
+        provider: Self::Output,
+        _context: &NodeContext,
+    ) -> Result<Action, Self::Error> {
+        state.provider = Some(provider);
+        Ok(Action::new("enqueue"))
+    }
+}
+
+struct EnqueueRequestsNode;
+
+#[async_trait]
+impl Node<QueueState> for EnqueueRequestsNode {
+    type Prep = ();
+    type Output = Vec<LlmRequest>;
+    type Error = AppError;
+
+    async fn prep(
+        &mut self,
+        _state: &QueueState,
+        _context: &NodeContext,
+    ) -> Result<Self::Prep, Self::Error> {
+        Ok(())
+    }
+
+    async fn exec(
+        &mut self,
+        _prep: &Self::Prep,
+        _context: &NodeContext,
+    ) -> Result<Self::Output, Self::Error> {
+        Ok(vec![
+            LlmRequest {
+                id: 1,
+                prompt: "Summarize CosmoFlow in one sentence.".to_string(),
+                attempts: 0,
+            },
+            LlmRequest {
+                id: 2,
+                prompt: "Name one benefit of modeling apps as state machines.".to_string(),
+                attempts: 0,
+            },
+            LlmRequest {
+                id: 3,
+                prompt: "fail once: demonstrate application-level retry".to_string(),
+                attempts: 0,
+            },
+        ])
+    }
+
+    async fn post(
+        &mut self,
+        state: &mut QueueState,
+        _prep: Self::Prep,
+        requests: Self::Output,
+        _context: &NodeContext,
+    ) -> Result<Action, Self::Error> {
+        state.queue.extend(requests);
+        Ok(Action::new("pick"))
+    }
+}
+
+struct PickNextNode;
+
+#[async_trait]
+impl Node<QueueState> for PickNextNode {
+    type Prep = ();
+    type Output = ();
+    type Error = AppError;
+
+    async fn prep(
+        &mut self,
+        _state: &QueueState,
+        _context: &NodeContext,
+    ) -> Result<Self::Prep, Self::Error> {
+        Ok(())
+    }
+
+    async fn exec(
+        &mut self,
+        _prep: &Self::Prep,
+        _context: &NodeContext,
+    ) -> Result<Self::Output, Self::Error> {
+        Ok(())
+    }
+
+    async fn post(
+        &mut self,
+        state: &mut QueueState,
+        _prep: Self::Prep,
+        _ignored: Self::Output,
+        _context: &NodeContext,
+    ) -> Result<Action, Self::Error> {
+        match state.queue.pop_front() {
+            Some(request) => {
+                state.current = Some(CurrentRequest {
+                    request,
+                    response: None,
+                    error: None,
+                });
+                Ok(Action::new("dispatch"))
+            }
+            None => Ok(Action::new("finish")),
+        }
+    }
+}
+
+struct DispatchNode;
+
+#[async_trait]
+impl Node<QueueState> for DispatchNode {
+    type Prep = (ProviderConfig, LlmRequest);
+    type Output = DispatchOutcome;
+    type Error = AppError;
+
+    async fn prep(
+        &mut self,
+        state: &QueueState,
+        _context: &NodeContext,
+    ) -> Result<Self::Prep, Self::Error> {
+        let provider = state.provider()?;
+        let current = state.current()?;
+        Ok((provider, current.request))
+    }
+
+    async fn exec(
+        &mut self,
+        (provider, request): &Self::Prep,
+        _context: &NodeContext,
+    ) -> Result<Self::Output, Self::Error> {
+        match provider {
+            ProviderConfig::Mock => Ok(dispatch_mock(request)),
+            ProviderConfig::Http {
+                api_key,
+                base_url,
+                model,
+            } => dispatch_http(api_key, base_url, model, request).await,
+        }
+    }
+
+    async fn post(
+        &mut self,
+        state: &mut QueueState,
+        _prep: Self::Prep,
+        outcome: Self::Output,
+        _context: &NodeContext,
+    ) -> Result<Action, Self::Error> {
+        let current = state
+            .current
+            .as_mut()
+            .ok_or_else(|| AppError::new("no current request available for dispatch outcome"))?;
+
+        match outcome {
+            DispatchOutcome::Success(response) => {
+                current.response = Some(response);
+                current.error = None;
+                Ok(Action::new("success"))
+            }
+            DispatchOutcome::Failure(error) => {
+                current.response = None;
+                current.error = Some(error);
+                Ok(Action::new("failure"))
+            }
+        }
+    }
+}
+
+fn dispatch_mock(request: &LlmRequest) -> DispatchOutcome {
+    if request.prompt.contains("fail once") && request.attempts == 0 {
+        return DispatchOutcome::Failure("mock provider intentionally failed once".to_string());
+    }
+
+    DispatchOutcome::Success(format!("mock response for request {}", request.id))
+}
+
+async fn dispatch_http(
+    api_key: &str,
+    base_url: &str,
+    model: &str,
+    request: &LlmRequest,
+) -> Result<DispatchOutcome, AppError> {
+    let client = LlmClient::new(base_url)
+        .with_header("Authorization", format!("Bearer {api_key}"))
+        .with_header("Content-Type", "application/json");
+
+    let body = json!({
+        "model": model,
+        "messages": [
+            {
+                "role": "user",
+                "content": request.prompt
+            }
+        ]
+    });
+
+    match client.post("chat/completions", &body).await {
+        Ok(response) => match extract_content(&response) {
+            Some(content) => Ok(DispatchOutcome::Success(content)),
+            None => Ok(DispatchOutcome::Failure(
+                "HTTP provider response did not contain choices[0].message.content".to_string(),
+            )),
+        },
+        Err(error) => Ok(DispatchOutcome::Failure(error.to_string())),
+    }
+}
+
+struct RecordSuccessNode;
+
+#[async_trait]
+impl Node<QueueState> for RecordSuccessNode {
+    type Prep = CurrentRequest;
+    type Output = CompletedRequest;
+    type Error = AppError;
+
+    async fn prep(
+        &mut self,
+        state: &QueueState,
+        _context: &NodeContext,
+    ) -> Result<Self::Prep, Self::Error> {
+        state.current()
+    }
+
+    async fn exec(
+        &mut self,
+        current: &Self::Prep,
+        _context: &NodeContext,
+    ) -> Result<Self::Output, Self::Error> {
+        let response = current
+            .response
+            .clone()
+            .ok_or_else(|| AppError::new("successful request missing response"))?;
+
+        Ok(CompletedRequest {
+            id: current.request.id,
+            prompt: current.request.prompt.clone(),
+            response,
+            attempts: current.request.attempts + 1,
+        })
+    }
+
+    async fn post(
+        &mut self,
+        state: &mut QueueState,
+        _prep: Self::Prep,
+        completed: Self::Output,
+        _context: &NodeContext,
+    ) -> Result<Action, Self::Error> {
+        state.completed.push(completed);
+        state.current = None;
+        Ok(Action::new("pick"))
+    }
+}
+
+struct RecordFailureNode;
+
+#[async_trait]
+impl Node<QueueState> for RecordFailureNode {
+    type Prep = CurrentRequest;
+    type Output = Result<LlmRequest, FailedRequest>;
+    type Error = AppError;
+
+    async fn prep(
+        &mut self,
+        state: &QueueState,
+        _context: &NodeContext,
+    ) -> Result<Self::Prep, Self::Error> {
+        state.current()
+    }
+
+    async fn exec(
+        &mut self,
+        current: &Self::Prep,
+        _context: &NodeContext,
+    ) -> Result<Self::Output, Self::Error> {
+        let error = current
+            .error
+            .clone()
+            .ok_or_else(|| AppError::new("failed request missing error"))?;
+        let attempts = current.request.attempts + 1;
+
+        if attempts < MAX_ATTEMPTS {
+            let mut retry = current.request.clone();
+            retry.attempts = attempts;
+            Ok(Ok(retry))
+        } else {
+            Ok(Err(FailedRequest {
+                id: current.request.id,
+                prompt: current.request.prompt.clone(),
+                error,
+                attempts,
+            }))
+        }
+    }
+
+    async fn post(
+        &mut self,
+        state: &mut QueueState,
+        _prep: Self::Prep,
+        outcome: Self::Output,
+        _context: &NodeContext,
+    ) -> Result<Action, Self::Error> {
+        match outcome {
+            Ok(retry) => state.queue.push_back(retry),
+            Err(failed) => state.failed.push(failed),
+        }
+        state.current = None;
+        Ok(Action::new("pick"))
+    }
+}
+
+struct ReportNode;
+
+#[async_trait]
+impl Node<QueueState> for ReportNode {
+    type Prep = (Vec<CompletedRequest>, Vec<FailedRequest>);
+    type Output = String;
+    type Error = AppError;
+
+    async fn prep(
+        &mut self,
+        state: &QueueState,
+        _context: &NodeContext,
+    ) -> Result<Self::Prep, Self::Error> {
+        Ok((state.completed.clone(), state.failed.clone()))
+    }
+
+    async fn exec(
+        &mut self,
+        (completed, failed): &Self::Prep,
+        _context: &NodeContext,
+    ) -> Result<Self::Output, Self::Error> {
+        let mut report = String::new();
+        report.push_str("LLM queue processing summary\n");
+        report.push_str("============================\n");
+        report.push_str(&format!("completed: {}\n", completed.len()));
+        report.push_str(&format!("failed: {}\n\n", failed.len()));
+
+        for item in completed {
+            report.push_str(&format!(
+                "ok #{id} attempts={attempts}: {prompt} -> {response}\n",
+                id = item.id,
+                attempts = item.attempts,
+                prompt = item.prompt,
+                response = item.response
+            ));
+        }
+
+        for item in failed {
+            report.push_str(&format!(
+                "failed #{id} attempts={attempts}: {prompt} -> {error}\n",
+                id = item.id,
+                attempts = item.attempts,
+                prompt = item.prompt,
+                error = item.error
+            ));
+        }
+
+        Ok(report)
+    }
+
+    async fn post(
+        &mut self,
+        _state: &mut QueueState,
+        _prep: Self::Prep,
+        report: Self::Output,
+        _context: &NodeContext,
+    ) -> Result<Action, Self::Error> {
+        println!("{report}");
+        Ok(Action::new("complete"))
+    }
+}
+
+/// Lightweight HTTP client for OpenAI-compatible chat completion endpoints.
+struct LlmClient {
     client: reqwest::Client,
     base_url: String,
     headers: HashMap<String, String>,
 }
 
 impl LlmClient {
-    /// Create a new LLM client
-    pub fn new(base_url: impl Into<String>) -> Self {
+    fn new(base_url: impl Into<String>) -> Self {
         Self {
             client: reqwest::Client::new(),
             base_url: base_url.into(),
@@ -47,413 +542,62 @@ impl LlmClient {
         }
     }
 
-    /// Add a header to all requests
-    pub fn with_header(mut self, key: impl Into<String>, value: impl Into<String>) -> Self {
+    fn with_header(mut self, key: impl Into<String>, value: impl Into<String>) -> Self {
         self.headers.insert(key.into(), value.into());
         self
     }
 
-    /// Make a POST request to the specified endpoint
-    pub async fn post(&self, endpoint: &str, body: &Value) -> Result<Value, reqwest::Error> {
+    async fn post(&self, endpoint: &str, body: &Value) -> Result<Value, reqwest::Error> {
         let url = format!(
             "{}/{}",
             self.base_url.trim_end_matches('/'),
             endpoint.trim_start_matches('/')
         );
-
         let mut request = self.client.post(&url).json(body);
 
         for (key, value) in &self.headers {
             request = request.header(key, value);
         }
 
-        let response = request.send().await?;
-        let json: Value = response.json().await?;
-        Ok(json)
+        request.send().await?.json().await
     }
 }
 
-/// Utility function to create a simple chat completion request
-pub fn create_chat_request(model: &str, messages: Vec<Value>) -> Value {
-    json!({
-        "model": model,
-        "messages": messages
-    })
-}
-
-/// Utility function to create a user message
-pub fn user_message(content: &str) -> Value {
-    json!({
-        "role": "user",
-        "content": content
-    })
-}
-
-/// Extract content from a chat completion response
-pub fn extract_content(response: &Value) -> Option<String> {
+fn extract_content(response: &Value) -> Option<String> {
     response
         .get("choices")?
         .get(0)?
         .get("message")?
         .get("content")?
         .as_str()
-        .map(|s| s.to_string())
+        .map(str::to_string)
 }
-
-/// Configuration for LLM API from environment variables
-#[derive(Debug, Clone, serde::Serialize, serde::Deserialize)]
-pub struct LlmConfig {
-    pub api_key: String,
-    pub base_url: String,
-    pub model: String,
-}
-
-impl LlmConfig {
-    /// Load configuration from environment variables
-    pub fn from_env() -> Result<Self, String> {
-        let api_key =
-            env::var("LLM_API_KEY").map_err(|_| "LLM_API_KEY environment variable not set")?;
-
-        let base_url =
-            env::var("LLM_BASE_URL").map_err(|_| "LLM_BASE_URL environment variable not set")?;
-
-        let model = env::var("LLM_MODEL").map_err(|_| "LLM_MODEL environment variable not set")?;
-
-        Ok(Self {
-            api_key,
-            base_url,
-            model,
-        })
-    }
-}
-
-// ============================================================================
-// WORKFLOW NODES
-// ============================================================================
-// These show how to implement workflow patterns without framework abstractions
-
-/// Simple logging node that demonstrates direct implementation
-/// instead of using framework-provided LogNode
-struct SimpleLogNode {
-    message: String,
-    next_action: Action,
-}
-
-impl SimpleLogNode {
-    fn new(message: &str, next_action: Action) -> Self {
-        Self {
-            message: message.to_string(),
-            next_action,
-        }
-    }
-}
-
-#[async_trait]
-impl<S: SharedStore + Send + Sync> Node<S> for SimpleLogNode {
-    type PrepResult = String;
-    type ExecResult = ();
-    type Error = NodeError;
-
-    async fn prep(
-        &mut self,
-        _store: &S,
-        _context: &ExecutionContext,
-    ) -> Result<Self::PrepResult, Self::Error> {
-        Ok(self.message.clone())
-    }
-
-    async fn exec(
-        &mut self,
-        prep_result: Self::PrepResult,
-        _context: &ExecutionContext,
-    ) -> Result<Self::ExecResult, Self::Error> {
-        println!("🚀 {}", prep_result);
-        Ok(())
-    }
-
-    async fn post(
-        &mut self,
-        _store: &mut S,
-        _prep_result: Self::PrepResult,
-        _exec_result: Self::ExecResult,
-        _context: &ExecutionContext,
-    ) -> Result<Action, Self::Error> {
-        Ok(self.next_action.clone())
-    }
-
-    fn name(&self) -> &str {
-        "SimpleLogNode"
-    }
-}
-
-/// Data setup node that demonstrates direct store operations
-/// instead of using framework-provided SetValueNode
-struct DataSetupNode {
-    next_action: Action,
-}
-
-impl DataSetupNode {
-    fn new(next_action: Action) -> Self {
-        Self { next_action }
-    }
-}
-
-#[async_trait]
-impl<S: SharedStore + Send + Sync> Node<S> for DataSetupNode {
-    type PrepResult = String;
-    type ExecResult = ();
-    type Error = NodeError;
-
-    async fn prep(
-        &mut self,
-        _store: &S,
-        _context: &ExecutionContext,
-    ) -> Result<Self::PrepResult, Self::Error> {
-        Ok("Setting up workflow data".to_string())
-    }
-
-    async fn exec(
-        &mut self,
-        prep_result: Self::PrepResult,
-        _context: &ExecutionContext,
-    ) -> Result<Self::ExecResult, Self::Error> {
-        println!("📊 {}", prep_result);
-        Ok(())
-    }
-
-    async fn post(
-        &mut self,
-        store: &mut S,
-        _prep_result: Self::PrepResult,
-        _exec_result: Self::ExecResult,
-        _context: &ExecutionContext,
-    ) -> Result<Action, Self::Error> {
-        // Direct store operations - no abstraction needed
-        store
-            .set("user_prompt".to_string(), "What is the meaning of life?")
-            .unwrap();
-
-        // Load LLM configuration from environment variables
-        let config = LlmConfig::from_env()
-            .map_err(|e| NodeError::ExecutionError(format!("Failed to load LLM config: {e}")))?;
-
-        store.set("llm_config".to_string(), config).unwrap();
-
-        Ok(self.next_action.clone())
-    }
-
-    fn name(&self) -> &str {
-        "DataSetupNode"
-    }
-}
-
-/// Real LLM node that demonstrates HTTP-based LLM integration patterns
-/// This makes actual HTTP calls to LLM APIs using environment configuration
-struct LlmNode {
-    prompt_key: String,
-    response_key: String,
-    next_action: Action,
-}
-
-impl LlmNode {
-    fn new(prompt_key: &str, response_key: &str, next_action: Action) -> Self {
-        Self {
-            prompt_key: prompt_key.to_string(),
-            response_key: response_key.to_string(),
-            next_action,
-        }
-    }
-}
-
-#[async_trait]
-impl<S: SharedStore + Send + Sync> Node<S> for LlmNode {
-    type PrepResult = (String, LlmConfig);
-    type ExecResult = String;
-    type Error = NodeError;
-
-    async fn prep(
-        &mut self,
-        store: &S,
-        _context: &ExecutionContext,
-    ) -> Result<Self::PrepResult, Self::Error> {
-        let prompt: String = store.get(&self.prompt_key).unwrap().unwrap();
-        let config: LlmConfig = store.get("llm_config").unwrap().unwrap();
-        Ok((prompt, config))
-    }
-
-    async fn exec(
-        &mut self,
-        prep_result: Self::PrepResult,
-        _context: &ExecutionContext,
-    ) -> Result<Self::ExecResult, Self::Error> {
-        let (prompt, config) = prep_result;
-
-        println!("🤖 Processing prompt with {}: {}", config.model, prompt);
-
-        // Create HTTP client with authorization header
-        let client = LlmClient::new(&config.base_url)
-            .with_header("Authorization", format!("Bearer {}", config.api_key))
-            .with_header("Content-Type", "application/json");
-
-        // Build request using utility functions
-        let messages = vec![user_message(&prompt)];
-        let request = create_chat_request(&config.model, messages);
-
-        // Make API call
-        let response = client
-            .post("chat/completions", &request)
-            .await
-            .map_err(|e| NodeError::ExecutionError(format!("LLM API request failed: {e}")))?;
-
-        // Extract response content
-        let content = extract_content(&response).ok_or_else(|| {
-            NodeError::ExecutionError("Failed to extract content from LLM response".to_string())
-        })?;
-
-        println!("✅ Received response from {}", config.model);
-
-        Ok(content)
-    }
-
-    async fn post(
-        &mut self,
-        store: &mut S,
-        _prep_result: Self::PrepResult,
-        exec_result: Self::ExecResult,
-        _context: &ExecutionContext,
-    ) -> Result<Action, Self::Error> {
-        // Direct store operation - no abstraction layer needed
-        store.set(self.response_key.clone(), exec_result).unwrap();
-
-        Ok(self.next_action.clone())
-    }
-
-    fn name(&self) -> &str {
-        "LlmNode"
-    }
-}
-
-/// Result display node that demonstrates data retrieval patterns
-struct ResultDisplayNode {
-    data_key: String,
-}
-
-impl ResultDisplayNode {
-    fn new(data_key: &str) -> Self {
-        Self {
-            data_key: data_key.to_string(),
-        }
-    }
-}
-
-#[async_trait]
-impl<S: SharedStore + Send + Sync> Node<S> for ResultDisplayNode {
-    type PrepResult = String;
-    type ExecResult = ();
-    type Error = NodeError;
-
-    async fn prep(
-        &mut self,
-        store: &S,
-        _context: &ExecutionContext,
-    ) -> Result<Self::PrepResult, Self::Error> {
-        let data: String = store.get(&self.data_key).unwrap().unwrap();
-        Ok(data)
-    }
-
-    async fn exec(
-        &mut self,
-        prep_result: Self::PrepResult,
-        _context: &ExecutionContext,
-    ) -> Result<Self::ExecResult, Self::Error> {
-        println!("✨ AI Response: {}", prep_result);
-        println!("🎉 Workflow completed successfully!");
-        Ok(())
-    }
-
-    async fn post(
-        &mut self,
-        _store: &mut S,
-        _prep_result: Self::PrepResult,
-        _exec_result: Self::ExecResult,
-        _context: &ExecutionContext,
-    ) -> Result<Action, Self::Error> {
-        Ok(Action::simple("complete"))
-    }
-
-    fn name(&self) -> &str {
-        "ResultDisplayNode"
-    }
-}
-
-// ============================================================================
-// MAIN EXAMPLE
-// ============================================================================
 
 #[tokio::main]
-async fn main() -> Result<(), FlowError> {
-    println!("🌟 CosmoFlow Real LLM Integration Example");
-    println!("==========================================");
-    println!();
-    println!("This example demonstrates real LLM API integration:");
-    println!("• Direct HTTP calls to LLM APIs");
-    println!("• Configuration from environment variables");
-    println!("• Error handling for API failures");
-    println!("• Clean, readable code with minimal overhead");
-    println!();
-
-    // Check environment variables early
-    if let Err(e) = LlmConfig::from_env() {
-        eprintln!("❌ Configuration Error: {e}");
-        eprintln!();
-        eprintln!("Please set the following environment variables:");
-        eprintln!("  LLM_API_KEY=your_api_key");
-        eprintln!("  LLM_BASE_URL=https://api.openai.com/v1");
-        eprintln!("  LLM_MODEL=gpt-3.5-turbo");
-        eprintln!();
-        eprintln!("Example:");
-        eprintln!("  export LLM_API_KEY=sk-...");
-        eprintln!("  export LLM_BASE_URL=https://api.openai.com/v1");
-        eprintln!("  export LLM_MODEL=gpt-3.5-turbo");
-        eprintln!("  cargo run --bin llm_request -p cosmoflow-examples");
-        std::process::exit(1);
-    }
-
-    // Create storage - just the core framework
-    let mut store = MemoryStorage::new();
-
-    // Build workflow using direct implementations
+async fn main() -> Result<(), Box<dyn Error>> {
     let mut flow = FlowBuilder::new()
-        .node(
-            "start",
-            SimpleLogNode::new("Starting real LLM workflow", Action::simple("setup")),
-        )
-        .node("setup", DataSetupNode::new(Action::simple("llm")))
-        .node(
-            "llm",
-            LlmNode::new("user_prompt", "ai_response", Action::simple("display")),
-        )
-        .node("display", ResultDisplayNode::new("ai_response"))
-        .route("start", "setup", "setup")
-        .route("setup", "llm", "llm")
-        .route("llm", "display", "display")
-        .terminal_route("display", "complete") // Explicit termination
-        .build();
+        .node("load_config", LoadConfigNode)
+        .node("enqueue", EnqueueRequestsNode)
+        .node("pick", PickNextNode)
+        .node("dispatch", DispatchNode)
+        .node("record_success", RecordSuccessNode)
+        .node("record_failure", RecordFailureNode)
+        .node("report", ReportNode)
+        .route("load_config", "enqueue", "enqueue")
+        .route("enqueue", "pick", "pick")
+        .route("pick", "dispatch", "dispatch")
+        .route("pick", "finish", "report")
+        .route("dispatch", "success", "record_success")
+        .route("dispatch", "failure", "record_failure")
+        .route("record_success", "pick", "pick")
+        .route("record_failure", "pick", "pick")
+        .build()?;
 
-    // Execute workflow
-    let _result = flow.execute(&mut store).await?;
+    let mut state = QueueState::default();
+    let execution = flow.run_recorded(&mut state).await?;
 
-    println!();
-    println!("✅ Workflow executed successfully!");
-    println!();
-    println!("Key benefits of this approach:");
-    println!("• 🌐 Real API integration with environment configuration");
-    println!("• 🪶 Lightweight: Minimal dependencies");
-    println!("• 🎯 Direct: No unnecessary abstractions");
-    println!("• 🔧 Flexible: Easy to customize for different APIs");
-    println!("• 📖 Readable: Clear, understandable code");
-    println!("• 📋 Copyable: Patterns you can use in your own projects");
-
+    println!("execution path: {:?}", execution.path);
+    println!("final action: {}", execution.final_action);
     Ok(())
 }
 
@@ -462,55 +606,37 @@ mod tests {
     use super::*;
 
     #[test]
-    fn test_llm_utilities() {
-        // Test utility functions
-        let messages = vec![user_message("Hello")];
-        let request = create_chat_request("gpt-3.5-turbo", messages);
-
-        assert_eq!(request["model"], "gpt-3.5-turbo");
-        assert_eq!(request["messages"][0]["role"], "user");
-        assert_eq!(request["messages"][0]["content"], "Hello");
-
-        // Test response extraction
+    fn extract_content_reads_chat_completion_shape() {
         let response = json!({
             "choices": [{
                 "message": {
-                    "content": "Hello there!"
+                    "content": "hello"
                 }
             }]
         });
 
-        assert_eq!(extract_content(&response), Some("Hello there!".to_string()));
+        assert_eq!(extract_content(&response), Some("hello".to_string()));
     }
 
     #[test]
-    fn test_llm_config_validation() {
-        // Test that config validation works
-        // Note: This test will fail if environment variables are not set,
-        // which is expected behavior
-        match LlmConfig::from_env() {
-            Ok(config) => {
-                assert!(!config.api_key.is_empty());
-                assert!(!config.base_url.is_empty());
-                assert!(!config.model.is_empty());
-            }
-            Err(_) => {
-                // Expected when environment variables are not set
-                println!("Environment variables not set - this is expected in test environment");
-            }
-        }
-    }
+    fn mock_provider_fails_marked_request_once() {
+        let first = LlmRequest {
+            id: 7,
+            prompt: "fail once".to_string(),
+            attempts: 0,
+        };
+        let retry = LlmRequest {
+            attempts: 1,
+            ..first.clone()
+        };
 
-    #[tokio::test]
-    async fn test_llm_client() {
-        let client = LlmClient::new("https://api.example.com")
-            .with_header("Authorization", "Bearer test-key");
-
-        // Test that client is constructed properly
-        assert_eq!(client.base_url, "https://api.example.com");
-        assert_eq!(
-            client.headers.get("Authorization"),
-            Some(&"Bearer test-key".to_string())
-        );
+        assert!(matches!(
+            dispatch_mock(&first),
+            DispatchOutcome::Failure(message) if message.contains("failed once")
+        ));
+        assert!(matches!(
+            dispatch_mock(&retry),
+            DispatchOutcome::Success(message) if message.contains("request 7")
+        ));
     }
 }
